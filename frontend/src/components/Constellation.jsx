@@ -6,7 +6,7 @@ import { WorldMap } from './WorldMap'
 import { getSitesOverview } from '../lib/api'
 
 export function Constellation() {
-  const { setView, setSelectedSite, toggleCommand } = useStore()
+  const { studyData, setView, setSelectedSite, toggleCommand } = useStore()
   const [hoveredSite, setHoveredSite] = useState(null)
   const [activeTab, setActiveTab] = useState('map')
   const [sites, setSites] = useState([])
@@ -49,7 +49,7 @@ export function Constellation() {
       <Header onBack={() => setView('pulse')} onSearch={toggleCommand} />
       
       <div className="px-8 pt-4 pb-8">
-        <SummaryBar />
+        <SummaryBar studyData={studyData} sites={sites} />
         
         <div className="mt-8 card p-6">
           <div className="flex items-center justify-between mb-6">
@@ -160,13 +160,17 @@ function Header({ onBack, onSearch }) {
   )
 }
 
-function SummaryBar() {
+function SummaryBar({ studyData, sites }) {
+  const criticalCount = sites.filter(s => s.status === 'critical').length
+  const healthyCount = sites.filter(s => s.status === 'healthy').length
+  const onTrackPercent = sites.length > 0 ? Math.round((healthyCount / sites.length) * 100) : 0
+  
   const metrics = [
-    { label: 'Enrolled', value: '420 / 595', status: 'healthy' },
-    { label: 'Entry Lag', value: '3.2 days', status: 'healthy' },
-    { label: 'Open Queries', value: '1,847', status: 'warning' },
-    { label: 'Critical Alerts', value: '3', status: 'critical' },
-    { label: 'Sites On Track', value: '82%', status: 'healthy' }
+    { label: 'Enrolled', value: `${studyData.enrolled} / ${studyData.target}`, status: 'healthy' },
+    { label: 'Active Sites', value: `${studyData.activeSites}`, status: 'healthy' },
+    { label: 'Countries', value: `${studyData.countries}`, status: 'healthy' },
+    { label: 'Critical Sites', value: `${criticalCount}`, status: criticalCount > 0 ? 'critical' : 'healthy' },
+    { label: 'Sites On Track', value: `${onTrackPercent}%`, status: onTrackPercent < 70 ? 'warning' : 'healthy' }
   ]
   
   return (
