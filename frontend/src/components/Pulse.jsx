@@ -6,73 +6,22 @@ import {
   BarChart3, Users, Clock, Sparkles
 } from 'lucide-react'
 import { useStore } from '../lib/store'
-import { getStudySummary, getAttentionSites } from '../lib/api'
-
-const defaultAgentInsights = [
-  {
-    id: 1,
-    agent: 'Enrollment Agent',
-    severity: 'critical',
-    title: 'Screen failure cluster detected in Japan region',
-    summary: 'SITE-108, SITE-112, SITE-119 showing 45% screen failure rate (vs 22% average). Root cause: ECOG eligibility misinterpretation.',
-    recommendation: 'Recommend targeted site training on ECOG assessment criteria.',
-    confidence: 94,
-    timestamp: '12 min ago',
-    sites: ['SITE-108', 'SITE-112', 'SITE-119'],
-    impact: 'Potential 8-week enrollment delay if unaddressed'
-  },
-  {
-    id: 2,
-    agent: 'Data Quality Agent',
-    severity: 'warning',
-    title: 'Query backlog accumulating at SITE-012',
-    summary: 'Lab Results and Drug Accountability pages showing 2.5x query rate vs peers. CRA proficiency gap identified following recent transition.',
-    recommendation: 'Schedule targeted CRF training session.',
-    confidence: 91,
-    timestamp: '34 min ago',
-    sites: ['SITE-012'],
-    impact: 'Database lock risk for upcoming interim analysis'
-  },
-  {
-    id: 3,
-    agent: 'Supply Chain Agent',
-    severity: 'warning',
-    title: 'Kit expiry risk at 3 low-enrolling sites',
-    summary: 'SITE-031, SITE-045, SITE-078 have drug kits approaching 60-day expiry with insufficient enrollment velocity to consume.',
-    recommendation: 'Consider kit redistribution to high-enrolling sites.',
-    confidence: 88,
-    timestamp: '1h ago',
-    sites: ['SITE-031', 'SITE-045', 'SITE-078'],
-    impact: '$45K potential wastage'
-  }
-]
-
-const agentActivity = [
-  { agent: 'Enrollment', status: 'analyzing', detail: 'Scanning screen failure patterns across 149 sites' },
-  { agent: 'Data Quality', status: 'monitoring', detail: 'Tracking query resolution rates' },
-  { agent: 'Compliance', status: 'idle', detail: 'Last scan: 15 min ago · No issues' },
-  { agent: 'Supply Chain', status: 'analyzing', detail: 'Forecasting kit demand for next 30 days' }
-]
-
-const defaultAttentionSites = [
-  { site_id: 'SITE-012', site_name: 'MD Anderson Cancer Center', issue: 'Query backlog elevated', severity: 'critical', metric: '23 open queries' },
-  { site_id: 'SITE-022', site_name: 'Cleveland Clinic', issue: 'Entry lag during CRA transition', severity: 'warning', metric: '4.2 day lag' },
-  { site_id: 'SITE-033', site_name: 'Johns Hopkins Hospital', issue: 'Missed monitoring visit', severity: 'warning', metric: '42 days gap' },
-  { site_id: 'SITE-108', site_name: 'National Cancer Center Hospital', issue: 'High screen failure rate', severity: 'critical', metric: '45% failure' }
-]
+import { getStudySummary, getAttentionSites, getAgentInsights } from '../lib/api'
 
 export function Pulse() {
   const { studyData, setStudyData, setView, setSelectedSite, setInvestigation, toggleCommand } = useStore()
   const [expandedInsight, setExpandedInsight] = useState(null)
-  const [attentionSites, setAttentionSites] = useState(defaultAttentionSites)
+  const [attentionSites, setAttentionSites] = useState([])
+  const [agentInsights, setAgentInsights] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [summary, attention] = await Promise.all([
+        const [summary, attention, insights] = await Promise.all([
           getStudySummary(),
-          getAttentionSites()
+          getAttentionSites(),
+          getAgentInsights()
         ])
         
         if (summary) {
@@ -92,6 +41,10 @@ export function Pulse() {
         
         if (attention?.sites?.length > 0) {
           setAttentionSites(attention.sites)
+        }
+        
+        if (insights?.insights?.length > 0) {
+          setAgentInsights(insights.insights)
         }
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error)
@@ -122,7 +75,7 @@ export function Pulse() {
             />
             
             <ConductorInsights 
-              insights={defaultAgentInsights}
+              insights={agentInsights}
               expandedInsight={expandedInsight}
               setExpandedInsight={setExpandedInsight}
               onInvestigate={(insight) => setInvestigation({

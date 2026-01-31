@@ -21,6 +21,14 @@ export async function getAttentionSites() {
   return fetchApi('/dashboard/attention-sites')
 }
 
+export async function getSitesOverview() {
+  return fetchApi('/dashboard/sites-overview')
+}
+
+export async function getAgentInsights() {
+  return fetchApi('/dashboard/agent-insights')
+}
+
 export async function getDataQualityDashboard() {
   return fetchApi('/dashboard/data-quality')
 }

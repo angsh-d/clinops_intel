@@ -1,23 +1,43 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Search, Globe, BarChart3 } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { WorldMap } from './WorldMap'
-
-const mockSites = Array.from({ length: 50 }, (_, i) => ({
-  id: `SITE-${String(i + 1).padStart(3, '0')}`,
-  enrollmentPercent: Math.random() * 100,
-  dataQualityScore: Math.random() * 100,
-  alertCount: Math.floor(Math.random() * 5),
-  status: Math.random() > 0.9 ? 'critical' : Math.random() > 0.7 ? 'warning' : 'healthy',
-  country: ['USA', 'UK', 'Japan', 'Germany', 'France', 'Canada'][Math.floor(Math.random() * 6)],
-  finding: 'Entry lag improving, query backlog elevated'
-}))
+import { getSitesOverview } from '../lib/api'
 
 export function Constellation() {
   const { setView, setSelectedSite, toggleCommand } = useStore()
   const [hoveredSite, setHoveredSite] = useState(null)
   const [activeTab, setActiveTab] = useState('map')
+  const [sites, setSites] = useState([])
+  const [loading, setLoading] = useState(true)
+  
+  useEffect(() => {
+    async function fetchSites() {
+      try {
+        const data = await getSitesOverview()
+        if (data?.sites) {
+          const mappedSites = data.sites.map(s => ({
+            id: s.site_id,
+            name: s.site_name,
+            enrollmentPercent: s.enrollment_percent,
+            dataQualityScore: s.data_quality_score,
+            alertCount: s.alert_count,
+            status: s.status,
+            country: s.country,
+            city: s.city,
+            finding: s.finding
+          }))
+          setSites(mappedSites)
+        }
+      } catch (error) {
+        console.error('Failed to fetch sites:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchSites()
+  }, [])
   
   return (
     <motion.div
@@ -48,7 +68,7 @@ export function Constellation() {
           
           {activeTab === 'map' ? (
             <WorldMap 
-              sites={mockSites}
+              sites={sites}
               onSiteClick={setSelectedSite}
               onSiteHover={setHoveredSite}
               hoveredSite={hoveredSite}
@@ -58,7 +78,7 @@ export function Constellation() {
               <AxisLabels />
               
               <div className="absolute inset-0 p-8">
-                {mockSites.map((site) => (
+                {sites.map((site) => (
                   <SiteDot
                     key={site.id}
                     site={site}
@@ -74,7 +94,7 @@ export function Constellation() {
           )}
         </div>
         
-        <SiteTable sites={mockSites} onSelect={setSelectedSite} />
+        <SiteTable sites={sites} onSelect={setSelectedSite} />
       </div>
     </motion.div>
   )

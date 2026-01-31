@@ -15,12 +15,12 @@ export const useStore = create((set, get) => ({
   toggleCommand: () => set((state) => ({ commandOpen: !state.commandOpen })),
   
   studyData: {
-    enrolled: 420,
-    target: 595,
-    criticalSites: 3,
-    watchSites: 7,
-    studyName: 'M14-359',
-    lastUpdated: new Date().toISOString()
+    enrolled: 0,
+    target: 0,
+    criticalSites: 0,
+    watchSites: 0,
+    studyName: '',
+    lastUpdated: null
   },
   setStudyData: (data) => set({ studyData: data }),
   

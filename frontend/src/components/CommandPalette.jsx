@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, ArrowRight, AlertCircle, TrendingUp, Users } from 'lucide-react'
 import { useStore } from '../lib/store'
+import { getAttentionSites } from '../lib/api'
 
 const suggestions = [
   { icon: AlertCircle, text: 'Which sites need attention?', category: 'Alerts' },
@@ -11,17 +12,30 @@ const suggestions = [
   { icon: TrendingUp, text: 'Screen failure analysis', category: 'Enrollment' }
 ]
 
-const recentSites = [
-  { id: 'SITE-012', status: 'critical', finding: 'Query spike detected' },
-  { id: 'SITE-022', status: 'warning', finding: 'Entry lag elevated' },
-  { id: 'SITE-041', status: 'healthy', finding: 'On track' }
-]
-
 export function CommandPalette() {
   const { setCommandOpen, setInvestigation, setSelectedSite, setView } = useStore()
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [recentSites, setRecentSites] = useState([])
   const inputRef = useRef(null)
+  
+  useEffect(() => {
+    async function fetchRecentSites() {
+      try {
+        const data = await getAttentionSites()
+        if (data?.sites) {
+          setRecentSites(data.sites.slice(0, 5).map(s => ({
+            id: s.site_id,
+            status: s.severity,
+            finding: s.issue
+          })))
+        }
+      } catch (error) {
+        console.error('Failed to fetch recent sites:', error)
+      }
+    }
+    fetchRecentSites()
+  }, [])
   
   const filteredSuggestions = query
     ? suggestions.filter(s => s.text.toLowerCase().includes(query.toLowerCase()))

@@ -251,3 +251,38 @@ class AttentionSitesResponse(BaseModel):
     sites: list[AttentionSite]
     critical_count: int
     warning_count: int
+
+
+class SiteOverview(BaseModel):
+    site_id: str
+    site_name: str | None
+    country: str | None
+    city: str | None
+    enrollment_percent: float
+    data_quality_score: float
+    alert_count: int
+    status: str
+    finding: str | None
+
+
+class SitesOverviewResponse(BaseModel):
+    sites: list[SiteOverview]
+    total: int
+
+
+class AgentInsight(BaseModel):
+    id: int
+    agent: str
+    severity: str
+    title: str
+    summary: str
+    recommendation: str | None
+    confidence: float
+    timestamp: str
+    sites: list[str]
+    impact: str | None
+
+
+class AgentInsightsResponse(BaseModel):
+    insights: list[AgentInsight]
+    total: int
