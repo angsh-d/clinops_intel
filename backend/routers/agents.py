@@ -319,13 +319,42 @@ def build_finding(site_id: str, site_data: dict, question: str) -> dict:
         "protocol_deviation": "protocol deviation patterns detected",
     }
     
-    # Build contextual summary
-    if anomaly and anomaly in anomaly_descriptions:
-        summary = f"Investigation of {site_name} identified that {anomaly_descriptions[anomaly]}."
-    elif site_data.get("open_queries", 0) > 15:
-        summary = f"Investigation of {site_name} revealed elevated query volume requiring attention."
-    elif site_data.get("avg_entry_lag", 0) and site_data.get("study_avg_lag") and site_data["avg_entry_lag"] > site_data["study_avg_lag"]:
-        summary = f"Investigation of {site_name} found data entry delays above the study average."
+    # Build contextual summary based on ACTUAL DATA, not just flags
+    screened = site_data.get("screened", 0)
+    randomized = site_data.get("randomized", 0)
+    open_queries = site_data.get("open_queries", 0)
+    avg_lag = site_data.get("avg_entry_lag", 0)
+    study_avg = site_data.get("study_avg_lag", 0)
+    
+    # Determine actual issues from data
+    issues = []
+    
+    # Check enrollment health (only flag if truly stalled - no recent activity and low numbers)
+    if screened == 0:
+        issues.append("no patient screenings recorded")
+    elif randomized == 0 and screened > 0:
+        issues.append(f"screening active ({screened} subjects) but no randomizations yet")
+    elif screened > 0 and randomized > 0:
+        rate = round(randomized / screened * 100)
+        if rate < 50:
+            issues.append(f"low screening-to-randomization rate ({rate}%)")
+    
+    # Check query burden
+    if open_queries > 15:
+        issues.append(f"elevated query backlog ({open_queries} open queries)")
+    elif open_queries > 10:
+        issues.append(f"moderate query volume requiring attention ({open_queries} queries)")
+    
+    # Check entry lag
+    if avg_lag and study_avg and avg_lag > study_avg + 2:
+        issues.append(f"data entry delays ({avg_lag}d vs study avg {study_avg}d)")
+    
+    # Build summary from actual findings
+    if issues:
+        summary = f"Investigation of {site_name} identified: {'; '.join(issues)}."
+    elif anomaly and anomaly in anomaly_descriptions:
+        # Only use flag if no data-driven issues found - historical context
+        summary = f"Investigation of {site_name}: Site was previously flagged for {anomaly.replace('_', ' ')}, but current metrics appear stable."
     else:
         summary = f"Investigation of {site_name} shows the site is operating within normal parameters."
     
@@ -362,21 +391,24 @@ def build_finding(site_id: str, site_data: dict, question: str) -> dict:
             evidence.append(f"Screening-to-randomization rate: {rate}% ({randomized} of {screened} subjects)")
         data_sources_used.append("screening_log")
     
-    # Build clear, actionable recommendations
-    if anomaly == "enrollment_stall":
-        recommendation = "Schedule a site engagement call to understand recruitment barriers. Consider expanding eligibility awareness and referral pathways."
-    elif anomaly == "high_query_burden":
-        recommendation = "Arrange targeted training on frequently queried CRF sections. Consider site visit to review data collection processes."
-    elif anomaly == "entry_lag_spike":
-        recommendation = "Review site workload and staffing. Implement weekly data entry checkpoints to prevent backlog."
-    elif anomaly == "monitoring_gap":
-        recommendation = "Prioritize scheduling the overdue monitoring visit. Review remote monitoring options if travel is constrained."
-    elif site_data.get("open_queries", 0) > 15:
+    # Build clear, actionable recommendations based on ACTUAL data issues
+    if screened == 0:
+        recommendation = "Initiate site engagement to start patient recruitment. Verify site readiness and staff availability."
+    elif randomized == 0 and screened > 0:
+        recommendation = "Review screening failures to identify eligibility barriers. Consider protocol clarification with site staff."
+    elif screened > 0 and randomized > 0 and round(randomized / screened * 100) < 50:
+        recommendation = "Investigate high screen failure rate. Review inclusion/exclusion criteria interpretation with site."
+    elif open_queries > 15:
         recommendation = "Focus on resolving open queries to maintain data quality. Consider additional data management support."
-    elif site_data.get("avg_entry_lag", 0) and site_data.get("study_avg_lag") and site_data["avg_entry_lag"] > site_data["study_avg_lag"] + 3:
+    elif open_queries > 10:
+        recommendation = "Prioritize query resolution. Schedule check-in with site to address recurring query patterns."
+    elif avg_lag and study_avg and avg_lag > study_avg + 2:
         recommendation = "Address data entry delays through process review. Staff may need additional support or training."
+    elif issues:
+        # Generic recommendation for other detected issues
+        recommendation = "Review site operations and address identified patterns. Consider targeted support where needed."
     else:
-        recommendation = "No immediate action required. Continue routine monitoring and maintain current engagement level."
+        recommendation = "Site is performing well. Continue routine monitoring and maintain current engagement level."
     
     return {
         "summary": summary,
