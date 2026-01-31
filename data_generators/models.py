@@ -96,7 +96,7 @@ class Site(Base):
     __tablename__ = "sites"
     id = Column(Integer, primary_key=True, autoincrement=True)
     site_id = Column(String(20), nullable=False, unique=True)
-    site_name = Column(String(200))
+    name = Column(String(200))
     country = Column(String(3))
     city = Column(String(100))
     site_type = Column(String(30))

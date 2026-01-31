@@ -219,3 +219,35 @@ class AlertDetailEnhanced(BaseModel):
     recommended_actions: list[Any] | None
 
     model_config = {"from_attributes": True}
+
+
+# ── Study Summary ────────────────────────────────────────────────────────────
+
+class StudySummary(BaseModel):
+    study_id: str
+    study_name: str
+    phase: str
+    enrolled: int
+    target: int
+    pct_enrolled: float
+    total_sites: int
+    active_sites: int
+    countries: list[str]
+    last_updated: str
+
+
+class AttentionSite(BaseModel):
+    site_id: str
+    site_name: str | None
+    country: str | None
+    city: str | None
+    issue: str
+    severity: str
+    metric: str
+    metric_value: float | None
+
+
+class AttentionSitesResponse(BaseModel):
+    sites: list[AttentionSite]
+    critical_count: int
+    warning_count: int

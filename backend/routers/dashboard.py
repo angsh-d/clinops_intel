@@ -13,6 +13,7 @@ from backend.schemas.dashboard import (
     KRITimeSeriesResponse, KRIDataPoint,
     EnrollmentVelocityResponse, VelocityDataPoint,
     AlertDetailEnhanced,
+    StudySummary, AttentionSite, AttentionSitesResponse,
 )
 from data_generators.models import (
     ECRFEntry, Query, DataCorrection, ScreeningLog,
@@ -290,4 +291,143 @@ def alert_detail_enhanced(alert_id: int, db: Session = Depends(get_db)):
         investigation_reasoning=investigation_reasoning,
         investigation_findings=investigation_findings,
         recommended_actions=recommended_actions,
+    )
+
+
+@router.get(
+    "/study-summary",
+    response_model=StudySummary,
+    summary="Study summary dashboard",
+    description="High-level study metrics: enrollment progress, site counts, and countries.",
+)
+def study_summary(db: Session = Depends(get_db)):
+    """Study summary metrics — pure SQL aggregation."""
+    from datetime import datetime
+    
+    study_config = db.query(StudyConfig).first()
+    if not study_config:
+        return StudySummary(
+            study_id="Unknown",
+            study_name="Unknown Study",
+            phase="Unknown",
+            enrolled=0,
+            target=0,
+            pct_enrolled=0.0,
+            total_sites=0,
+            active_sites=0,
+            countries=[],
+            last_updated=datetime.now().isoformat(),
+        )
+    
+    enrolled = db.query(func.count(RandomizationLog.id)).scalar() or 0
+    total_sites = db.query(func.count(Site.id)).scalar() or 0
+    
+    # Sites with at least one randomization
+    active_sites = db.query(func.count(func.distinct(RandomizationLog.site_id))).scalar() or 0
+    
+    # Distinct countries
+    countries = [r[0] for r in db.query(func.distinct(Site.country)).all() if r[0]]
+    
+    pct = round((enrolled / study_config.target_enrollment * 100), 1) if study_config.target_enrollment else 0
+    
+    return StudySummary(
+        study_id=study_config.study_id,
+        study_name=study_config.study_id,
+        phase=study_config.phase or "Phase 3",
+        enrolled=enrolled,
+        target=study_config.target_enrollment or 0,
+        pct_enrolled=pct,
+        total_sites=total_sites,
+        active_sites=active_sites,
+        countries=countries,
+        last_updated=datetime.now().isoformat(),
+    )
+
+
+@router.get(
+    "/attention-sites",
+    response_model=AttentionSitesResponse,
+    summary="Sites requiring attention",
+    description="Sites with elevated metrics, high query counts, or anomalies that need review.",
+)
+def attention_sites(db: Session = Depends(get_db)):
+    """Sites requiring attention based on data quality and enrollment issues."""
+    attention_list = []
+    
+    # Get sites with high open query counts
+    high_query_sites = db.query(
+        Query.site_id,
+        func.count(Query.id).filter(Query.status == "Open").label("open_queries"),
+    ).group_by(Query.site_id).having(
+        func.count(Query.id).filter(Query.status == "Open") > 15
+    ).all()
+    
+    # Get site details
+    site_map = {s.site_id: s for s in db.query(Site).all()}
+    
+    for row in high_query_sites:
+        site = site_map.get(row.site_id)
+        if site:
+            attention_list.append(AttentionSite(
+                site_id=row.site_id,
+                site_name=getattr(site, 'name', None),
+                country=site.country,
+                city=site.city,
+                issue="High open query count",
+                severity="critical" if row.open_queries > 25 else "warning",
+                metric=f"{row.open_queries} open queries",
+                metric_value=float(row.open_queries),
+            ))
+    
+    # Get sites with high entry lag
+    high_lag_sites = db.query(
+        ECRFEntry.site_id,
+        func.avg(ECRFEntry.entry_lag_days).label("avg_lag"),
+    ).group_by(ECRFEntry.site_id).having(
+        func.avg(ECRFEntry.entry_lag_days) > 5
+    ).all()
+    
+    existing_ids = {s.site_id for s in attention_list}
+    for row in high_lag_sites:
+        if row.site_id not in existing_ids:
+            site = site_map.get(row.site_id)
+            if site:
+                attention_list.append(AttentionSite(
+                    site_id=row.site_id,
+                    site_name=getattr(site, 'name', None),
+                    country=site.country,
+                    city=site.city,
+                    issue="Elevated entry lag",
+                    severity="warning",
+                    metric=f"{round(row.avg_lag, 1)} day lag",
+                    metric_value=float(row.avg_lag),
+                ))
+    
+    # Get sites with anomaly types
+    anomaly_sites = db.query(Site).filter(Site.anomaly_type.isnot(None)).limit(5).all()
+    for site in anomaly_sites:
+        if site.site_id not in existing_ids:
+            attention_list.append(AttentionSite(
+                site_id=site.site_id,
+                site_name=getattr(site, 'name', None),
+                country=site.country,
+                city=site.city,
+                issue=site.anomaly_type or "Anomaly detected",
+                severity="critical",
+                metric="Flagged for review",
+                metric_value=None,
+            ))
+            existing_ids.add(site.site_id)
+    
+    # Sort by severity (critical first) and limit
+    attention_list.sort(key=lambda x: (0 if x.severity == "critical" else 1, x.site_id))
+    attention_list = attention_list[:10]
+    
+    critical_count = sum(1 for s in attention_list if s.severity == "critical")
+    warning_count = sum(1 for s in attention_list if s.severity == "warning")
+    
+    return AttentionSitesResponse(
+        sites=attention_list,
+        critical_count=critical_count,
+        warning_count=warning_count,
     )

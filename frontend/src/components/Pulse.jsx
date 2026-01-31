@@ -6,8 +6,9 @@ import {
   BarChart3, Users, Clock, Sparkles
 } from 'lucide-react'
 import { useStore } from '../lib/store'
+import { getStudySummary, getAttentionSites } from '../lib/api'
 
-const agentInsights = [
+const defaultAgentInsights = [
   {
     id: 1,
     agent: 'Enrollment Agent',
@@ -53,17 +54,58 @@ const agentActivity = [
   { agent: 'Supply Chain', status: 'analyzing', detail: 'Forecasting kit demand for next 30 days' }
 ]
 
-const attentionSites = [
-  { id: 'SITE-012', name: 'MD Anderson Cancer Center', issue: 'Query backlog elevated', severity: 'critical', metric: '23 open queries' },
-  { id: 'SITE-022', name: 'Cleveland Clinic', issue: 'Entry lag during CRA transition', severity: 'warning', metric: '4.2 day lag' },
-  { id: 'SITE-033', name: 'Johns Hopkins Hospital', issue: 'Missed monitoring visit', severity: 'warning', metric: '42 days gap' },
-  { id: 'SITE-108', name: 'National Cancer Center Hospital', issue: 'High screen failure rate', severity: 'critical', metric: '45% failure' }
+const defaultAttentionSites = [
+  { site_id: 'SITE-012', site_name: 'MD Anderson Cancer Center', issue: 'Query backlog elevated', severity: 'critical', metric: '23 open queries' },
+  { site_id: 'SITE-022', site_name: 'Cleveland Clinic', issue: 'Entry lag during CRA transition', severity: 'warning', metric: '4.2 day lag' },
+  { site_id: 'SITE-033', site_name: 'Johns Hopkins Hospital', issue: 'Missed monitoring visit', severity: 'warning', metric: '42 days gap' },
+  { site_id: 'SITE-108', site_name: 'National Cancer Center Hospital', issue: 'High screen failure rate', severity: 'critical', metric: '45% failure' }
 ]
 
 export function Pulse() {
-  const { studyData, setView, setSelectedSite, setInvestigation, toggleCommand } = useStore()
+  const { studyData, setStudyData, setView, setSelectedSite, setInvestigation, toggleCommand } = useStore()
   const [expandedInsight, setExpandedInsight] = useState(null)
-  const percentage = Math.round((studyData.enrolled / studyData.target) * 100 * 10) / 10
+  const [attentionSites, setAttentionSites] = useState(defaultAttentionSites)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [summary, attention] = await Promise.all([
+          getStudySummary(),
+          getAttentionSites()
+        ])
+        
+        if (summary) {
+          setStudyData({
+            studyId: summary.study_id,
+            studyName: summary.study_name,
+            enrolled: summary.enrolled,
+            target: summary.target,
+            totalSites: summary.total_sites,
+            activeSites: summary.active_sites,
+            countries: summary.countries,
+            criticalSites: attention?.critical_count || 0,
+            watchSites: attention?.warning_count || 0,
+            lastUpdated: summary.last_updated
+          })
+        }
+        
+        if (attention?.sites?.length > 0) {
+          setAttentionSites(attention.sites)
+        }
+      } catch (error) {
+        console.error('Failed to fetch dashboard data:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchData()
+  }, [setStudyData])
+
+  const percentage = studyData.target > 0 
+    ? Math.round((studyData.enrolled / studyData.target) * 100 * 10) / 10 
+    : 0
 
   return (
     <div className="min-h-screen bg-apple-bg">
@@ -80,7 +122,7 @@ export function Pulse() {
             />
             
             <ConductorInsights 
-              insights={agentInsights}
+              insights={defaultAgentInsights}
               expandedInsight={expandedInsight}
               setExpandedInsight={setExpandedInsight}
               onInvestigate={(insight) => setInvestigation({
@@ -363,12 +405,12 @@ function AttentionRequired({ sites, onSiteClick }) {
       <div className="space-y-2">
         {sites.map((site) => (
           <button
-            key={site.id}
-            onClick={() => onSiteClick(site)}
+            key={site.site_id}
+            onClick={() => onSiteClick({ id: site.site_id, ...site })}
             className="w-full text-left p-3 bg-apple-bg rounded-xl hover:bg-apple-border/50 transition-colors"
           >
             <div className="flex items-center justify-between mb-1">
-              <span className="text-caption text-apple-text font-medium">{site.id}</span>
+              <span className="text-caption text-apple-text font-medium">{site.site_id}</span>
               <span className={`w-2 h-2 rounded-full ${
                 site.severity === 'critical' ? 'bg-apple-critical' : 'bg-apple-warning'
               }`} />
