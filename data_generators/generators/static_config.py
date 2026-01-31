@@ -48,6 +48,441 @@ _CITIES: dict[str, list[str]] = {
     ],
 }
 
+# ── Real hospital/institution names by city ──────────────────────────────────
+_INSTITUTIONS: dict[str, list[str]] = {
+    # USA
+    "New York": [
+        "Memorial Sloan Kettering Cancer Center",
+        "NYU Langone Health",
+        "Mount Sinai Hospital",
+        "NewYork-Presbyterian Hospital",
+        "Montefiore Medical Center",
+    ],
+    "Los Angeles": [
+        "UCLA Medical Center",
+        "Cedars-Sinai Medical Center",
+        "City of Hope National Medical Center",
+        "USC Norris Comprehensive Cancer Center",
+        "Ronald Reagan UCLA Medical Center",
+    ],
+    "Chicago": [
+        "Northwestern Memorial Hospital",
+        "University of Chicago Medical Center",
+        "Rush University Medical Center",
+        "Lurie Cancer Center",
+        "Advocate Christ Medical Center",
+    ],
+    "Houston": [
+        "MD Anderson Cancer Center",
+        "Houston Methodist Hospital",
+        "Baylor St. Luke's Medical Center",
+        "Memorial Hermann-Texas Medical Center",
+        "Harris Health Ben Taub Hospital",
+    ],
+    "Phoenix": [
+        "Mayo Clinic Arizona",
+        "Banner University Medical Center Phoenix",
+        "HonorHealth Scottsdale Osborn Medical Center",
+        "Dignity Health St. Joseph's Hospital",
+    ],
+    "Philadelphia": [
+        "Penn Medicine Hospital of the University of Pennsylvania",
+        "Thomas Jefferson University Hospital",
+        "Fox Chase Cancer Center",
+        "Temple University Hospital",
+    ],
+    "San Antonio": [
+        "University Hospital San Antonio",
+        "Methodist Healthcare System",
+        "CHRISTUS Santa Rosa Health System",
+        "Brooke Army Medical Center",
+    ],
+    "San Diego": [
+        "UC San Diego Health Moores Cancer Center",
+        "Scripps Health",
+        "Sharp Memorial Hospital",
+        "Rady Children's Hospital",
+    ],
+    "Dallas": [
+        "UT Southwestern Medical Center",
+        "Baylor University Medical Center",
+        "Parkland Memorial Hospital",
+        "Texas Health Presbyterian Hospital Dallas",
+    ],
+    "San Jose": [
+        "Stanford Health Care",
+        "El Camino Hospital",
+        "Regional Medical Center of San Jose",
+        "Kaiser Permanente San Jose Medical Center",
+    ],
+    "Austin": [
+        "Dell Seton Medical Center at UT",
+        "St. David's Medical Center",
+        "Ascension Seton Medical Center Austin",
+    ],
+    "Jacksonville": [
+        "Mayo Clinic Florida",
+        "UF Health Jacksonville",
+        "Baptist Medical Center Jacksonville",
+    ],
+    "Fort Worth": [
+        "Baylor Scott & White All Saints Medical Center",
+        "Texas Health Harris Methodist Hospital Fort Worth",
+        "JPS Health Network",
+    ],
+    "Columbus": [
+        "Ohio State University Wexner Medical Center",
+        "OhioHealth Riverside Methodist Hospital",
+        "Nationwide Children's Hospital",
+    ],
+    "Indianapolis": [
+        "Indiana University Health Methodist Hospital",
+        "Eskenazi Health",
+        "Ascension St. Vincent Indianapolis Hospital",
+    ],
+    "Charlotte": [
+        "Atrium Health Carolinas Medical Center",
+        "Novant Health Presbyterian Medical Center",
+        "Levine Cancer Institute",
+    ],
+    "San Francisco": [
+        "UCSF Medical Center",
+        "Zuckerberg San Francisco General Hospital",
+        "California Pacific Medical Center",
+        "UCSF Helen Diller Family Comprehensive Cancer Center",
+    ],
+    "Seattle": [
+        "Fred Hutchinson Cancer Center",
+        "UW Medical Center",
+        "Swedish Medical Center",
+        "Virginia Mason Medical Center",
+    ],
+    "Denver": [
+        "UCHealth University of Colorado Hospital",
+        "National Jewish Health",
+        "Denver Health Medical Center",
+    ],
+    "Nashville": [
+        "Vanderbilt University Medical Center",
+        "TriStar Centennial Medical Center",
+        "Ascension Saint Thomas Hospital West",
+    ],
+    "Baltimore": [
+        "Johns Hopkins Hospital",
+        "University of Maryland Medical Center",
+        "MedStar Harbor Hospital",
+    ],
+    "Boston": [
+        "Massachusetts General Hospital",
+        "Dana-Farber Cancer Institute",
+        "Brigham and Women's Hospital",
+        "Beth Israel Deaconess Medical Center",
+    ],
+    "Memphis": [
+        "St. Jude Children's Research Hospital",
+        "Regional One Health",
+        "Baptist Memorial Hospital-Memphis",
+    ],
+    "Louisville": [
+        "UofL Health - University of Louisville Hospital",
+        "Norton Hospital",
+        "Baptist Health Louisville",
+    ],
+    "Portland": [
+        "OHSU Hospital",
+        "Providence Portland Medical Center",
+        "Legacy Emanuel Medical Center",
+    ],
+    "Oklahoma City": [
+        "OU Health University of Oklahoma Medical Center",
+        "INTEGRIS Baptist Medical Center",
+        "Mercy Hospital Oklahoma City",
+    ],
+    "Las Vegas": [
+        "University Medical Center of Southern Nevada",
+        "Sunrise Hospital and Medical Center",
+        "Comprehensive Cancer Centers of Nevada",
+    ],
+    "Milwaukee": [
+        "Froedtert Hospital",
+        "Aurora St. Luke's Medical Center",
+        "Medical College of Wisconsin",
+    ],
+    "Albuquerque": [
+        "University of New Mexico Hospital",
+        "Presbyterian Hospital Albuquerque",
+        "Lovelace Medical Center",
+    ],
+    "Tucson": [
+        "Banner University Medical Center Tucson",
+        "Tucson Medical Center",
+        "University of Arizona Cancer Center",
+    ],
+    "Fresno": [
+        "Community Regional Medical Center",
+        "Saint Agnes Medical Center",
+        "Kaiser Permanente Fresno Medical Center",
+    ],
+    "Sacramento": [
+        "UC Davis Medical Center",
+        "Sutter Medical Center Sacramento",
+        "Mercy General Hospital",
+    ],
+    "Atlanta": [
+        "Emory University Hospital",
+        "Grady Memorial Hospital",
+        "Winship Cancer Institute of Emory University",
+    ],
+    "Kansas City": [
+        "University of Kansas Medical Center",
+        "Saint Luke's Hospital of Kansas City",
+        "Research Medical Center",
+    ],
+    "Miami": [
+        "Sylvester Comprehensive Cancer Center",
+        "Jackson Memorial Hospital",
+        "Baptist Hospital of Miami",
+    ],
+    "Raleigh": [
+        "Duke Raleigh Hospital",
+        "WakeMed Health & Hospitals",
+        "UNC REX Healthcare",
+    ],
+    "Omaha": [
+        "Nebraska Medicine",
+        "CHI Health Creighton University Medical Center",
+        "Methodist Hospital Omaha",
+    ],
+    "Minneapolis": [
+        "University of Minnesota Medical Center",
+        "Hennepin Healthcare",
+        "Abbott Northwestern Hospital",
+    ],
+    "Cleveland": [
+        "Cleveland Clinic",
+        "University Hospitals Cleveland Medical Center",
+        "MetroHealth Medical Center",
+    ],
+    "Tampa": [
+        "Moffitt Cancer Center",
+        "Tampa General Hospital",
+        "AdventHealth Tampa",
+    ],
+    # Japan
+    "Tokyo": [
+        "National Cancer Center Hospital",
+        "University of Tokyo Hospital",
+        "Keio University Hospital",
+        "Tokyo Metropolitan Cancer and Infectious Diseases Center Komagome Hospital",
+        "St. Luke's International Hospital",
+    ],
+    "Osaka": [
+        "Osaka University Hospital",
+        "Osaka International Cancer Institute",
+        "National Hospital Organization Osaka National Hospital",
+        "Osaka City University Hospital",
+    ],
+    "Nagoya": [
+        "Nagoya University Hospital",
+        "Aichi Cancer Center Hospital",
+        "Nagoya City University Hospital",
+    ],
+    "Yokohama": [
+        "Yokohama City University Hospital",
+        "Kanagawa Cancer Center",
+        "Showa University Northern Yokohama Hospital",
+    ],
+    "Sapporo": [
+        "Hokkaido University Hospital",
+        "Sapporo Medical University Hospital",
+        "Teine Keijinkai Hospital",
+    ],
+    "Kobe": [
+        "Kobe University Hospital",
+        "Hyogo Cancer Center",
+        "Kobe City Medical Center General Hospital",
+    ],
+    "Kyoto": [
+        "Kyoto University Hospital",
+        "Kyoto Prefectural University of Medicine Hospital",
+        "National Hospital Organization Kyoto Medical Center",
+    ],
+    "Fukuoka": [
+        "Kyushu University Hospital",
+        "National Hospital Organization Kyushu Cancer Center",
+        "Fukuoka University Hospital",
+    ],
+    "Kawasaki": [
+        "St. Marianna University School of Medicine Hospital",
+        "Nippon Medical School Musashi Kosugi Hospital",
+    ],
+    "Hiroshima": [
+        "Hiroshima University Hospital",
+        "Hiroshima Red Cross Hospital & Atomic-bomb Survivors Hospital",
+    ],
+    "Sendai": [
+        "Tohoku University Hospital",
+        "Miyagi Cancer Center",
+        "Sendai Medical Center",
+    ],
+    "Kitakyushu": [
+        "University of Occupational and Environmental Health Hospital",
+        "Kitakyushu Municipal Medical Center",
+    ],
+    "Chiba": [
+        "Chiba University Hospital",
+        "National Cancer Center Hospital East",
+        "Chiba Cancer Center",
+    ],
+    "Sakai": [
+        "Kinki University Hospital",
+        "Sakai City Medical Center",
+    ],
+    "Niigata": [
+        "Niigata University Medical & Dental Hospital",
+        "Niigata Cancer Center Hospital",
+    ],
+    # Canada
+    "Toronto": [
+        "Princess Margaret Cancer Centre",
+        "Sunnybrook Health Sciences Centre",
+        "Mount Sinai Hospital Toronto",
+        "Toronto General Hospital",
+    ],
+    "Montreal": [
+        "McGill University Health Centre",
+        "Centre hospitalier de l'Université de Montréal",
+        "Jewish General Hospital",
+    ],
+    "Vancouver": [
+        "BC Cancer Vancouver Centre",
+        "Vancouver General Hospital",
+        "St. Paul's Hospital Vancouver",
+    ],
+    "Calgary": [
+        "Tom Baker Cancer Centre",
+        "Foothills Medical Centre",
+        "Peter Lougheed Centre",
+    ],
+    "Edmonton": [
+        "Cross Cancer Institute",
+        "University of Alberta Hospital",
+        "Royal Alexandra Hospital",
+    ],
+    "Ottawa": [
+        "The Ottawa Hospital",
+        "Ottawa Hospital Cancer Centre",
+        "Queensway Carleton Hospital",
+    ],
+    "Winnipeg": [
+        "CancerCare Manitoba",
+        "Health Sciences Centre Winnipeg",
+        "St. Boniface Hospital",
+    ],
+    "Quebec City": [
+        "CHU de Québec-Université Laval",
+        "Institut universitaire de cardiologie et de pneumologie de Québec",
+    ],
+    "Hamilton": [
+        "Juravinski Cancer Centre",
+        "Hamilton Health Sciences",
+        "St. Joseph's Healthcare Hamilton",
+    ],
+    "Kitchener": [
+        "Grand River Hospital",
+        "St. Mary's General Hospital",
+    ],
+    # Australia
+    "Sydney": [
+        "Chris O'Brien Lifehouse",
+        "Royal Prince Alfred Hospital",
+        "Westmead Hospital",
+        "Prince of Wales Hospital",
+    ],
+    "Melbourne": [
+        "Peter MacCallum Cancer Centre",
+        "Royal Melbourne Hospital",
+        "Monash Medical Centre",
+    ],
+    "Brisbane": [
+        "Royal Brisbane and Women's Hospital",
+        "Princess Alexandra Hospital",
+        "Mater Hospital Brisbane",
+    ],
+    "Perth": [
+        "Sir Charles Gairdner Hospital",
+        "Fiona Stanley Hospital",
+        "Royal Perth Hospital",
+    ],
+    "Adelaide": [
+        "Royal Adelaide Hospital",
+        "Flinders Medical Centre",
+        "Ashford Cancer Centre",
+    ],
+    "Gold Coast": [
+        "Gold Coast University Hospital",
+        "John Flynn Private Hospital",
+    ],
+    "Canberra": [
+        "Canberra Hospital",
+        "Calvary Public Hospital Bruce",
+    ],
+    "Newcastle": [
+        "John Hunter Hospital",
+        "Calvary Mater Newcastle",
+    ],
+    "Hobart": [
+        "Royal Hobart Hospital",
+        "Hobart Private Hospital",
+    ],
+    "Darwin": [
+        "Royal Darwin Hospital",
+        "Darwin Private Hospital",
+    ],
+    # New Zealand
+    "Auckland": [
+        "Auckland City Hospital",
+        "Mercy Hospital Auckland",
+        "North Shore Hospital",
+    ],
+    "Wellington": [
+        "Wellington Hospital",
+        "Bowen Hospital",
+    ],
+    "Christchurch": [
+        "Christchurch Hospital",
+        "St George's Hospital Christchurch",
+    ],
+    "Hamilton": [
+        "Waikato Hospital",
+        "Braemar Hospital",
+    ],
+    "Tauranga": [
+        "Tauranga Hospital",
+        "Grace Hospital Tauranga",
+    ],
+    "Dunedin": [
+        "Dunedin Hospital",
+        "Mercy Hospital Dunedin",
+    ],
+    "Palmerston North": [
+        "Palmerston North Hospital",
+        "Crest Hospital",
+    ],
+    "Napier": [
+        "Hawke's Bay Hospital",
+        "Royston Hospital",
+    ],
+    "Nelson": [
+        "Nelson Hospital",
+        "Manuka Street Hospital",
+    ],
+    "Rotorua": [
+        "Rotorua Hospital",
+        "QE Health Rotorua",
+    ],
+}
+
 # ── Site activation waves ─────────────────────────────────────────────────────
 # (country, count, wave_month_offset_start, wave_month_offset_end)
 _WAVES = [
@@ -217,6 +652,7 @@ def _generate_sites(rng: Generator, anomaly_site_ids: set[str]) -> list[Site]:
     sites: list[Site] = []
     site_counter = 1
     country_city_idx: dict[str, int] = {c: 0 for c in _CITIES}
+    city_institution_idx: dict[str, int] = {}
 
     # Pre-assign anomaly site IDs to their specified countries
     anomaly_country_map: dict[str, str] = {}
@@ -247,6 +683,13 @@ def _generate_sites(rng: Generator, anomaly_site_ids: set[str]) -> list[Site]:
             city = city_list[country_city_idx[country_code] % len(city_list)]
             country_city_idx[country_code] += 1
 
+            # Get real institution name for this city
+            if city not in city_institution_idx:
+                city_institution_idx[city] = 0
+            institutions = _INSTITUTIONS.get(city, [f"{city} Medical Center", f"{city} General Hospital"])
+            site_name = institutions[city_institution_idx[city] % len(institutions)]
+            city_institution_idx[city] += 1
+
             # Activation date within wave window
             start = STUDY_START + timedelta(days=month_start * 30)
             end = STUDY_START + timedelta(days=month_end * 30)
@@ -265,6 +708,7 @@ def _generate_sites(rng: Generator, anomaly_site_ids: set[str]) -> list[Site]:
 
             sites.append(Site(
                 site_id=sid,
+                site_name=site_name,
                 country=country_code,
                 city=city,
                 site_type=site_type,
