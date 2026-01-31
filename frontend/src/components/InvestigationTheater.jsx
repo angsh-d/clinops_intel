@@ -45,6 +45,12 @@ export function InvestigationTheater() {
           }, delays[index]))
         })
         
+        // Set phase to 5 (Finding) after all phases complete
+        const phaseCount = result.phases?.length || 0
+        timers.push(setTimeout(() => {
+          setCurrentPhase(5)
+        }, delays[phaseCount] || 5500))
+        
         // Type the final answer
         const finalAnswer = buildFinalAnswer(result)
         const typingDelay = 6000
