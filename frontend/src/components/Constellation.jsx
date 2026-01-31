@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Search } from 'lucide-react'
+import { ArrowLeft, Search, Globe, BarChart3 } from 'lucide-react'
 import { useStore } from '../lib/store'
+import { WorldMap } from './WorldMap'
 
 const mockSites = Array.from({ length: 50 }, (_, i) => ({
   id: `SITE-${String(i + 1).padStart(3, '0')}`,
@@ -16,7 +17,7 @@ const mockSites = Array.from({ length: 50 }, (_, i) => ({
 export function Constellation() {
   const { setView, setSelectedSite, toggleCommand } = useStore()
   const [hoveredSite, setHoveredSite] = useState(null)
-  const canvasRef = useRef(null)
+  const [activeTab, setActiveTab] = useState('map')
   
   return (
     <motion.div
@@ -32,36 +33,79 @@ export function Constellation() {
         
         <div className="mt-8 card p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-section text-apple-text">Site Constellation</h2>
-            <div className="flex gap-2">
-              <LegendDot color="bg-apple-text" label="Healthy" />
-              <LegendDot color="bg-apple-warning" label="Warning" />
-              <LegendDot color="bg-apple-critical" label="Critical" />
+            <h2 className="text-section text-apple-text">
+              {activeTab === 'map' ? 'Global Site Map' : 'Site Constellation'}
+            </h2>
+            <div className="flex items-center gap-4">
+              <ViewToggle activeTab={activeTab} onTabChange={setActiveTab} />
+              <div className="flex gap-2">
+                <LegendDot color="bg-apple-text" label="Healthy" />
+                <LegendDot color="bg-apple-warning" label="Warning" />
+                <LegendDot color="bg-apple-critical" label="Critical" />
+              </div>
             </div>
           </div>
           
-          <div className="relative h-[500px] bg-apple-bg rounded-xl overflow-hidden">
-            <AxisLabels />
-            
-            <div className="absolute inset-0 p-8">
-              {mockSites.map((site) => (
-                <SiteDot
-                  key={site.id}
-                  site={site}
-                  onHover={setHoveredSite}
-                  onClick={() => setSelectedSite(site)}
-                  isHovered={hoveredSite?.id === site.id}
-                />
-              ))}
+          {activeTab === 'map' ? (
+            <WorldMap 
+              sites={mockSites}
+              onSiteClick={setSelectedSite}
+              onSiteHover={setHoveredSite}
+              hoveredSite={hoveredSite}
+            />
+          ) : (
+            <div className="relative h-[500px] bg-apple-bg rounded-xl overflow-hidden border border-apple-border">
+              <AxisLabels />
+              
+              <div className="absolute inset-0 p-8">
+                {mockSites.map((site) => (
+                  <SiteDot
+                    key={site.id}
+                    site={site}
+                    onHover={setHoveredSite}
+                    onClick={() => setSelectedSite(site)}
+                    isHovered={hoveredSite?.id === site.id}
+                  />
+                ))}
+              </div>
+              
+              {hoveredSite && <SiteTooltip site={hoveredSite} />}
             </div>
-            
-            {hoveredSite && <SiteTooltip site={hoveredSite} />}
-          </div>
+          )}
         </div>
         
         <SiteTable sites={mockSites} onSelect={setSelectedSite} />
       </div>
     </motion.div>
+  )
+}
+
+function ViewToggle({ activeTab, onTabChange }) {
+  return (
+    <div className="flex bg-apple-bg rounded-lg p-1 border border-apple-border">
+      <button
+        onClick={() => onTabChange('map')}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-caption transition-colors ${
+          activeTab === 'map' 
+            ? 'bg-apple-surface text-apple-text shadow-sm' 
+            : 'text-apple-secondary hover:text-apple-text'
+        }`}
+      >
+        <Globe className="w-4 h-4" />
+        <span>Map</span>
+      </button>
+      <button
+        onClick={() => onTabChange('scatter')}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-caption transition-colors ${
+          activeTab === 'scatter' 
+            ? 'bg-apple-surface text-apple-text shadow-sm' 
+            : 'text-apple-secondary hover:text-apple-text'
+        }`}
+      >
+        <BarChart3 className="w-4 h-4" />
+        <span>Scatter</span>
+      </button>
+    </div>
   )
 }
 
