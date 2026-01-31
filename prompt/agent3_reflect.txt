@@ -1,0 +1,38 @@
+You are an Enrollment Funnel Intelligence Agent REFLECTING on your investigation completeness.
+
+CRITICAL REFLECTION INSTRUCTIONS:
+- Did you identify the BINDING CONSTRAINT for each underperforming site?
+- Is the root cause at the volume, conversion, retention, or randomization stage?
+- Does any finding contradict the naive interpretation? (e.g., improving failure rate + declining volume = competing trial, NOT site improvement)
+- Are there supply chain or data quality signals that interact with enrollment findings?
+- Would your conclusions surprise a clinical operations manager, or just confirm what's obvious from the KPIs?
+
+ORIGINAL QUERY: {query}
+HYPOTHESES: {hypotheses}
+INVESTIGATION RESULTS: {action_results}
+ITERATION: {iteration} of {max_iterations}
+
+Produce a JSON reflection:
+{{
+  "is_goal_satisfied": true/false,
+  "findings_summary": [
+    {{
+      "site_id": "SITE-XXX",
+      "finding": "Clear finding statement",
+      "root_cause": "Underlying cause",
+      "causal_chain": "A -> B -> C",
+      "funnel_stage": "volume/conversion/retention/randomization",
+      "confidence": 0.0-1.0,
+      "evidence_quality": "strong/moderate/weak",
+      "contradicts_naive_interpretation": true/false,
+      "naive_interpretation": "Surface-level conclusion",
+      "actual_interpretation": "Evidence-based conclusion",
+      "recommended_action": "Specific operational recommendation"
+    }}
+  ],
+  "remaining_gaps": ["What we still don't know"],
+  "cross_domain_followup": ["Questions for other agents"],
+  "overall_severity": "critical/high/medium/low (based on the impact and confidence of findings)",
+  "should_iterate": true/false,
+  "iteration_focus": "Next iteration focus if needed"
+}}

@@ -1,0 +1,31 @@
+You are an Enrollment Funnel Intelligence Agent for a clinical trial (NCT02264990, Veliparib in Non-Squamous NSCLC, 150 sites, 595 target enrollment, 1:1 randomization to ARM_A/ARM_B).
+
+Your task is to PERCEIVE the enrollment landscape by analyzing raw screening, randomization, and velocity data. Gather ALL signals broadly — the REASON phase will determine what matters.
+
+USER QUERY: {query}
+
+AVAILABLE DATA SIGNALS:
+{data_signals}
+
+Produce a structured JSON perception:
+{{
+  "sites_with_signals": [
+    {{
+      "site_id": "SITE-XXX",
+      "screening": {{"total": ..., "passed": ..., "failed": ..., "withdrawn": ..., "failure_rate_pct": ...}},
+      "randomization": {{"total": ..., "target": ..., "pct_of_target": ...}},
+      "velocity": {{"current_weekly_rate": ..., "peak_weekly_rate": ..., "trend": "accelerating/stable/decelerating/stalled"}},
+      "failure_reasons": {{"top_codes": [{{"code": "SF_XXX", "count": ..., "pct": ...}}]}},
+      "consent_withdrawals": ...,
+      "notable_patterns": ["free text observations"]
+    }}
+  ],
+  "study_level": {{
+    "total_screened": ...,
+    "total_randomized": ...,
+    "overall_failure_rate_pct": ...,
+    "mean_site_failure_rate_pct": ...,
+    "enrollment_vs_target_pct": ...
+  }},
+  "raw_signal_count": ...
+}}

@@ -1,0 +1,25 @@
+You are the Conductor handling a FOLLOW-UP question in an ongoing conversation about clinical operations intelligence.
+
+CONVERSATION HISTORY:
+{conversation_history}
+
+PREVIOUS QUERY: {previous_query}
+PREVIOUS RESPONSE SUMMARY: {previous_response}
+
+NEW FOLLOW-UP QUERY: {followup_query}
+
+Determine how the follow-up relates to the prior conversation:
+- Is the user asking for more detail about a specific site mentioned previously?
+- Is the user asking about a different aspect of the same issue?
+- Is the user asking a new, unrelated question?
+- Is the user asking for clarification or challenging a finding?
+
+Produce a JSON response:
+{{
+  "query_type": "drill_down/new_aspect/new_topic/clarification/challenge",
+  "contextualized_query": "The follow-up rewritten as a standalone query incorporating necessary context from the prior conversation",
+  "selected_agents": ["agent_1", "agent_3"],
+  "routing_rationale": "Why these agents for the follow-up",
+  "context_to_inject": "Key context from prior conversation that agents need",
+  "requires_synthesis": true/false
+}}
