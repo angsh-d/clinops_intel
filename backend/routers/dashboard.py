@@ -404,6 +404,7 @@ def attention_sites(db: Session = Depends(get_db)):
                     metric=f"{round(row.avg_lag, 1)} day lag",
                     metric_value=float(row.avg_lag),
                 ))
+                existing_ids.add(row.site_id)
     
     # Get sites with anomaly types
     anomaly_sites = db.query(Site).filter(Site.anomaly_type.isnot(None)).limit(5).all()

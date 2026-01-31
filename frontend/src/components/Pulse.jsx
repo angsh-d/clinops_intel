@@ -13,6 +13,12 @@ export function Pulse() {
   const [expandedInsight, setExpandedInsight] = useState(null)
   const [attentionSites, setAttentionSites] = useState([])
   const [agentInsights, setAgentInsights] = useState([])
+  const [agentActivity, setAgentActivity] = useState([
+    { id: 'enrollment', name: 'Enrollment Agent', status: 'idle', lastRun: 'Ready' },
+    { id: 'data-quality', name: 'Data Quality Agent', status: 'idle', lastRun: 'Ready' },
+    { id: 'compliance', name: 'Compliance Agent', status: 'idle', lastRun: 'Ready' },
+    { id: 'risk', name: 'Risk Agent', status: 'idle', lastRun: 'Ready' }
+  ])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -320,15 +326,15 @@ function AgentActivityPanel({ agents }) {
       
       <div className="space-y-3">
         {agents.map((agent) => (
-          <div key={agent.agent} className="flex items-center gap-3">
+          <div key={agent.id} className="flex items-center gap-3">
             <div className={`w-2 h-2 rounded-full ${
               agent.status === 'analyzing' ? 'bg-apple-accent animate-pulse' :
               agent.status === 'monitoring' ? 'bg-apple-success' :
               'bg-apple-secondary'
             }`} />
             <div className="flex-1 min-w-0">
-              <p className="text-caption text-apple-text font-medium">{agent.agent}</p>
-              <p className="text-caption text-apple-secondary truncate">{agent.detail}</p>
+              <p className="text-caption text-apple-text font-medium">{agent.name}</p>
+              <p className="text-caption text-apple-secondary truncate">{agent.lastRun}</p>
             </div>
           </div>
         ))}
