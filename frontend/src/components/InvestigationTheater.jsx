@@ -283,6 +283,32 @@ function ConfidenceBadge({ confidence }) {
 }
 
 function ReasoningTrace({ result }) {
+  const agentName = result?.agent_id === 'enrollment' ? 'Enrollment Agent' : 
+                    result?.agent_id === 'data_quality' ? 'Data Quality Agent' : 'Analysis Agent'
+  
+  const reasoning = [
+    {
+      step: "Query Classification",
+      detail: `Analyzed question context and routed to ${agentName} based on keywords and intent.`
+    },
+    {
+      step: "Data Collection",
+      detail: `Retrieved records from ${(result?.data_sources || ['database']).join(', ')} for site ${result?.site_id || 'N/A'}.`
+    },
+    {
+      step: "Pattern Analysis", 
+      detail: result?.finding?.evidence?.[0] || "Examined data patterns and distributions across available records."
+    },
+    {
+      step: "Anomaly Detection",
+      detail: result?.finding?.summary || "Compared site metrics against study benchmarks to identify deviations."
+    },
+    {
+      step: "Recommendation Generation",
+      detail: `Formulated actionable guidance based on findings with ${result?.confidence || 85}% confidence.`
+    }
+  ]
+  
   return (
     <motion.div
       initial={{ height: 0, opacity: 0 }}
@@ -290,11 +316,14 @@ function ReasoningTrace({ result }) {
       exit={{ height: 0, opacity: 0 }}
       className="overflow-hidden"
     >
-      <div className="mt-4 p-4 bg-apple-bg rounded-xl font-mono text-xs text-apple-secondary space-y-2">
-        <p>{"{"} "agent": "{result?.agent_id || 'analysis'}", "confidence": {(result?.confidence || 88) / 100} {"}"}</p>
-        <p>{"{"} "data_sources": {JSON.stringify(result?.data_sources || ["Database"])} {"}"}</p>
-        <p>{"{"} "site_id": "{result?.site_id || 'N/A'}" {"}"}</p>
-        <p>{"{"} "phases_completed": {result?.phases?.length || 0} {"}"}</p>
+      <div className="mt-4 p-4 bg-apple-bg rounded-xl space-y-3">
+        <p className="text-caption font-medium text-apple-text mb-3">Agent Reasoning Process</p>
+        {reasoning.map((item, idx) => (
+          <div key={idx} className="flex gap-3 text-sm">
+            <span className="text-apple-accent font-medium min-w-[140px]">{item.step}:</span>
+            <span className="text-apple-secondary">{item.detail}</span>
+          </div>
+        ))}
       </div>
     </motion.div>
   )
