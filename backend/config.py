@@ -19,11 +19,12 @@ class Settings(BaseSettings):
     # Database - use DATABASE_URL from environment if available
     database_url: str = ""
 
-    # Gemini
-    gemini_api_key: str = ""
+    # Gemini - Replit AI Integrations (automatically set by Replit)
+    ai_integrations_gemini_api_key: str = ""
+    ai_integrations_gemini_base_url: str = ""
     gemini_temperature: float = 0.0
     gemini_top_p: float = 0.95
-    gemini_max_output_tokens: int = 50000
+    gemini_max_output_tokens: int = 8192
     gemini_max_retries: int = 3
     gemini_timeout: int = 300
 

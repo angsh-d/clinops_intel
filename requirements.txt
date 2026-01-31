@@ -43,3 +43,4 @@ python-dotenv
 sqlalchemy
 uvicorn
 websockets
+google-genai

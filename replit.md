@@ -45,8 +45,16 @@ python -m uvicorn backend.main:app --host 0.0.0.0 --port 5000 --reload
 
 ## Environment Variables
 - `DATABASE_URL` - PostgreSQL connection string (auto-configured by Replit)
-- `GEMINI_API_KEY` - Google Gemini API key (optional)
-- `AZURE_OPENAI_API_KEY` - Azure OpenAI API key (optional)
+- `AI_INTEGRATIONS_GEMINI_API_KEY` - Replit AI Integrations Gemini key (auto-configured)
+- `AI_INTEGRATIONS_GEMINI_BASE_URL` - Replit AI Integrations base URL (auto-configured)
+
+## LLM Integration
+The application uses Replit AI Integrations for Gemini access, which provides:
+- No personal API key required
+- Charges billed to Replit credits
+- Supported models: gemini-3-pro-preview (primary), gemini-2.5-flash
 
 ## Recent Changes
 - 2026-01-31: Imported to Replit, configured for Replit environment
+- 2026-01-31: Set up Replit-managed PostgreSQL database
+- 2026-01-31: Configured Gemini via Replit AI Integrations

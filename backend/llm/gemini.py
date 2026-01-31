@@ -1,4 +1,7 @@
-"""Gemini LLM client implementation using google-genai SDK."""
+"""Gemini LLM client implementation using google-genai SDK.
+
+This uses Replit AI Integrations for Gemini access without requiring your own API key.
+"""
 
 import asyncio
 import logging
@@ -12,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class GeminiClient(LLMClient):
-    """Gemini client via google-genai SDK."""
+    """Gemini client via google-genai SDK using Replit AI Integrations."""
 
     def __init__(self, settings: Settings):
         self._model_name = settings.primary_llm
@@ -20,7 +23,13 @@ class GeminiClient(LLMClient):
         self._max_tokens = settings.gemini_max_output_tokens
         self._top_p = settings.gemini_top_p
         self._timeout = settings.gemini_timeout
-        self._client = genai.Client(api_key=settings.gemini_api_key)
+        self._client = genai.Client(
+            api_key=settings.ai_integrations_gemini_api_key,
+            http_options={
+                'api_version': '',
+                'base_url': settings.ai_integrations_gemini_base_url
+            }
+        )
 
     async def generate(self, prompt: str, *, system: str = "", temperature: float | None = None) -> LLMResponse:
         temp = temperature if temperature is not None else self._default_temp
