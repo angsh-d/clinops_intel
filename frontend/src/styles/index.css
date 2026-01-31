@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  html {
+    @apply bg-apple-bg;
+  }
+  
+  body {
+    @apply font-body text-apple-text;
+  }
+  
+  ::selection {
+    @apply bg-apple-accent/20;
+  }
+}
+
+@layer components {
+  .ai-gradient-border {
+    background: linear-gradient(135deg, #5856D6 0%, #AF52DE 100%);
+  }
+  
+  .ai-glow {
+    box-shadow: 0 0 20px rgba(88, 86, 214, 0.3);
+  }
+  
+  .glass {
+    @apply bg-white/80 backdrop-blur-xl;
+  }
+  
+  .card {
+    @apply bg-apple-surface border border-apple-border rounded-2xl shadow-apple;
+  }
+  
+  .button-primary {
+    @apply px-5 py-2.5 bg-apple-accent text-white rounded-full font-medium text-body
+           transition-all duration-200 hover:opacity-90 active:scale-95;
+  }
+  
+  .button-secondary {
+    @apply px-5 py-2.5 bg-apple-bg text-apple-text border border-apple-border rounded-full font-medium text-body
+           transition-all duration-200 hover:bg-apple-border/50 active:scale-95;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

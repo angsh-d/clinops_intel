@@ -48,6 +48,9 @@ class Settings(BaseSettings):
 
     # CORS - allow all origins for development
     cors_origins: list[str] = ["*"]
+    
+    # Server
+    backend_port: int = 8000
 
     model_config = {
         "env_file": str(_ENV_FILE),
