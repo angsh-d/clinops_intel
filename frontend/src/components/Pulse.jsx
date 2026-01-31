@@ -1,105 +1,413 @@
-import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { 
+  Activity, ArrowRight, AlertTriangle, TrendingDown, 
+  Brain, Zap, Eye, CheckCircle, ChevronRight, 
+  BarChart3, Users, Clock, Sparkles
+} from 'lucide-react'
 import { useStore } from '../lib/store'
 
+const agentInsights = [
+  {
+    id: 1,
+    agent: 'Enrollment Agent',
+    severity: 'critical',
+    title: 'Screen failure cluster detected in Japan region',
+    summary: 'SITE-108, SITE-112, SITE-119 showing 45% screen failure rate (vs 22% average). Root cause: ECOG eligibility misinterpretation.',
+    recommendation: 'Recommend targeted site training on ECOG assessment criteria.',
+    confidence: 94,
+    timestamp: '12 min ago',
+    sites: ['SITE-108', 'SITE-112', 'SITE-119'],
+    impact: 'Potential 8-week enrollment delay if unaddressed'
+  },
+  {
+    id: 2,
+    agent: 'Data Quality Agent',
+    severity: 'warning',
+    title: 'Query backlog accumulating at SITE-012',
+    summary: 'Lab Results and Drug Accountability pages showing 2.5x query rate vs peers. CRA proficiency gap identified following recent transition.',
+    recommendation: 'Schedule targeted CRF training session.',
+    confidence: 91,
+    timestamp: '34 min ago',
+    sites: ['SITE-012'],
+    impact: 'Database lock risk for upcoming interim analysis'
+  },
+  {
+    id: 3,
+    agent: 'Supply Chain Agent',
+    severity: 'warning',
+    title: 'Kit expiry risk at 3 low-enrolling sites',
+    summary: 'SITE-031, SITE-045, SITE-078 have drug kits approaching 60-day expiry with insufficient enrollment velocity to consume.',
+    recommendation: 'Consider kit redistribution to high-enrolling sites.',
+    confidence: 88,
+    timestamp: '1h ago',
+    sites: ['SITE-031', 'SITE-045', 'SITE-078'],
+    impact: '$45K potential wastage'
+  }
+]
+
+const agentActivity = [
+  { agent: 'Enrollment', status: 'analyzing', detail: 'Scanning screen failure patterns across 149 sites' },
+  { agent: 'Data Quality', status: 'monitoring', detail: 'Tracking query resolution rates' },
+  { agent: 'Compliance', status: 'idle', detail: 'Last scan: 15 min ago · No issues' },
+  { agent: 'Supply Chain', status: 'analyzing', detail: 'Forecasting kit demand for next 30 days' }
+]
+
+const attentionSites = [
+  { id: 'SITE-012', name: 'MD Anderson Cancer Center', issue: 'Query backlog elevated', severity: 'critical', metric: '23 open queries' },
+  { id: 'SITE-022', name: 'Cleveland Clinic', issue: 'Entry lag during CRA transition', severity: 'warning', metric: '4.2 day lag' },
+  { id: 'SITE-033', name: 'Johns Hopkins Hospital', issue: 'Missed monitoring visit', severity: 'warning', metric: '42 days gap' },
+  { id: 'SITE-108', name: 'National Cancer Center Hospital', issue: 'High screen failure rate', severity: 'critical', metric: '45% failure' }
+]
+
 export function Pulse() {
-  const { studyData, setView } = useStore()
+  const { studyData, setView, setSelectedSite, setInvestigation, toggleCommand } = useStore()
+  const [expandedInsight, setExpandedInsight] = useState(null)
   const percentage = Math.round((studyData.enrolled / studyData.target) * 100 * 10) / 10
-  
+
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.3 }}
-      className="min-h-screen flex flex-col items-center justify-center px-6 cursor-pointer"
-      onClick={() => setView('constellation')}
-    >
-      <motion.div
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.1, duration: 0.5 }}
-        className="text-center max-w-2xl"
-      >
-        <p className="text-caption text-apple-secondary mb-8 tracking-wide uppercase">
-          {studyData.studyName}
-        </p>
-        
-        <div className="mb-8">
-          <motion.span 
-            className="text-hero text-apple-text font-light tracking-tight"
-            initial={{ scale: 0.9 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: 'spring', stiffness: 100 }}
-          >
-            {studyData.enrolled}
-          </motion.span>
-          <span className="text-hero text-apple-secondary font-light"> / {studyData.target}</span>
-        </div>
-        
-        <div className="relative w-full max-w-md mx-auto mb-8">
-          <div className="h-2 bg-apple-border rounded-full overflow-hidden">
-            <motion.div
-              className="h-full bg-apple-text rounded-full animate-pulse-slow"
-              initial={{ width: 0 }}
-              animate={{ width: `${percentage}%` }}
-              transition={{ delay: 0.4, duration: 1, ease: 'easeOut' }}
+    <div className="min-h-screen bg-apple-bg">
+      <Header studyData={studyData} onSearch={toggleCommand} onBack={() => setView('home')} />
+      
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <EnrollmentHero 
+              enrolled={studyData.enrolled} 
+              target={studyData.target} 
+              percentage={percentage}
+              onExplore={() => setView('constellation')}
+            />
+            
+            <ConductorInsights 
+              insights={agentInsights}
+              expandedInsight={expandedInsight}
+              setExpandedInsight={setExpandedInsight}
+              onInvestigate={(insight) => setInvestigation({
+                question: `Investigate: ${insight.title}`,
+                site: { id: insight.sites[0] },
+                status: 'routing'
+              })}
+            />
+          </div>
+          
+          <div className="space-y-6">
+            <AgentActivityPanel agents={agentActivity} />
+            
+            <AttentionRequired 
+              sites={attentionSites}
+              onSiteClick={(site) => setSelectedSite(site)}
+            />
+            
+            <QuickActions 
+              onAsk={toggleCommand}
+              onExplore={() => setView('constellation')}
             />
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function Header({ studyData, onSearch, onBack }) {
+  return (
+    <header className="sticky top-0 z-40 glass border-b border-apple-border">
+      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={onBack}
+            className="flex items-center gap-2 text-apple-secondary hover:text-apple-text transition-colors"
+          >
+            <Activity className="w-5 h-5" />
+            <span className="text-section text-apple-text">{studyData.studyName}</span>
+          </button>
+          <span className="text-caption text-apple-secondary">Phase 3 · NSCLC</span>
+        </div>
         
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6 }}
-          className="text-title text-apple-text mb-4"
+        <button
+          onClick={onSearch}
+          className="flex items-center gap-2 px-4 py-2 bg-apple-bg border border-apple-border 
+                     rounded-full text-caption text-apple-secondary hover:text-apple-text transition-colors"
         >
-          {percentage}% enrolled
-        </motion.p>
-        
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.8 }}
-          className="text-body text-apple-secondary"
+          <Sparkles className="w-4 h-4" />
+          <span>Ask Conductor</span>
+          <kbd className="px-1.5 py-0.5 bg-apple-surface rounded text-xs font-mono ml-2">⌘K</kbd>
+        </button>
+      </div>
+    </header>
+  )
+}
+
+function EnrollmentHero({ enrolled, target, percentage, onExplore }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="card p-8"
+    >
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <p className="text-caption text-apple-secondary mb-2">Study Enrollment</p>
+          <div className="flex items-baseline gap-2">
+            <span className="text-5xl font-light text-apple-text">{enrolled}</span>
+            <span className="text-2xl text-apple-secondary">/ {target}</span>
+          </div>
+        </div>
+        <button
+          onClick={onExplore}
+          className="flex items-center gap-2 text-caption text-apple-accent hover:underline"
         >
-          <span className="text-apple-critical">{studyData.criticalSites} sites</span> need attention
-          <span className="mx-2">·</span>
-          <span className="text-apple-warning">{studyData.watchSites}</span> on watch
-        </motion.p>
-        
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.2 }}
-          className="text-caption text-apple-secondary/60 mt-12"
-        >
-          Click anywhere to explore
-        </motion.p>
-      </motion.div>
+          Explore sites
+          <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
       
-      <CommandHint />
+      <div className="mb-4">
+        <div className="h-3 bg-apple-border rounded-full overflow-hidden">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${percentage}%` }}
+            transition={{ duration: 1, ease: 'easeOut' }}
+            className="h-full bg-gradient-to-r from-apple-text to-apple-secondary rounded-full"
+          />
+        </div>
+      </div>
+      
+      <div className="flex items-center justify-between text-caption">
+        <span className="text-apple-text font-medium">{percentage}% complete</span>
+        <div className="flex items-center gap-4 text-apple-secondary">
+          <span className="flex items-center gap-1">
+            <Users className="w-3.5 h-3.5" />
+            149 active sites
+          </span>
+          <span className="flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5" />
+            Updated 2h ago
+          </span>
+        </div>
+      </div>
     </motion.div>
   )
 }
 
-function CommandHint() {
-  const { toggleCommand } = useStore()
-  
+function ConductorInsights({ insights, expandedInsight, setExpandedInsight, onInvestigate }) {
   return (
-    <motion.button
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: 1.5 }}
-      onClick={(e) => {
-        e.stopPropagation()
-        toggleCommand()
-      }}
-      className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 
-                 bg-apple-surface border border-apple-border rounded-full shadow-apple
-                 text-caption text-apple-secondary hover:text-apple-text transition-colors"
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1 }}
+      className="card overflow-hidden"
     >
-      <kbd className="px-1.5 py-0.5 bg-apple-bg rounded text-xs font-mono">⌘K</kbd>
-      <span>Ask anything</span>
-    </motion.button>
+      <div className="p-6 border-b border-apple-border">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#5856D6] to-[#AF52DE] flex items-center justify-center">
+              <Brain className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h2 className="text-section text-apple-text">Conductor Insights</h2>
+              <p className="text-caption text-apple-secondary">Proactive findings from AI agents</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-apple-success animate-pulse" />
+            <span className="text-caption text-apple-secondary">Live monitoring</span>
+          </div>
+        </div>
+      </div>
+      
+      <div className="divide-y divide-apple-border">
+        {insights.map((insight) => (
+          <InsightCard 
+            key={insight.id}
+            insight={insight}
+            isExpanded={expandedInsight === insight.id}
+            onToggle={() => setExpandedInsight(expandedInsight === insight.id ? null : insight.id)}
+            onInvestigate={() => onInvestigate(insight)}
+          />
+        ))}
+      </div>
+    </motion.div>
+  )
+}
+
+function InsightCard({ insight, isExpanded, onToggle, onInvestigate }) {
+  const severityConfig = {
+    critical: { bg: 'bg-apple-critical/10', text: 'text-apple-critical', icon: AlertTriangle },
+    warning: { bg: 'bg-apple-warning/10', text: 'text-apple-warning', icon: TrendingDown },
+    info: { bg: 'bg-apple-info/10', text: 'text-apple-info', icon: Eye }
+  }
+  const config = severityConfig[insight.severity] || severityConfig.info
+  const Icon = config.icon
+
+  return (
+    <div className="p-6">
+      <button 
+        onClick={onToggle}
+        className="w-full text-left"
+      >
+        <div className="flex items-start gap-4">
+          <div className={`p-2 rounded-lg ${config.bg}`}>
+            <Icon className={`w-4 h-4 ${config.text}`} />
+          </div>
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-caption text-apple-accent font-medium">{insight.agent}</span>
+              <span className="text-caption text-apple-secondary">· {insight.timestamp}</span>
+            </div>
+            <h3 className="text-body text-apple-text font-medium mb-2">{insight.title}</h3>
+            <p className="text-caption text-apple-secondary line-clamp-2">{insight.summary}</p>
+          </div>
+          
+          <ChevronRight className={`w-5 h-5 text-apple-secondary transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+        </div>
+      </button>
+      
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="mt-4 ml-12 space-y-4">
+              <div className="p-4 bg-apple-bg rounded-xl">
+                <p className="text-caption text-apple-secondary mb-2">Recommendation</p>
+                <p className="text-body text-apple-text">{insight.recommendation}</p>
+              </div>
+              
+              <div className="flex items-center gap-6 text-caption">
+                <div>
+                  <span className="text-apple-secondary">Confidence: </span>
+                  <span className="font-mono text-apple-text">{insight.confidence}%</span>
+                </div>
+                <div>
+                  <span className="text-apple-secondary">Impact: </span>
+                  <span className="text-apple-text">{insight.impact}</span>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onInvestigate(); }}
+                  className="button-primary text-sm py-2"
+                >
+                  <Zap className="w-4 h-4 mr-2" />
+                  Investigate
+                </button>
+                <button className="button-secondary text-sm py-2">
+                  View affected sites
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+function AgentActivityPanel({ agents }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.2 }}
+      className="card p-6"
+    >
+      <div className="flex items-center gap-2 mb-4">
+        <Activity className="w-4 h-4 text-apple-accent" />
+        <h3 className="text-section text-apple-text">Agent Activity</h3>
+      </div>
+      
+      <div className="space-y-3">
+        {agents.map((agent) => (
+          <div key={agent.agent} className="flex items-center gap-3">
+            <div className={`w-2 h-2 rounded-full ${
+              agent.status === 'analyzing' ? 'bg-apple-accent animate-pulse' :
+              agent.status === 'monitoring' ? 'bg-apple-success' :
+              'bg-apple-secondary'
+            }`} />
+            <div className="flex-1 min-w-0">
+              <p className="text-caption text-apple-text font-medium">{agent.agent}</p>
+              <p className="text-caption text-apple-secondary truncate">{agent.detail}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  )
+}
+
+function AttentionRequired({ sites, onSiteClick }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.3 }}
+      className="card p-6"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-apple-critical" />
+          <h3 className="text-section text-apple-text">Attention Required</h3>
+        </div>
+        <span className="px-2 py-0.5 bg-apple-critical/10 text-apple-critical rounded-full text-xs font-medium">
+          {sites.length} sites
+        </span>
+      </div>
+      
+      <div className="space-y-2">
+        {sites.map((site) => (
+          <button
+            key={site.id}
+            onClick={() => onSiteClick(site)}
+            className="w-full text-left p-3 bg-apple-bg rounded-xl hover:bg-apple-border/50 transition-colors"
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-caption text-apple-text font-medium">{site.id}</span>
+              <span className={`w-2 h-2 rounded-full ${
+                site.severity === 'critical' ? 'bg-apple-critical' : 'bg-apple-warning'
+              }`} />
+            </div>
+            <p className="text-caption text-apple-secondary truncate">{site.issue}</p>
+            <p className="text-caption text-apple-secondary/70 font-mono">{site.metric}</p>
+          </button>
+        ))}
+      </div>
+    </motion.div>
+  )
+}
+
+function QuickActions({ onAsk, onExplore }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.4 }}
+      className="card p-6"
+    >
+      <h3 className="text-section text-apple-text mb-4">Quick Actions</h3>
+      
+      <div className="space-y-2">
+        <button 
+          onClick={onAsk}
+          className="w-full flex items-center gap-3 p-3 bg-apple-bg rounded-xl hover:bg-apple-border/50 transition-colors"
+        >
+          <Sparkles className="w-4 h-4 text-apple-accent" />
+          <span className="text-caption text-apple-text">Ask Conductor anything</span>
+        </button>
+        <button 
+          onClick={onExplore}
+          className="w-full flex items-center gap-3 p-3 bg-apple-bg rounded-xl hover:bg-apple-border/50 transition-colors"
+        >
+          <BarChart3 className="w-4 h-4 text-apple-secondary" />
+          <span className="text-caption text-apple-text">Explore all sites</span>
+        </button>
+      </div>
+    </motion.div>
   )
 }
