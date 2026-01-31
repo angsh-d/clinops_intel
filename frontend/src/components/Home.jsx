@@ -250,7 +250,7 @@ function StudyCard({ study, onSelect }) {
     <button
       onClick={() => onSelect(study)}
       disabled={!isActive}
-      className={`w-full text-left card p-6 transition-all ${
+      className={`w-full h-full text-left card p-6 transition-all flex flex-col ${
         isActive 
           ? 'hover:shadow-apple-lg hover:border-apple-text/20 cursor-pointer' 
           : 'opacity-60 cursor-not-allowed'
@@ -275,37 +275,33 @@ function StudyCard({ study, onSelect }) {
         )}
       </div>
       
-      {isActive ? (
-        <>
-          <div className="mb-4">
-            <div className="flex justify-between text-caption mb-1">
-              <span className="text-apple-secondary">Enrollment</span>
-              <span className="font-mono text-apple-text">{study.enrolled} / {study.target}</span>
-            </div>
-            <div className="h-1.5 bg-apple-border rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-apple-text rounded-full"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-4 text-caption text-apple-secondary">
-            <div className="flex items-center gap-1">
-              <Users className="w-3.5 h-3.5" />
-              <span>{study.sites} sites</span>
-            </div>
-            <span>·</span>
-            <span>{study.countries} countries</span>
-            <span>·</span>
-            <span>Updated {study.lastUpdated}</span>
-          </div>
-        </>
-      ) : (
-        <div className="text-caption text-apple-secondary">
-          {study.lastUpdated}
+      <div className="flex-1" />
+      
+      <div className="mb-4">
+        <div className="flex justify-between text-caption mb-1">
+          <span className="text-apple-secondary">Enrollment</span>
+          <span className="font-mono text-apple-text">
+            {isActive ? `${study.enrolled} / ${study.target}` : `0 / ${study.target}`}
+          </span>
         </div>
-      )}
+        <div className="h-1.5 bg-apple-border rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-apple-text rounded-full"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+      
+      <div className="flex items-center gap-4 text-caption text-apple-secondary">
+        <div className="flex items-center gap-1">
+          <Users className="w-3.5 h-3.5" />
+          <span>{study.sites} sites</span>
+        </div>
+        <span>·</span>
+        <span>{study.countries} countries</span>
+        <span>·</span>
+        <span>{isActive ? `Updated ${study.lastUpdated}` : study.lastUpdated}</span>
+      </div>
     </button>
   )
 }
