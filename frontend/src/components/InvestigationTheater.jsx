@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ChevronDown, ExternalLink, Copy, Check } from 'lucide-react'
+import { X, ChevronDown, ExternalLink, Copy, Check, Loader2 } from 'lucide-react'
 import { useStore } from '../lib/store'
+import { runInvestigation } from '../lib/api'
 
 const PHASES = ['Routing', 'Gathering', 'Analyzing', 'Planning', 'Investigating', 'Finding']
 
@@ -11,51 +12,67 @@ export function InvestigationTheater() {
   const [typedText, setTypedText] = useState('')
   const [showTrace, setShowTrace] = useState(false)
   const [phaseData, setPhaseData] = useState({})
+  const [investigationResult, setInvestigationResult] = useState(null)
+  const [loading, setLoading] = useState(true)
   
-  const finalAnswer = `Query spike at ${investigation?.site?.id || 'this site'} is driven by Lab Results and Drug Accountability pages.
-
-Root Cause: Data entry proficiency gap following CRA transition, not a monitoring-triggered spike.
-
-Evidence:
-• Lab Results page: 38% of queries (norm: 18%)
-• Drug Accountability: 22% of queries (norm: 12%)
-• Query rate 2.5x peer average for Academic sites
-• No monitoring visit correlation detected
-
-Recommended Action: Targeted training on Lab Results and Drug Accountability CRF completion. Expected 40-50% query reduction within 3-4 weeks based on similar interventions at peer sites.`
-
   useEffect(() => {
     if (!investigation) return
     
-    const delays = [500, 1500, 3000, 4500, 6000, 7500]
-    const timers = []
-    
-    delays.forEach((delay, index) => {
-      timers.push(setTimeout(() => {
-        setCurrentPhase(index)
-        setPhaseData(prev => ({
-          ...prev,
-          [index]: getPhaseContent(index, investigation)
-        }))
-      }, delay))
-    })
-    
-    const typingDelay = 8000
-    let charIndex = 0
-    const typeTimer = setInterval(() => {
-      if (charIndex <= finalAnswer.length) {
-        setTypedText(finalAnswer.slice(0, charIndex))
-        charIndex++
-      } else {
-        clearInterval(typeTimer)
+    async function fetchInvestigation() {
+      setLoading(true)
+      setCurrentPhase(0)
+      setTypedText('')
+      setPhaseData({})
+      
+      try {
+        const result = await runInvestigation(
+          investigation.question,
+          investigation.site?.id
+        )
+        setInvestigationResult(result)
+        
+        // Animate through phases
+        const delays = [500, 1500, 2500, 3500, 4500, 5500]
+        const timers = []
+        
+        result.phases?.forEach((phase, index) => {
+          timers.push(setTimeout(() => {
+            setCurrentPhase(index)
+            setPhaseData(prev => ({
+              ...prev,
+              [index]: phase.content
+            }))
+          }, delays[index]))
+        })
+        
+        // Type the final answer
+        const finalAnswer = buildFinalAnswer(result)
+        const typingDelay = 6000
+        let charIndex = 0
+        const typeTimer = setInterval(() => {
+          if (charIndex <= finalAnswer.length) {
+            setTypedText(finalAnswer.slice(0, charIndex))
+            charIndex++
+          } else {
+            clearInterval(typeTimer)
+          }
+        }, 12)
+        
+        timers.push(typeTimer)
+        
+        setLoading(false)
+        
+        return () => {
+          timers.forEach(t => clearTimeout(t) || clearInterval(t))
+        }
+      } catch (error) {
+        console.error('Investigation failed:', error)
+        setLoading(false)
       }
-    }, 15)
-    
-    return () => {
-      timers.forEach(clearTimeout)
-      clearInterval(typeTimer)
     }
-  }, [investigation])
+    
+    fetchInvestigation()
+  }, [investigation?.question, investigation?.site?.id])
   
   if (!investigation) return null
   
@@ -91,62 +108,93 @@ Recommended Action: Targeted training on Lab Results and Drug Accountability CRF
           {investigation.site?.id} · Just now
         </motion.p>
         
-        <PhaseIndicator phases={PHASES} currentPhase={currentPhase} />
-        
-        <div className="mt-8 space-y-4">
-          <AnimatePresence mode="popLayout">
-            {Object.entries(phaseData).map(([phase, content]) => (
-              <PhaseCard key={phase} phase={parseInt(phase)} content={content} />
-            ))}
-          </AnimatePresence>
-        </div>
-        
-        {currentPhase >= 5 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-8"
-          >
-            <div className="card p-6 border-l-4 border-l-[#5856D6] relative overflow-hidden">
-              <div className="absolute inset-0 opacity-5 ai-gradient-border" />
-              
-              <h3 className="text-section text-apple-text mb-4">Finding</h3>
-              
-              <div className="prose prose-sm max-w-none">
-                <pre className="whitespace-pre-wrap font-body text-body text-apple-text leading-relaxed bg-transparent p-0 m-0">
-                  {typedText}
-                  <span className="animate-pulse">|</span>
-                </pre>
-              </div>
-              
-              <div className="flex items-center gap-4 mt-6 pt-4 border-t border-apple-border">
-                <ConfidenceBadge confidence={92} />
-                <span className="text-caption text-apple-secondary">
-                  Data Quality Agent · EDC + CTMS · Updated 2h ago
-                </span>
-              </div>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center h-64">
+            <Loader2 className="w-8 h-8 text-apple-secondary animate-spin mb-4" />
+            <p className="text-body text-apple-secondary">Analyzing data...</p>
+          </div>
+        ) : (
+          <>
+            <PhaseIndicator phases={PHASES} currentPhase={currentPhase} />
+            
+            <div className="mt-8 space-y-4">
+              <AnimatePresence mode="popLayout">
+                {Object.entries(phaseData).map(([phase, content]) => (
+                  <PhaseCard key={phase} phase={parseInt(phase)} content={content} />
+                ))}
+              </AnimatePresence>
             </div>
             
-            <button
-              onClick={() => setShowTrace(!showTrace)}
-              className="flex items-center gap-2 mt-4 text-caption text-apple-accent hover:underline"
-            >
-              <ChevronDown className={`w-4 h-4 transition-transform ${showTrace ? 'rotate-180' : ''}`} />
-              {showTrace ? 'Hide reasoning trace' : 'Show full reasoning trace'}
-            </button>
-            
-            <AnimatePresence>
-              {showTrace && <ReasoningTrace />}
-            </AnimatePresence>
-            
-            <FollowUpChips />
-            
-            <ActionButtons />
-          </motion.div>
+            {currentPhase >= 5 && investigationResult && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-8"
+              >
+                <div className="card p-6 border-l-4 border-l-[#5856D6] relative overflow-hidden">
+                  <div className="absolute inset-0 opacity-5 ai-gradient-border" />
+                  
+                  <h3 className="text-section text-apple-text mb-4">Finding</h3>
+                  
+                  <div className="prose prose-sm max-w-none">
+                    <pre className="whitespace-pre-wrap font-body text-body text-apple-text leading-relaxed bg-transparent p-0 m-0">
+                      {typedText}
+                      <span className="animate-pulse">|</span>
+                    </pre>
+                  </div>
+                  
+                  <div className="flex items-center gap-4 mt-6 pt-4 border-t border-apple-border">
+                    <ConfidenceBadge confidence={investigationResult.confidence || 88} />
+                    <span className="text-caption text-apple-secondary">
+                      {investigationResult.agent_id === 'data_quality' ? 'Data Quality Agent' : 'Analysis Agent'} · {investigationResult.finding?.data_sources || 'Database'} · Live data
+                    </span>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => setShowTrace(!showTrace)}
+                  className="flex items-center gap-2 mt-4 text-caption text-apple-accent hover:underline"
+                >
+                  <ChevronDown className={`w-4 h-4 transition-transform ${showTrace ? 'rotate-180' : ''}`} />
+                  {showTrace ? 'Hide reasoning trace' : 'Show full reasoning trace'}
+                </button>
+                
+                <AnimatePresence>
+                  {showTrace && <ReasoningTrace result={investigationResult} />}
+                </AnimatePresence>
+                
+                <FollowUpChips />
+                
+                <ActionButtons />
+              </motion.div>
+            )}
+          </>
         )}
       </div>
     </motion.div>
   )
+}
+
+function buildFinalAnswer(result) {
+  if (!result?.finding) {
+    return "Analysis complete. No significant issues detected."
+  }
+  
+  const { finding } = result
+  let answer = finding.summary || "Analysis complete."
+  
+  if (finding.evidence && finding.evidence.length > 0) {
+    answer += "\n\nEvidence:\n"
+    finding.evidence.forEach(e => {
+      answer += `• ${e}\n`
+    })
+  }
+  
+  if (finding.recommendation) {
+    answer += `\nRecommended Action: ${finding.recommendation}`
+  }
+  
+  return answer
 }
 
 function PhaseIndicator({ phases, currentPhase }) {
@@ -173,6 +221,8 @@ function PhaseIndicator({ phases, currentPhase }) {
 
 function PhaseCard({ phase, content }) {
   const titles = ['Routing', 'Gathering Data', 'Analyzing', 'Investigation Plan', 'Investigating', 'Finding']
+  
+  if (!content || !Array.isArray(content)) return null
   
   return (
     <motion.div
@@ -206,44 +256,6 @@ function PhaseCard({ phase, content }) {
   )
 }
 
-function getPhaseContent(phase, investigation) {
-  const site = investigation?.site?.id || 'SITE-012'
-  
-  switch (phase) {
-    case 0:
-      return [{ text: `Routing to Data Quality specialist — this question is about query patterns. Confidence: 97%` }]
-    case 1:
-      return [
-        { text: 'Querying eCRF entry data... 847 records', done: true },
-        { text: 'Querying query history... 312 queries', done: true },
-        { text: 'Checking CRA assignment history... 2 assignments', done: true },
-        { text: 'Loading monitoring visit log...', done: false }
-      ]
-    case 2:
-      return [
-        { text: '1. CRA training gap — query concentration on Lab Results and AE pages suggests proficiency issue' },
-        { text: '2. Monitoring spike — recent visit may have triggered query burst' },
-        { text: '3. Site complexity — academic high-volume site' }
-      ]
-    case 3:
-      return [
-        { text: '(1) Check CRF page distribution of queries' },
-        { text: '(2) Cross-reference monitoring visit dates' },
-        { text: '(3) Compare with peer sites of similar profile' },
-        { text: '(4) Examine CRA assignment timeline' }
-      ]
-    case 4:
-      return [
-        { text: 'Step 1: Lab Results 38%, Drug Accountability 22%, AE 18% → Concentration confirmed', done: true },
-        { text: 'Step 2: Last visit 42 days ago, no triggered queries → Monitoring spike ruled out', done: true },
-        { text: 'Step 3: 2.5x average for similar Academic sites → Genuinely anomalous', done: true },
-        { text: 'Step 4: Single CRA since activation → CRA change ruled out', done: true }
-      ]
-    default:
-      return []
-  }
-}
-
 function ConfidenceBadge({ confidence }) {
   const filled = Math.round(confidence / 10)
   
@@ -264,7 +276,7 @@ function ConfidenceBadge({ confidence }) {
   )
 }
 
-function ReasoningTrace() {
+function ReasoningTrace({ result }) {
   return (
     <motion.div
       initial={{ height: 0, opacity: 0 }}
@@ -273,11 +285,10 @@ function ReasoningTrace() {
       className="overflow-hidden"
     >
       <div className="mt-4 p-4 bg-apple-bg rounded-xl font-mono text-xs text-apple-secondary space-y-2">
-        <p>{"{"} "agent": "data_quality", "confidence": 0.92 {"}"}</p>
-        <p>{"{"} "data_sources": ["EDC", "CTMS"], "records_analyzed": 1159 {"}"}</p>
-        <p>{"{"} "hypotheses_tested": 3, "hypotheses_rejected": 2 {"}"}</p>
-        <p>{"{"} "primary_signal": "query_concentration", "pages": ["Lab Results", "Drug Accountability"] {"}"}</p>
-        <p>{"{"} "peer_comparison": {"{"} "site_type": "Academic", "ratio": 2.5 {"}"} {"}"}</p>
+        <p>{"{"} "agent": "{result?.agent_id || 'analysis'}", "confidence": {(result?.confidence || 88) / 100} {"}"}</p>
+        <p>{"{"} "data_sources": {JSON.stringify(result?.data_sources || ["Database"])} {"}"}</p>
+        <p>{"{"} "site_id": "{result?.site_id || 'N/A'}" {"}"}</p>
+        <p>{"{"} "phases_completed": {result?.phases?.length || 0} {"}"}</p>
       </div>
     </motion.div>
   )

@@ -16,6 +16,8 @@ from backend.schemas.dashboard import (
     StudySummary, AttentionSite, AttentionSitesResponse,
     SiteOverview, SitesOverviewResponse,
     AgentInsight, AgentInsightsResponse,
+    AgentActivityStatus, AgentActivityResponse,
+    SiteMetricDetail, SiteAlertDetail, SiteDetailResponse,
 )
 from data_generators.models import (
     ECRFEntry, Query, DataCorrection, ScreeningLog,
@@ -615,3 +617,194 @@ def agent_insights(db: Session = Depends(get_db)):
             ))
     
     return AgentInsightsResponse(insights=insights, total=len(insights))
+
+
+@router.get(
+    "/agent-activity",
+    response_model=AgentActivityResponse,
+    summary="Agent activity status",
+    description="Returns the status of all AI agents based on their recent findings.",
+)
+def agent_activity(db: Session = Depends(get_db)):
+    """Get agent activity status from database."""
+    from datetime import datetime, timedelta
+    
+    agent_definitions = [
+        {"id": "enrollment", "name": "Enrollment Agent"},
+        {"id": "data_quality", "name": "Data Quality Agent"},
+        {"id": "compliance", "name": "Compliance Agent"},
+        {"id": "risk", "name": "Risk Agent"},
+    ]
+    
+    agents = []
+    for agent_def in agent_definitions:
+        findings = db.query(AgentFinding).filter(
+            AgentFinding.agent_id == agent_def["id"]
+        ).order_by(AgentFinding.created_at.desc()).all()
+        
+        findings_count = len(findings)
+        
+        if findings_count > 0 and findings[0].created_at:
+            last_finding = findings[0]
+            delta = datetime.now() - last_finding.created_at
+            if delta.days > 0:
+                last_run = f"{delta.days}d ago"
+            elif delta.seconds > 3600:
+                last_run = f"{delta.seconds // 3600}h ago"
+            else:
+                last_run = f"{max(1, delta.seconds // 60)} min ago"
+            status = "idle"
+        else:
+            last_run = "Ready"
+            status = "idle"
+        
+        agents.append(AgentActivityStatus(
+            id=agent_def["id"],
+            name=agent_def["name"],
+            status=status,
+            lastRun=last_run,
+            findingsCount=findings_count,
+        ))
+    
+    return AgentActivityResponse(agents=agents)
+
+
+@router.get(
+    "/site/{site_id}",
+    response_model=SiteDetailResponse,
+    summary="Site detail with metrics",
+    description="Returns detailed site data including metrics, alerts, and AI summary.",
+)
+def site_detail(site_id: str, db: Session = Depends(get_db)):
+    """Get detailed site data from database."""
+    from datetime import datetime, timedelta
+    
+    site = db.query(Site).filter(Site.site_id == site_id).first()
+    if not site:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    # Get enrollment data
+    screened = db.query(func.count(ScreeningLog.id)).filter(ScreeningLog.site_id == site_id).scalar() or 0
+    randomized = db.query(func.count(RandomizationLog.id)).filter(RandomizationLog.site_id == site_id).scalar() or 0
+    site_target = site.target_enrollment or 4
+    enrollment_pct = min(100.0, round((randomized / site_target) * 100, 1)) if site_target else 0
+    
+    # Get data quality metrics
+    entry_lag = db.query(func.avg(ECRFEntry.entry_lag_days)).filter(ECRFEntry.site_id == site_id).scalar()
+    open_queries = db.query(func.count(Query.id)).filter(Query.site_id == site_id, Query.status == "Open").scalar() or 0
+    total_queries = db.query(func.count(Query.id)).filter(Query.site_id == site_id).scalar() or 0
+    
+    # Calculate query rate (queries per subject)
+    query_rate = round(total_queries / max(1, screened), 2) if screened else 0
+    
+    # Compute study-level averages from database
+    study_avg_lag = db.query(func.avg(ECRFEntry.entry_lag_days)).scalar()
+    study_total_screened = db.query(func.count(ScreeningLog.id)).scalar() or 1
+    study_total_queries = db.query(func.count(Query.id)).scalar() or 0
+    avg_query_rate = round(study_total_queries / max(1, study_total_screened), 2)
+    
+    # Data quality score
+    dq_score = max(0, 100 - (open_queries * 5))
+    
+    # Determine status
+    if site.anomaly_type or open_queries > 20:
+        status = "critical"
+    elif open_queries > 10 or enrollment_pct < 50:
+        status = "warning"
+    else:
+        status = "healthy"
+    
+    # Build AI summary based on actual data
+    summary_parts = []
+    if entry_lag and entry_lag > 5:
+        summary_parts.append(f"Entry lag elevated at {round(entry_lag, 1)} days")
+    if open_queries > 10:
+        summary_parts.append(f"Query backlog of {open_queries} open queries needs attention")
+    if enrollment_pct < 75:
+        summary_parts.append(f"Enrollment at {enrollment_pct}% of target")
+    if site.anomaly_type:
+        summary_parts.append(f"Flagged for: {site.anomaly_type}")
+    if not summary_parts:
+        summary_parts.append("Site performing within expected parameters")
+    ai_summary = ". ".join(summary_parts) + "."
+    
+    # Build data quality metrics
+    study_avg_lag_val = round(float(study_avg_lag), 1) if study_avg_lag else 0
+    lag_trend = "down" if entry_lag and entry_lag < study_avg_lag_val else "up" if entry_lag and entry_lag > study_avg_lag_val + 2 else "stable"
+    data_quality_metrics = [
+        SiteMetricDetail(
+            label="Entry Lag",
+            value=f"{round(entry_lag, 1)}d" if entry_lag else "N/A",
+            trend=lag_trend,
+            note=f"avg: {study_avg_lag_val}d" if entry_lag else None
+        ),
+        SiteMetricDetail(
+            label="Open Queries",
+            value=str(open_queries),
+            trend="stable" if open_queries < 15 else "up"
+        ),
+        SiteMetricDetail(
+            label="Query Rate",
+            value=str(query_rate),
+            note=f"avg: {avg_query_rate}"
+        ),
+    ]
+    
+    # Build enrollment metrics
+    enrollment_metrics = [
+        SiteMetricDetail(
+            label="Screened",
+            value=str(screened),
+            trend="stable"
+        ),
+        SiteMetricDetail(
+            label="Randomized",
+            value=str(randomized),
+            note=f"Target: {site_target}"
+        ),
+        SiteMetricDetail(
+            label="Enrollment %",
+            value=f"{enrollment_pct}%",
+            trend="up" if enrollment_pct > 75 else "down"
+        ),
+    ]
+    
+    # Get alerts from database
+    alerts_db = db.query(AlertLog).filter(
+        AlertLog.site_id == site_id,
+        AlertLog.status.in_(["open", "active"])
+    ).order_by(AlertLog.created_at.desc()).limit(5).all()
+    
+    alerts = []
+    for alert in alerts_db:
+        if alert.created_at:
+            delta = datetime.now() - alert.created_at
+            if delta.days > 0:
+                time_str = f"{delta.days}d ago"
+            elif delta.seconds > 3600:
+                time_str = f"{delta.seconds // 3600}h ago"
+            else:
+                time_str = f"{max(1, delta.seconds // 60)} min ago"
+        else:
+            time_str = "Recently"
+        
+        alerts.append(SiteAlertDetail(
+            severity=alert.severity or "info",
+            message=alert.title or "Alert",
+            time=time_str,
+        ))
+    
+    return SiteDetailResponse(
+        site_id=site_id,
+        site_name=site.name,
+        country=site.country,
+        city=site.city,
+        status=status,
+        ai_summary=ai_summary,
+        data_quality_metrics=data_quality_metrics,
+        enrollment_metrics=enrollment_metrics,
+        alerts=alerts,
+        enrollment_percent=enrollment_pct,
+        data_quality_score=float(dq_score),
+    )

@@ -48,3 +48,30 @@ export async function getKRITimeseries(siteId) {
 export async function getEnrollmentVelocity(siteId) {
   return fetchApi(`/dashboard/enrollment-velocity/${siteId}`)
 }
+
+export async function getAgentActivity() {
+  return fetchApi('/dashboard/agent-activity')
+}
+
+export async function getSiteDetail(siteId) {
+  return fetchApi(`/dashboard/site/${siteId}`)
+}
+
+export async function runInvestigation(query, siteId) {
+  try {
+    const response = await fetch(`${API_BASE}/agents/investigate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query, site_id: siteId }),
+    })
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`)
+    }
+    return await response.json()
+  } catch (error) {
+    console.error('Failed to run investigation:', error)
+    throw error
+  }
+}

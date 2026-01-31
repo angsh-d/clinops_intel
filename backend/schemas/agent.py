@@ -37,6 +37,7 @@ class AgentInvokeResponse(BaseModel):
 class AgentInvokeRequest(BaseModel):
     query: str = Field(..., min_length=1, description="Question for the agent to investigate")
     session_id: str | None = None
+    site_id: str | None = None
 
     model_config = {
         "json_schema_extra": {
@@ -44,6 +45,7 @@ class AgentInvokeRequest(BaseModel):
                 {
                     "query": "Which sites have the worst data quality issues?",
                     "session_id": "sess-abc123",
+                    "site_id": "SITE-001",
                 }
             ]
         }

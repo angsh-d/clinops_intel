@@ -6,28 +6,24 @@ import {
   BarChart3, Users, Clock, Sparkles
 } from 'lucide-react'
 import { useStore } from '../lib/store'
-import { getStudySummary, getAttentionSites, getAgentInsights } from '../lib/api'
+import { getStudySummary, getAttentionSites, getAgentInsights, getAgentActivity } from '../lib/api'
 
 export function Pulse() {
   const { studyData, setStudyData, setView, setSelectedSite, setInvestigation, toggleCommand } = useStore()
   const [expandedInsight, setExpandedInsight] = useState(null)
   const [attentionSites, setAttentionSites] = useState([])
   const [agentInsights, setAgentInsights] = useState([])
-  const [agentActivity, setAgentActivity] = useState([
-    { id: 'enrollment', name: 'Enrollment Agent', status: 'idle', lastRun: 'Ready' },
-    { id: 'data-quality', name: 'Data Quality Agent', status: 'idle', lastRun: 'Ready' },
-    { id: 'compliance', name: 'Compliance Agent', status: 'idle', lastRun: 'Ready' },
-    { id: 'risk', name: 'Risk Agent', status: 'idle', lastRun: 'Ready' }
-  ])
+  const [agentActivity, setAgentActivity] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [summary, attention, insights] = await Promise.all([
+        const [summary, attention, insights, activity] = await Promise.all([
           getStudySummary(),
           getAttentionSites(),
-          getAgentInsights()
+          getAgentInsights(),
+          getAgentActivity()
         ])
         
         if (summary) {
@@ -51,6 +47,10 @@ export function Pulse() {
         
         if (insights?.insights?.length > 0) {
           setAgentInsights(insights.insights)
+        }
+        
+        if (activity?.agents?.length > 0) {
+          setAgentActivity(activity.agents)
         }
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error)

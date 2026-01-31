@@ -286,3 +286,42 @@ class AgentInsight(BaseModel):
 class AgentInsightsResponse(BaseModel):
     insights: list[AgentInsight]
     total: int
+
+
+class AgentActivityStatus(BaseModel):
+    id: str
+    name: str
+    status: str
+    lastRun: str
+    findingsCount: int
+
+
+class AgentActivityResponse(BaseModel):
+    agents: list[AgentActivityStatus]
+
+
+class SiteMetricDetail(BaseModel):
+    label: str
+    value: str
+    trend: str | None = None
+    note: str | None = None
+
+
+class SiteAlertDetail(BaseModel):
+    severity: str
+    message: str
+    time: str
+
+
+class SiteDetailResponse(BaseModel):
+    site_id: str
+    site_name: str | None
+    country: str | None
+    city: str | None
+    status: str
+    ai_summary: str
+    data_quality_metrics: list[SiteMetricDetail]
+    enrollment_metrics: list[SiteMetricDetail]
+    alerts: list[SiteAlertDetail]
+    enrollment_percent: float
+    data_quality_score: float
