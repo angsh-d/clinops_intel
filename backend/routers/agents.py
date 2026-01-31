@@ -304,47 +304,82 @@ def build_investigation_phases(site_id: str, site_data: dict, question: str) -> 
 
 
 def build_finding(site_id: str, site_data: dict, question: str) -> dict:
-    """Build finding summary based on real data."""
+    """Build finding summary based on real data with clear, actionable language."""
     query_dist = site_data.get("query_distribution", [])
     top_pages = query_dist[:2] if query_dist else []
+    site_name = site_data.get("site_name", site_id or "this site")
+    anomaly = site_data.get("anomaly_type")
     
-    # Build evidence points
+    # Map anomaly types to human-readable descriptions
+    anomaly_descriptions = {
+        "enrollment_stall": "enrollment has stalled with no new patient screenings",
+        "high_query_burden": "unusually high number of data queries requiring resolution",
+        "entry_lag_spike": "significant delays in data entry after patient visits",
+        "monitoring_gap": "overdue site monitoring visit",
+        "protocol_deviation": "protocol deviation patterns detected",
+    }
+    
+    # Build contextual summary
+    if anomaly and anomaly in anomaly_descriptions:
+        summary = f"Investigation of {site_name} identified that {anomaly_descriptions[anomaly]}."
+    elif site_data.get("open_queries", 0) > 15:
+        summary = f"Investigation of {site_name} revealed elevated query volume requiring attention."
+    elif site_data.get("avg_entry_lag", 0) and site_data.get("study_avg_lag") and site_data["avg_entry_lag"] > site_data["study_avg_lag"]:
+        summary = f"Investigation of {site_name} found data entry delays above the study average."
+    else:
+        summary = f"Investigation of {site_name} shows the site is operating within normal parameters."
+    
+    # Build evidence points with context
     evidence = []
     data_sources_used = []
     
     if top_pages:
-        for page in top_pages:
-            evidence.append(f"{page['page']}: {page['percent']}% of queries")
+        pages_list = " and ".join([p['page'] for p in top_pages])
+        evidence.append(f"Query concentration on {pages_list} pages suggests potential training needs")
         data_sources_used.append("queries")
     
     if site_data.get("avg_entry_lag"):
         lag = site_data["avg_entry_lag"]
         study_avg = site_data.get("study_avg_lag")
         if study_avg and lag > study_avg:
-            evidence.append(f"Entry lag elevated at {lag} days (study avg: {study_avg}d)")
+            evidence.append(f"Data entry averaging {lag} days (above study average of {study_avg} days)")
         else:
-            evidence.append(f"Entry lag within normal range at {lag} days")
+            evidence.append(f"Data entry timing is on track at {lag} days average")
         data_sources_used.append("ecrf_entries")
     
     if site_data.get("open_queries") is not None:
         oq = site_data["open_queries"]
-        evidence.append(f"{oq} open queries {'requiring attention' if oq > 10 else 'manageable'}")
+        if oq > 10:
+            evidence.append(f"{oq} open queries need resolution to maintain data quality")
+        else:
+            evidence.append(f"Query backlog is manageable with {oq} items pending")
     
     if site_data.get("screened"):
+        screened = site_data["screened"]
+        randomized = site_data.get("randomized", 0)
+        if screened > 0:
+            rate = round(randomized / screened * 100) if screened else 0
+            evidence.append(f"Screening-to-randomization rate: {rate}% ({randomized} of {screened} subjects)")
         data_sources_used.append("screening_log")
     
-    # Build recommendation
-    if site_data.get("anomaly_type"):
-        recommendation = f"Address flagged issue: {site_data['anomaly_type']}. Recommend site assessment and targeted intervention."
+    # Build clear, actionable recommendations
+    if anomaly == "enrollment_stall":
+        recommendation = "Schedule a site engagement call to understand recruitment barriers. Consider expanding eligibility awareness and referral pathways."
+    elif anomaly == "high_query_burden":
+        recommendation = "Arrange targeted training on frequently queried CRF sections. Consider site visit to review data collection processes."
+    elif anomaly == "entry_lag_spike":
+        recommendation = "Review site workload and staffing. Implement weekly data entry checkpoints to prevent backlog."
+    elif anomaly == "monitoring_gap":
+        recommendation = "Prioritize scheduling the overdue monitoring visit. Review remote monitoring options if travel is constrained."
     elif site_data.get("open_queries", 0) > 15:
-        recommendation = "Prioritize query resolution. Consider additional data management support for high-volume pages."
+        recommendation = "Focus on resolving open queries to maintain data quality. Consider additional data management support."
     elif site_data.get("avg_entry_lag", 0) and site_data.get("study_avg_lag") and site_data["avg_entry_lag"] > site_data["study_avg_lag"] + 3:
-        recommendation = "Implement entry lag improvement plan. Consider training on timely data entry."
+        recommendation = "Address data entry delays through process review. Staff may need additional support or training."
     else:
-        recommendation = "Site performing within expected parameters. Continue standard monitoring."
+        recommendation = "No immediate action required. Continue routine monitoring and maintain current engagement level."
     
     return {
-        "summary": f"Analysis of {site_id or 'site'} based on current database records.",
+        "summary": summary,
         "evidence": evidence,
         "recommendation": recommendation,
         "data_sources": ", ".join(data_sources_used) if data_sources_used else "database",
