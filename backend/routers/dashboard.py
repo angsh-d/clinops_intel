@@ -557,22 +557,25 @@ def agent_insights(db: Session = Depends(get_db)):
         if finding.site_id:
             sites = [finding.site_id]
         
-        # Get recommended actions
+        # Get recommendation from detail JSON
         rec = None
-        if finding.recommended_actions:
+        if finding.detail:
             try:
-                actions = finding.recommended_actions if isinstance(finding.recommended_actions, list) else []
-                if actions and len(actions) > 0:
-                    first_action = actions[0]
-                    rec = first_action.get("action", str(first_action)) if isinstance(first_action, dict) else str(first_action)
+                detail = finding.detail if isinstance(finding.detail, dict) else {}
+                rec = detail.get("issue")
             except:
                 pass
+        
+        # Extract title from summary (first sentence or full summary)
+        title = finding.summary or "Analysis complete"
+        if title and len(title) > 60:
+            title = title[:60] + "..."
         
         insights.append(AgentInsight(
             id=finding.id,
             agent=agent,
             severity=finding.severity or "warning",
-            title=finding.title or "Analysis complete",
+            title=title,
             summary=finding.summary or "",
             recommendation=rec,
             confidence=finding.confidence or 85.0,

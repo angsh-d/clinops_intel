@@ -219,15 +219,21 @@ function ConductorInsights({ insights, expandedInsight, setExpandedInsight, onIn
       </div>
       
       <div className="divide-y divide-apple-border">
-        {insights.map((insight) => (
-          <InsightCard 
-            key={insight.id}
-            insight={insight}
-            isExpanded={expandedInsight === insight.id}
-            onToggle={() => setExpandedInsight(expandedInsight === insight.id ? null : insight.id)}
-            onInvestigate={() => onInvestigate(insight)}
-          />
-        ))}
+        {insights.length === 0 ? (
+          <div className="p-6 text-center">
+            <p className="text-apple-secondary text-caption">No active insights at this time</p>
+          </div>
+        ) : (
+          insights.map((insight) => (
+            <InsightCard 
+              key={insight.id}
+              insight={insight}
+              isExpanded={expandedInsight === insight.id}
+              onToggle={() => setExpandedInsight(expandedInsight === insight.id ? null : insight.id)}
+              onInvestigate={() => onInvestigate(insight)}
+            />
+          ))
+        )}
       </div>
     </motion.div>
   )
@@ -236,6 +242,8 @@ function ConductorInsights({ insights, expandedInsight, setExpandedInsight, onIn
 function InsightCard({ insight, isExpanded, onToggle, onInvestigate }) {
   const severityConfig = {
     critical: { bg: 'bg-apple-critical/10', text: 'text-apple-critical', icon: AlertTriangle },
+    high: { bg: 'bg-apple-warning/10', text: 'text-apple-warning', icon: AlertTriangle },
+    medium: { bg: 'bg-apple-info/10', text: 'text-apple-info', icon: TrendingDown },
     warning: { bg: 'bg-apple-warning/10', text: 'text-apple-warning', icon: TrendingDown },
     info: { bg: 'bg-apple-info/10', text: 'text-apple-info', icon: Eye }
   }
