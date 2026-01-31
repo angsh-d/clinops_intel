@@ -16,8 +16,8 @@ _ENV_FILE = _PROJECT_ROOT / ".env"
 class Settings(BaseSettings):
     """Application settings loaded from .env file."""
 
-    # Database
-    clinops_db_url: str = "postgresql://angshuman.deb@localhost:5432/clinops_intel"
+    # Database - use DATABASE_URL from environment if available
+    database_url: str = ""
 
     # Gemini
     gemini_api_key: str = ""
@@ -45,14 +45,19 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_dir: str = "./tmp"
 
-    # CORS
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+    # CORS - allow all origins for development
+    cors_origins: list[str] = ["*"]
 
     model_config = {
         "env_file": str(_ENV_FILE),
         "env_file_encoding": "utf-8",
         "extra": "ignore",
     }
+
+    @property
+    def db_url(self) -> str:
+        """Get database URL, preferring DATABASE_URL env var."""
+        return self.database_url
 
 
 @lru_cache()
@@ -63,7 +68,7 @@ def get_settings() -> Settings:
 # Database engine and session factory
 _settings = get_settings()
 engine = create_engine(
-    _settings.clinops_db_url,
+    _settings.db_url,
     echo=False,
     pool_pre_ping=True,
     pool_size=10,
