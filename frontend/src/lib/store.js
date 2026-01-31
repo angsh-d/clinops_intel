@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 export const useStore = create((set, get) => ({
-  view: 'pulse',
+  view: 'home',
   setView: (view) => set({ view }),
   
   selectedSite: null,

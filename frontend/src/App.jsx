@@ -1,5 +1,5 @@
-import { useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
+import { Home } from './components/Home'
 import { Pulse } from './components/Pulse'
 import { Constellation } from './components/Constellation'
 import { SiteSheet } from './components/SiteSheet'
@@ -13,6 +13,7 @@ function App() {
   return (
     <div className="min-h-screen bg-apple-bg">
       <AnimatePresence mode="wait">
+        {view === 'home' && <Home key="home" />}
         {view === 'pulse' && <Pulse key="pulse" />}
         {view === 'constellation' && <Constellation key="constellation" />}
       </AnimatePresence>
