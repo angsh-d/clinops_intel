@@ -3,17 +3,34 @@ import { create } from 'zustand'
 export const useStore = create((set, get) => ({
   view: 'home',
   setView: (view) => set({ view }),
-  
+
   selectedSite: null,
   setSelectedSite: (site) => set({ selectedSite: site }),
-  
+
   investigation: null,
-  setInvestigation: (investigation) => set({ investigation }),
-  
+  setInvestigation: (investigation) => set({
+    investigation,
+    investigationPhases: [],
+    investigationResult: null,
+    investigationError: null,
+  }),
+
+  // Investigation streaming state
+  investigationPhases: [],
+  addInvestigationPhase: (phase) => set((state) => ({
+    investigationPhases: [...state.investigationPhases, phase]
+  })),
+
+  investigationResult: null,
+  setInvestigationResult: (result) => set({ investigationResult: result }),
+
+  investigationError: null,
+  setInvestigationError: (error) => set({ investigationError: error }),
+
   commandOpen: false,
   setCommandOpen: (open) => set({ commandOpen: open }),
   toggleCommand: () => set((state) => ({ commandOpen: !state.commandOpen })),
-  
+
   studyData: {
     enrolled: 0,
     target: 0,
@@ -23,10 +40,10 @@ export const useStore = create((set, get) => ({
     lastUpdated: null
   },
   setStudyData: (data) => set({ studyData: data }),
-  
+
   sites: [],
   setSites: (sites) => set({ sites }),
-  
+
   alerts: [],
   setAlerts: (alerts) => set({ alerts })
 }))

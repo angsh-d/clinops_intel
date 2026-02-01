@@ -16,18 +16,36 @@ from data_generators.protocol_reader import ProtocolContext
 
 _COUNTRY_DEPOT = {
     "USA": "DEPOT_US",
+    "ARG": "DEPOT_AM",
+    "CAN": "DEPOT_AM",
+    "GBR": "DEPOT_EU_W",
+    "ESP": "DEPOT_EU_W",
+    "DEU": "DEPOT_EU_W",
+    "NLD": "DEPOT_EU_W",
+    "DNK": "DEPOT_EU_W",
+    "FIN": "DEPOT_EU_W",
+    "HUN": "DEPOT_EU_E",
+    "CZE": "DEPOT_EU_E",
+    "RUS": "DEPOT_EU_E",
+    "TUR": "DEPOT_EU_E",
     "JPN": "DEPOT_JP",
-    "CAN": "DEPOT_CA",
-    "AUS": "DEPOT_AU",
-    "NZL": "DEPOT_NZ",
+    "KOR": "DEPOT_AP",
+    "TWN": "DEPOT_AP",
+    "AUS": "DEPOT_AP",
+    "NZL": "DEPOT_AP",
+    "ISR": "DEPOT_IL",
+    "ZAF": "DEPOT_ZA",
 }
 
 _DEPOT_SHIPPING_DAYS = {
     "DEPOT_US": 3,
+    "DEPOT_AM": 4,
+    "DEPOT_EU_W": 3,
+    "DEPOT_EU_E": 4,
     "DEPOT_JP": 2,
-    "DEPOT_CA": 3,
-    "DEPOT_AU": 4,
-    "DEPOT_NZ": 5,
+    "DEPOT_AP": 4,
+    "DEPOT_IL": 3,
+    "DEPOT_ZA": 5,
 }
 
 _DELAY_REASONS = {

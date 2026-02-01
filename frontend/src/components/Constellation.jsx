@@ -130,6 +130,7 @@ function ViewToggle({ activeTab, onTabChange }) {
 }
 
 function Header({ onBack, onSearch }) {
+  const { studyData } = useStore()
   return (
     <header className="sticky top-0 z-40 glass border-b border-apple-border">
       <div className="px-8 py-4 flex items-center justify-between">
@@ -141,8 +142,8 @@ function Header({ onBack, onSearch }) {
             <ArrowLeft className="w-5 h-5 text-apple-secondary" />
           </button>
           <div>
-            <h1 className="text-section text-apple-text">M14-359</h1>
-            <p className="text-caption text-apple-secondary">149 active sites · Updated 2h ago</p>
+            <h1 className="text-section text-apple-text">{studyData.studyId || 'M14-359'}</h1>
+            <p className="text-caption text-apple-secondary">{studyData.activeSites || 0} active sites · Updated {studyData.lastUpdated ? new Date(studyData.lastUpdated).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : 'recently'}</p>
           </div>
         </div>
         
@@ -247,7 +248,7 @@ function SiteTooltip({ site }) {
       className="absolute top-4 right-4 card p-4 w-64 z-10"
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="text-section text-apple-text">{site.id}</span>
+        <span className="text-section text-apple-text">{site.name || site.id}</span>
         <span className={`px-2 py-0.5 rounded-full text-xs text-white ${
           site.status === 'critical' ? 'bg-apple-critical' :
           site.status === 'warning' ? 'bg-apple-warning' :
@@ -310,7 +311,7 @@ function SiteTable({ sites, onSelect }) {
               onClick={() => onSelect(site)}
               className="border-b border-apple-border last:border-0 hover:bg-apple-bg cursor-pointer transition-colors"
             >
-              <td className="px-6 py-4 text-body font-medium">{site.id}</td>
+              <td className="px-6 py-4 text-body font-medium">{site.name || site.id}</td>
               <td className="px-6 py-4 text-body text-apple-secondary">{site.country}</td>
               <td className="px-6 py-4 text-right font-mono text-data">{Math.round(site.enrollmentPercent)}%</td>
               <td className="px-6 py-4 text-right font-mono text-data">{Math.round(site.dataQualityScore)}</td>

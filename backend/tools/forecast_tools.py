@@ -4,6 +4,7 @@ import logging
 import numpy as np
 
 from backend.tools.base import BaseTool, ToolResult
+from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,8 @@ class TrendProjectionTool(BaseTool):
         projections = (slope * future_x + intercept).tolist()
 
         # Trend classification
-        if abs(slope) < 0.01 * np.mean(y):
+        settings = get_settings()
+        if abs(slope) < settings.trend_stable_slope_factor * np.mean(y):
             trend = "stable"
         elif slope > 0:
             trend = "increasing"

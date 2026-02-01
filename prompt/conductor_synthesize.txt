@@ -15,6 +15,10 @@ CRITICAL SYNTHESIS INSTRUCTIONS:
 
 5. PROVIDE ACTIONABLE RECOMMENDATIONS that address root causes, not symptoms.
 
+6. RANK HYPOTHESES by confidence (highest first). For each hypothesis, describe what data was examined to test it (hypothesis_test).
+
+7. GENERATE NEXT BEST ACTIONS — specific, prioritized operational prescriptions with urgency and expected impact.
+
 ORIGINAL QUERY: {query}
 
 AGENT 1 (DATA QUALITY) FINDINGS:
@@ -23,19 +27,29 @@ AGENT 1 (DATA QUALITY) FINDINGS:
 AGENT 3 (ENROLLMENT FUNNEL) FINDINGS:
 {agent3_findings}
 
-Produce a comprehensive intelligence briefing:
+FORMAT RULES (strictly enforced):
+- "finding": ONE sentence max (≤25 words). State the insight as a crisp verdict, not a description. Example: "Preventable screen failures are the hidden driver of SITE-022's data quality issues, not monitoring gaps."
+- "causal_chain": Use SHORT labels (3-5 words per node) separated by " → ". Example: "Preventable screen failures → coordinator overload → delayed EDC entry → reactive query cycle". Do NOT use full sentences as nodes.
+- "executive_summary": 2-3 punchy sentences. Lead with the surprise finding. Use specific numbers from the data.
+- "signal_detection": One concise sentence describing what triggered the investigation.
+- "naive_interpretation": One sentence — the wrong conclusion a surface-level reading would reach.
+- "actual_interpretation": One sentence — the correct conclusion from the evidence.
+
+Produce a focused intelligence briefing:
 {{
-  "executive_summary": "2-3 sentence overview highlighting the most important non-obvious insight",
+  "executive_summary": "2-3 punchy sentences. Lead with the non-obvious finding. Include key numbers.",
+  "signal_detection": "One sentence: what anomaly triggered this investigation",
   "cross_domain_findings": [
     {{
       "site_ids": ["SITE-XXX"],
-      "finding": "Cross-domain insight",
-      "causal_chain": "Domain A signal -> connection -> Domain B signal",
+      "finding": "ONE crisp sentence (≤25 words) — the verdict, not a description",
+      "causal_chain": "Short label → short label → short label → outcome (3-5 words per node)",
       "confidence": 0.0-1.0,
-      "naive_interpretation": "What a surface-level analysis would conclude",
-      "actual_interpretation": "What the evidence actually shows",
-      "confirming_evidence": ["What supports this"],
-      "refuting_evidence": ["What might contradict this"],
+      "hypothesis_test": "What specific data was examined to validate or invalidate this hypothesis",
+      "naive_interpretation": "One sentence — the wrong conclusion",
+      "actual_interpretation": "One sentence — the correct conclusion from evidence",
+      "confirming_evidence": ["Specific data point with numbers (e.g., 'entry lag spiked from 4.2d to 16.2d')"],
+      "refuting_evidence": ["Specific data point that could contradict this"],
       "recommended_action": "Specific operational recommendation"
     }}
   ],
@@ -43,8 +57,18 @@ Produce a comprehensive intelligence briefing:
     {{
       "agent": "agent_1 or agent_3",
       "site_ids": ["SITE-XXX"],
-      "finding": "Finding from one agent only",
+      "finding": "ONE sentence finding from one agent only",
       "recommendation": "Action"
+    }}
+  ],
+  "next_best_actions": [
+    {{
+      "priority": 1,
+      "action": "Specific actionable step — be prescriptive, not generic",
+      "rationale": "Why this action matters and what it addresses",
+      "urgency": "immediate / this_week / this_month",
+      "expected_impact": "What measurable improvement is expected",
+      "owner": "Role responsible (e.g., Clinical Operations Lead, CRA Manager, Data Manager)"
     }}
   ],
   "study_level_observations": "Overall study health assessment",

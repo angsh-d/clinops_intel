@@ -46,11 +46,12 @@ ANOMALY_PROFILES: dict[str, dict] = {
         "country": "USA",
         "anomaly_type": "enrollment_stall",
         "screen_failure_rate": 0.42,
-        "competing_trial_start_week": 20,
+        "competing_trial_start_week": 35,
         "screening_drop_pct": 0.60,
         "post_competition_sf_rate": 0.15,
+        "screening_rate_multiplier": 2.5,  # strong referral pipeline pre-competition
         "experience_level": "High",  # needs volume before competition starts
-        "description": "42% failure, stops enrolling week 20 (competing trial) (Chain 6)",
+        "description": "42% failure, volume drops week 35 (competing trial ~Nov 2024) (Chain 6)",
     },
     "SITE-089": {
         "country": "AUS",
@@ -152,8 +153,9 @@ ANOMALY_PROFILES: dict[str, dict] = {
 }
 
 # Sites affected by regional cluster (Chain 5)
+# experience_level ensures these sites have enough subjects for detectable lag patterns
 REGIONAL_CLUSTER_SITES = {
-    "SITE-108": {"country": "JPN", "lag_extra_days": 3, "lag_start": date(2025, 1, 5), "lag_weeks": 4},
-    "SITE-112": {"country": "JPN", "lag_extra_days": 2, "lag_start": date(2025, 1, 3), "lag_weeks": 4},
-    "SITE-119": {"country": "JPN", "lag_extra_days": 2, "lag_start": date(2025, 1, 7), "lag_weeks": 3},
+    "SITE-108": {"country": "JPN", "lag_extra_days": 3, "lag_start": date(2025, 1, 5), "lag_weeks": 4, "experience_level": "High"},
+    "SITE-112": {"country": "JPN", "lag_extra_days": 2, "lag_start": date(2025, 1, 3), "lag_weeks": 4, "experience_level": "High"},
+    "SITE-119": {"country": "JPN", "lag_extra_days": 2, "lag_start": date(2025, 1, 7), "lag_weeks": 3, "experience_level": "Medium"},
 }

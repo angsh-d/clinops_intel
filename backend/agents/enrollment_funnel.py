@@ -65,8 +65,8 @@ class EnrollmentFunnelAgent(BaseAgent):
             logger.info("[%s] REASON: generated %d hypotheses", self.agent_id, len(hypotheses))
             return hypotheses
         except (json.JSONDecodeError, KeyError) as e:
-            logger.error("[%s] REASON: failed to parse LLM response: %s", self.agent_id, e)
-            return [{"hypothesis_id": "H1", "description": "Unable to parse reasoning output", "confidence": 0.0}]
+            logger.error("[%s] REASON: failed to parse LLM response: %s\nRaw text: %s", self.agent_id, e, response.text[:500])
+            raise RuntimeError(f"[{self.agent_id}] REASON phase failed to parse LLM response: {e}") from e
 
     async def plan(self, ctx: AgentContext) -> list:
         """LLM decides which tools to invoke and in what order."""
@@ -138,17 +138,20 @@ class EnrollmentFunnelAgent(BaseAgent):
                         len(parsed.get("findings_summary", [])))
             return parsed
         except (json.JSONDecodeError, KeyError) as e:
-            logger.error("[%s] REFLECT: failed to parse: %s", self.agent_id, e)
-            return {"is_goal_satisfied": True, "findings_summary": [], "remaining_gaps": [str(e)]}
+            logger.error("[%s] REFLECT: failed to parse: %s\nRaw text: %s", self.agent_id, e, response.text[:500])
+            raise RuntimeError(f"[{self.agent_id}] REFLECT phase failed to parse LLM response: {e}") from e
 
     async def _build_output(self, ctx: AgentContext) -> AgentOutput:
         """Build structured output from completed PRPA context."""
         findings = ctx.reflection.get("findings_summary", [])
 
-        # Use LLM-assigned severity from reflect phase; fall back only if absent
         confidences = [f.get("confidence", 0) for f in findings]
-        avg_confidence = sum(confidences) / len(confidences) if confidences else 0.5
-        severity = ctx.reflection.get("overall_severity", "medium")
+        if not confidences:
+            raise RuntimeError(f"[{self.agent_id}] _build_output: no findings produced after PRPA loop")
+        avg_confidence = sum(confidences) / len(confidences)
+        severity = ctx.reflection.get("overall_severity")
+        if not severity:
+            raise RuntimeError(f"[{self.agent_id}] _build_output: LLM reflect phase did not return overall_severity")
 
         summary_parts = []
         for f in findings:

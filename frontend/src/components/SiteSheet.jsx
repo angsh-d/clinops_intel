@@ -56,8 +56,8 @@ export function SiteSheet() {
       >
         <div className="sticky top-0 bg-apple-surface/90 backdrop-blur-xl border-b border-apple-border px-6 py-4 flex items-center justify-between z-10">
           <div>
-            <h2 className="text-section text-apple-text">{selectedSite.id}</h2>
-            <p className="text-caption text-apple-secondary">{siteData?.country || selectedSite.country}</p>
+            <h2 className="text-section text-apple-text">{siteData?.site_name || selectedSite.name || selectedSite.id}</h2>
+            <p className="text-caption text-apple-secondary">{siteData?.country || selectedSite.country}{siteData?.city ? `, ${siteData.city}` : ''}</p>
           </div>
           <button
             onClick={() => setSelectedSite(null)}

@@ -41,6 +41,7 @@ async def websocket_query(websocket: WebSocket, query_id: str):
                 "query_id": query_id,
                 "synthesis": cached.get("synthesis", {}) if cached else {"executive_summary": interaction.synthesized_response or ""},
                 "agent_outputs": cached.get("agent_outputs", {}) if cached else interaction.agent_responses or {},
+                "routing": cached.get("routing", {}) if cached else {},
                 "cached": True,
             })
             await websocket.close()
@@ -53,9 +54,8 @@ async def websocket_query(websocket: WebSocket, query_id: str):
 
         if interaction.status == "processing":
             await websocket.send_json({
-                "phase": "info",
+                "error": "Investigation is already in progress. Please wait for it to complete.",
                 "query_id": query_id,
-                "message": "Query is already being processed by a background task.",
             })
             await websocket.close()
             return
@@ -87,10 +87,8 @@ async def websocket_query(websocket: WebSocket, query_id: str):
             "phase": "complete",
             "query_id": query_id,
             "synthesis": result.get("synthesis", {}),
-            "agent_outputs": {
-                aid: {"summary": out.get("summary", ""), "findings": out.get("findings", [])}
-                for aid, out in result.get("agent_outputs", {}).items()
-            },
+            "agent_outputs": result.get("agent_outputs", {}),
+            "routing": result.get("routing", {}),
         })
 
         # Store in cache
@@ -107,8 +105,24 @@ async def websocket_query(websocket: WebSocket, query_id: str):
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected for query %s", query_id)
+        # Mark as failed so the record doesn't stay stuck in "processing"
+        try:
+            interaction = db.query(ConversationalInteraction).filter_by(query_id=query_id).first()
+            if interaction and interaction.status == "processing":
+                interaction.status = "failed"
+                db.commit()
+        except Exception:
+            db.rollback()
     except Exception as e:
         logger.error("WebSocket error for query %s: %s", query_id, e, exc_info=True)
+        # Mark as failed so retries don't get stuck on "processing"
+        try:
+            interaction = db.query(ConversationalInteraction).filter_by(query_id=query_id).first()
+            if interaction and interaction.status == "processing":
+                interaction.status = "failed"
+                db.commit()
+        except Exception:
+            db.rollback()
         try:
             await websocket.send_json({"error": str(e), "query_id": query_id})
             await websocket.close()

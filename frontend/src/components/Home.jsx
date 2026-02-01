@@ -9,10 +9,10 @@ const studies = [
     title: 'Veliparib + Carboplatin/Paclitaxel in Advanced NSCLC',
     phase: 'Phase 3',
     status: 'active',
-    enrolled: 420,
+    enrolled: 427,
     target: 595,
-    sites: 149,
-    countries: 5,
+    sites: 142,
+    countries: 20,
     lastUpdated: '2h ago'
   },
   {

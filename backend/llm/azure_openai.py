@@ -16,11 +16,12 @@ class AzureOpenAIClient(LLMClient):
     def __init__(self, settings: Settings):
         self._deployment = settings.azure_openai_deployment
         self._model_name = settings.azure_openai_model_name
+        self._max_tokens = settings.azure_openai_max_tokens
         self._client = AsyncAzureOpenAI(
             api_key=settings.azure_openai_api_key,
             azure_endpoint=settings.azure_openai_endpoint,
             api_version=settings.azure_openai_api_version,
-            timeout=httpx.Timeout(300, connect=10),
+            timeout=httpx.Timeout(settings.gemini_timeout, connect=10),
         )
 
     async def generate(self, prompt: str, *, system: str = "", temperature: float | None = None) -> LLMResponse:
@@ -33,7 +34,7 @@ class AzureOpenAIClient(LLMClient):
             model=self._deployment,
             messages=messages,
             temperature=temperature if temperature is not None else 0.0,
-            max_tokens=16384,
+            max_completion_tokens=self._max_tokens,
         )
         choice = response.choices[0]
         usage = {}

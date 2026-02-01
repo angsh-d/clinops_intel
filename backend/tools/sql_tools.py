@@ -14,6 +14,7 @@ from data_generators.models import (
     ScreenFailureReasonCode, KitInventory, KRISnapshot,
 )
 from backend.tools.base import BaseTool, ToolResult
+from backend.config import get_settings
 
 
 def _serialize_rows(rows) -> list[dict]:
@@ -48,6 +49,8 @@ class EntryLagAnalysisTool(BaseTool):
 
     async def execute(self, db_session: Session, **kwargs) -> ToolResult:
         site_id = kwargs.get("site_id")
+        period_start = kwargs.get("period_start")
+        period_end = kwargs.get("period_end")
         q = db_session.query(
             ECRFEntry.site_id,
             ECRFEntry.crf_page_name,
@@ -61,6 +64,10 @@ class EntryLagAnalysisTool(BaseTool):
 
         if site_id:
             q = q.filter(ECRFEntry.site_id == site_id)
+        if period_start:
+            q = q.filter(ECRFEntry.visit_date >= period_start)
+        if period_end:
+            q = q.filter(ECRFEntry.visit_date <= period_end)
 
         rows = q.all()
         data = _serialize_rows(rows)
@@ -72,11 +79,14 @@ class QueryBurdenTool(BaseTool):
     description = (
         "Analyzes query counts, aging, types, and status by site. "
         "Returns open/answered/closed counts, aging distribution, query types. "
-        "Args: site_id (optional)."
+        "Args: site_id (optional), period_start/period_end (optional date filters)."
     )
 
     async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        settings = get_settings()
         site_id = kwargs.get("site_id")
+        period_start = kwargs.get("period_start")
+        period_end = kwargs.get("period_end")
         q = db_session.query(
             Query.site_id,
             Query.status,
@@ -85,12 +95,16 @@ class QueryBurdenTool(BaseTool):
             func.count(Query.id).label("query_count"),
             func.avg(Query.age_days).label("mean_age"),
             func.max(Query.age_days).label("max_age"),
-            func.sum(case((Query.age_days > 14, 1), else_=0)).label("aging_over_14d"),
-            func.sum(case((Query.age_days > 30, 1), else_=0)).label("aging_over_30d"),
+            func.sum(case((Query.age_days > settings.query_aging_amber_days, 1), else_=0)).label("aging_over_14d"),
+            func.sum(case((Query.age_days > settings.query_aging_red_days, 1), else_=0)).label("aging_over_30d"),
         ).group_by(Query.site_id, Query.status, Query.query_type, Query.priority)
 
         if site_id:
             q = q.filter(Query.site_id == site_id)
+        if period_start:
+            q = q.filter(Query.open_date >= period_start)
+        if period_end:
+            q = q.filter(Query.open_date <= period_end)
 
         rows = q.all()
         data = _serialize_rows(rows)
@@ -184,7 +198,7 @@ class SiteSummaryTool(BaseTool):
     name = "site_summary"
     description = (
         "Returns site metadata — country, city, type, experience level, activation date, "
-        "target enrollment, anomaly type (if any). Args: site_id (optional), country (optional)."
+        "target enrollment. Args: site_id (optional), country (optional)."
     )
 
     async def execute(self, db_session: Session, **kwargs) -> ToolResult:
@@ -212,11 +226,14 @@ class ScreeningFunnelTool(BaseTool):
     name = "screening_funnel"
     description = (
         "Decomposes the screening funnel by site — total screened, passed, failed, withdrawn, "
-        "failure rate. Provides per-site funnel decomposition. Args: site_id (optional)."
+        "failure rate. Provides per-site funnel decomposition. "
+        "Args: site_id (optional), period_start/period_end (optional date filters)."
     )
 
     async def execute(self, db_session: Session, **kwargs) -> ToolResult:
         site_id = kwargs.get("site_id")
+        period_start = kwargs.get("period_start")
+        period_end = kwargs.get("period_end")
         q = db_session.query(
             ScreeningLog.site_id,
             func.count(ScreeningLog.id).label("total_screened"),
@@ -227,6 +244,10 @@ class ScreeningFunnelTool(BaseTool):
 
         if site_id:
             q = q.filter(ScreeningLog.site_id == site_id)
+        if period_start:
+            q = q.filter(ScreeningLog.screening_date >= period_start)
+        if period_end:
+            q = q.filter(ScreeningLog.screening_date <= period_end)
 
         rows = q.all()
         data = _serialize_rows(rows)
@@ -277,12 +298,15 @@ class ScreenFailurePatternTool(BaseTool):
     description = (
         "Analyzes screen failure reason codes and narratives by site — code distribution, "
         "overrepresented codes vs study average, raw failure narratives for NLP analysis. "
-        "Args: site_id (optional), include_narratives (bool, default false)."
+        "Args: site_id (optional), include_narratives (bool, default false), "
+        "period_start/period_end (optional date filters)."
     )
 
     async def execute(self, db_session: Session, **kwargs) -> ToolResult:
         site_id = kwargs.get("site_id")
         include_narratives = kwargs.get("include_narratives", False)
+        period_start = kwargs.get("period_start")
+        period_end = kwargs.get("period_end")
 
         # Code distribution
         q = db_session.query(
@@ -296,6 +320,10 @@ class ScreenFailurePatternTool(BaseTool):
 
         if site_id:
             q = q.filter(ScreeningLog.site_id == site_id)
+        if period_start:
+            q = q.filter(ScreeningLog.screening_date >= period_start)
+        if period_end:
+            q = q.filter(ScreeningLog.screening_date <= period_end)
 
         rows = q.all()
         data = _serialize_rows(rows)
@@ -323,7 +351,12 @@ class ScreenFailurePatternTool(BaseTool):
             )
             if site_id:
                 nq = nq.filter(ScreeningLog.site_id == site_id)
-            narratives = nq.limit(200).all()
+            if period_start:
+                nq = nq.filter(ScreeningLog.screening_date >= period_start)
+            if period_end:
+                nq = nq.filter(ScreeningLog.screening_date <= period_end)
+            settings = get_settings()
+            narratives = nq.limit(settings.narrative_fetch_limit).all()
             result["narratives"] = _serialize_rows(narratives)
 
         return ToolResult(tool_name=self.name, success=True, data=result, row_count=len(data))
@@ -332,13 +365,17 @@ class ScreenFailurePatternTool(BaseTool):
 class RegionalComparisonTool(BaseTool):
     name = "regional_comparison"
     description = (
-        "Compares enrollment and screening metrics across sites in the same country/region. "
-        "Detects regional cluster patterns. Args: country (optional), site_ids (optional, comma-separated)."
+        "Compares enrollment, screening, and data quality metrics across sites in the same country/region. "
+        "Includes entry lag statistics for detecting regional cluster patterns. "
+        "Args: country (optional), site_ids (optional, comma-separated), "
+        "period_start/period_end (optional date filters for temporal comparison)."
     )
 
     async def execute(self, db_session: Session, **kwargs) -> ToolResult:
         country = kwargs.get("country")
         site_ids_str = kwargs.get("site_ids")
+        period_start = kwargs.get("period_start")
+        period_end = kwargs.get("period_end")
 
         # Get sites
         sq = db_session.query(Site.site_id, Site.country, Site.city)
@@ -354,23 +391,47 @@ class RegionalComparisonTool(BaseTool):
             return ToolResult(tool_name=self.name, success=True, data=[], row_count=0)
 
         # Screening summary per site
-        screening = db_session.query(
+        screening_q = db_session.query(
             ScreeningLog.site_id,
             func.count(ScreeningLog.id).label("total_screened"),
             func.sum(case((ScreeningLog.outcome == "Failed", 1), else_=0)).label("failed"),
             func.sum(case((ScreeningLog.outcome == "Passed", 1), else_=0)).label("passed"),
-        ).filter(ScreeningLog.site_id.in_(site_list)).group_by(ScreeningLog.site_id).all()
+        ).filter(ScreeningLog.site_id.in_(site_list))
+        if period_start:
+            screening_q = screening_q.filter(ScreeningLog.screening_date >= period_start)
+        if period_end:
+            screening_q = screening_q.filter(ScreeningLog.screening_date <= period_end)
+        screening = screening_q.group_by(ScreeningLog.site_id).all()
 
         # Randomization counts
-        randomization = db_session.query(
+        rand_q = db_session.query(
             RandomizationLog.site_id,
             func.count(RandomizationLog.id).label("randomized"),
-        ).filter(RandomizationLog.site_id.in_(site_list)).group_by(RandomizationLog.site_id).all()
+        ).filter(RandomizationLog.site_id.in_(site_list))
+        if period_start:
+            rand_q = rand_q.filter(RandomizationLog.randomization_date >= period_start)
+        if period_end:
+            rand_q = rand_q.filter(RandomizationLog.randomization_date <= period_end)
+        randomization = rand_q.group_by(RandomizationLog.site_id).all()
+
+        # Entry lag per site (for regional cluster detection)
+        lag_q = db_session.query(
+            ECRFEntry.site_id,
+            func.count(ECRFEntry.id).label("entry_count"),
+            func.avg(ECRFEntry.entry_lag_days).label("mean_lag"),
+            func.percentile_cont(0.5).within_group(ECRFEntry.entry_lag_days).label("median_lag"),
+        ).filter(ECRFEntry.site_id.in_(site_list))
+        if period_start:
+            lag_q = lag_q.filter(ECRFEntry.visit_date >= period_start)
+        if period_end:
+            lag_q = lag_q.filter(ECRFEntry.visit_date <= period_end)
+        entry_lag = lag_q.group_by(ECRFEntry.site_id).all()
 
         data = {
             "sites": _serialize_rows(sites),
             "screening": _serialize_rows(screening),
             "randomization": _serialize_rows(randomization),
+            "entry_lag": _serialize_rows(entry_lag),
         }
         return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(site_list))
 

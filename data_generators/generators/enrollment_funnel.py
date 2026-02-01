@@ -6,7 +6,7 @@ import numpy as np
 from numpy.random import Generator
 from sqlalchemy.orm import Session
 
-from data_generators.anomaly_profiles import ANOMALY_PROFILES
+from data_generators.anomaly_profiles import ANOMALY_PROFILES, REGIONAL_CLUSTER_SITES
 from data_generators.config import SNAPSHOT_DATE, STUDY_START, STUDY_WEEKS
 from data_generators.distributions import (
     SF_CODE_WEIGHTS, enrollment_s_curve, generate_narrative, seasonal_factor,
@@ -17,7 +17,7 @@ from data_generators.models import (
 from data_generators.protocol_reader import ProtocolContext
 
 # Per-site base monthly screening rates by experience level
-_EXP_MONTHLY_RATE = {"High": 2.4, "Medium": 1.6, "Low": 0.9}
+_EXP_MONTHLY_RATE = {"High": 0.4, "Medium": 0.25, "Low": 0.15}
 
 # Weeks to continue screening after enrollment cap is reached (pipeline wind-down)
 _POST_CAP_WIND_DOWN_WEEKS = 8
@@ -90,7 +90,11 @@ def generate_enrollment(
             prof = ANOMALY_PROFILES.get(site.site_id)
             if prof:
                 if prof.get("screening_rate_multiplier"):
-                    rate *= prof["screening_rate_multiplier"]
+                    # For competing-trial sites, only apply multiplier before competition starts
+                    if prof.get("competing_trial_start_week") and week_num >= prof["competing_trial_start_week"]:
+                        pass  # don't apply pre-competition boost after competition starts
+                    else:
+                        rate *= prof["screening_rate_multiplier"]
                 if prof.get("competing_trial_start_week") and week_num >= prof["competing_trial_start_week"]:
                     rate *= (1.0 - prof["screening_drop_pct"])
                 if prof.get("enrollment_drop_during_spike_pct") and prof.get("cra_transition_date"):
@@ -101,14 +105,25 @@ def generate_enrollment(
                     if spike_start <= week_start <= spike_end:
                         rate *= (1.0 - prof["enrollment_drop_during_spike_pct"])
 
-            # Ensure anomaly sites have minimum meaningful enrollment for pattern detection
-            # Don't override competing trial drops (Chain 6 needs visible volume decline)
+            # Ensure anomaly and regional cluster sites have minimum meaningful enrollment
+            # for pattern detection. Disable floor when anomaly profile intentionally
+            # suppresses the rate (competing trial drop, CRA-transition enrollment drop)
+            # so that the decline is visible to agents.
+            is_anomaly = prof is not None
+            is_regional = site.site_id in REGIONAL_CLUSTER_SITES
             apply_floor = True
             if prof and prof.get("competing_trial_start_week"):
                 if week_num >= prof["competing_trial_start_week"]:
                     apply_floor = False
-            if prof and apply_floor:
-                rate = max(rate, 0.30)  # ~15 screenings per 50 active weeks
+            if prof and prof.get("enrollment_drop_during_spike_pct") and prof.get("cra_transition_date"):
+                cra_date = prof["cra_transition_date"]
+                delay_wk = prof.get("enrollment_drop_delay_weeks", 3)
+                drop_start = cra_date + timedelta(weeks=delay_wk)
+                drop_end = drop_start + timedelta(weeks=prof.get("lag_spike_duration_weeks", 6))
+                if drop_start <= week_start <= drop_end:
+                    apply_floor = False
+            if (is_anomaly or is_regional) and apply_floor:
+                rate = max(rate, 0.40)  # ~1 screening every 2-3 weeks minimum
 
             # Chain 2: boost screening rate during stockout windows so consent
             # withdrawal pattern is clearly visible in the data
@@ -117,7 +132,7 @@ def generate_enrollment(
                     ep_start = ep["start"]
                     ep_end = ep_start + timedelta(days=ep["duration_days"])
                     if ep_start - timedelta(days=7) <= week_start <= ep_end + timedelta(days=14):
-                        rate = max(rate, 0.90)
+                        rate = max(rate, 0.80)
                         break
 
             n_screen = int(rng.poisson(max(rate, 0.01)))

@@ -53,6 +53,7 @@ class ConductorRouter:
             return {
                 "selected_agents": ["agent_1"],
                 "routing_rationale": f"Default routing due to parse error: {e}",
+                "signal_summary": "",
                 "requires_synthesis": False,
             }
 
@@ -74,6 +75,8 @@ class ConductorRouter:
         routing = await self.route_query(query, session_context)
         selected_agents = routing.get("selected_agents", [])
         requires_synthesis = routing.get("requires_synthesis", False)
+
+        signal_detection = routing.get("signal_summary", routing.get("routing_rationale", ""))
 
         logger.info("Conductor routed to %s (synthesis=%s)", selected_agents, requires_synthesis)
 
@@ -124,22 +127,51 @@ class ConductorRouter:
             synthesis = await self._synthesize(query, agent_outputs)
         else:
             single_output = next(iter(agent_outputs.values()), None)
+            # Build single_domain_findings matching the prompt schema:
+            # each entry has agent, site_ids, finding (string), recommendation
+            single_findings = []
+            if single_output and single_output.findings:
+                for f in single_output.findings:
+                    if isinstance(f, dict):
+                        single_findings.append({
+                            "agent": single_output.agent_id,
+                            "site_ids": [f.get("site_id")] if f.get("site_id") else [],
+                            "finding": f.get("finding") or f.get("summary") or str(f),
+                            "recommendation": f.get("recommendation", ""),
+                        })
+                    else:
+                        single_findings.append({
+                            "agent": single_output.agent_id,
+                            "site_ids": [],
+                            "finding": str(f),
+                            "recommendation": "",
+                        })
+            elif single_output:
+                single_findings.append({
+                    "agent": single_output.agent_id,
+                    "site_ids": [],
+                    "finding": single_output.summary,
+                    "recommendation": "",
+                })
+
             synthesis = {
                 "executive_summary": single_output.summary if single_output else "No results.",
+                "signal_detection": signal_detection,
                 "cross_domain_findings": [],
-                "single_domain_findings": [
-                    {
-                        "agent": single_output.agent_id if single_output else "",
-                        "findings": single_output.findings if single_output else [],
-                    }
-                ] if single_output else [],
+                "single_domain_findings": single_findings,
+                "next_best_actions": [],
                 "priority_actions": [],
             }
+
+        # Ensure signal_detection is always present in synthesis
+        if "signal_detection" not in synthesis:
+            synthesis["signal_detection"] = signal_detection
 
         return {
             "query_id": query_id,
             "query": query,
             "routing": routing,
+            "signal_detection": signal_detection,
             "agent_outputs": {
                 aid: {
                     "agent_id": out.agent_id,
@@ -188,6 +220,10 @@ class ConductorRouter:
             logger.error("Synthesis parse failed: %s", e)
             return {
                 "executive_summary": "Synthesis could not be completed.",
+                "signal_detection": "",
                 "cross_domain_findings": [],
+                "single_domain_findings": [],
+                "next_best_actions": [],
+                "priority_actions": [],
                 "error": str(e),
             }

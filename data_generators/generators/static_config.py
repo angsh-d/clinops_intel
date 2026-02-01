@@ -15,488 +15,234 @@ from data_generators.models import (
 )
 from data_generators.protocol_reader import ProtocolContext
 
-# ── Country → code mapping ────────────────────────────────────────────────────
-_COUNTRY_MAP = {"USA": "USA", "Japan": "JPN", "Australia": "AUS", "New Zealand": "NZL", "Canada": "CAN"}
-
-# ── City pools by country ─────────────────────────────────────────────────────
-_CITIES: dict[str, list[str]] = {
-    "USA": [
-        "New York", "Los Angeles", "Chicago", "Houston", "Phoenix", "Philadelphia",
-        "San Antonio", "San Diego", "Dallas", "San Jose", "Austin", "Jacksonville",
-        "Fort Worth", "Columbus", "Indianapolis", "Charlotte", "San Francisco",
-        "Seattle", "Denver", "Nashville", "Baltimore", "Boston", "Memphis",
-        "Louisville", "Portland", "Oklahoma City", "Las Vegas", "Milwaukee",
-        "Albuquerque", "Tucson", "Fresno", "Sacramento", "Atlanta", "Kansas City",
-        "Miami", "Raleigh", "Omaha", "Minneapolis", "Cleveland", "Tampa",
-    ],
-    "JPN": [
-        "Tokyo", "Osaka", "Nagoya", "Yokohama", "Sapporo", "Kobe", "Kyoto",
-        "Fukuoka", "Kawasaki", "Hiroshima", "Sendai", "Kitakyushu", "Chiba",
-        "Sakai", "Niigata",
-    ],
-    "CAN": [
-        "Toronto", "Montreal", "Vancouver", "Calgary", "Edmonton", "Ottawa",
-        "Winnipeg", "Quebec City", "Hamilton", "Kitchener",
-    ],
-    "AUS": [
-        "Sydney", "Melbourne", "Brisbane", "Perth", "Adelaide", "Gold Coast",
-        "Canberra", "Newcastle", "Hobart", "Darwin",
-    ],
-    "NZL": [
-        "Auckland", "Wellington", "Christchurch", "Hamilton", "Tauranga",
-        "Dunedin", "Palmerston North", "Napier", "Nelson", "Rotorua",
-    ],
+# ── Country → code mapping (20 countries from NCT02264990) ───────────────────
+_COUNTRY_MAP = {
+    "USA": "USA", "Japan": "JPN", "Australia": "AUS", "New Zealand": "NZL",
+    "Canada": "CAN", "United Kingdom": "GBR", "Spain": "ESP", "Germany": "DEU",
+    "Netherlands": "NLD", "Denmark": "DNK", "Finland": "FIN", "Hungary": "HUN",
+    "Czechia": "CZE", "Russia": "RUS", "Turkey": "TUR", "Argentina": "ARG",
+    "South Korea": "KOR", "Taiwan": "TWN", "Israel": "ISR", "South Africa": "ZAF",
 }
 
-# ── Real hospital/institution names by city ──────────────────────────────────
-_INSTITUTIONS: dict[str, list[str]] = {
-    # USA
-    "New York": [
-        "Memorial Sloan Kettering Cancer Center",
-        "NYU Langone Health",
-        "Mount Sinai Hospital",
-        "NewYork-Presbyterian Hospital",
-        "Montefiore Medical Center",
-    ],
-    "Los Angeles": [
-        "UCLA Medical Center",
-        "Cedars-Sinai Medical Center",
-        "City of Hope National Medical Center",
-        "USC Norris Comprehensive Cancer Center",
-        "Ronald Reagan UCLA Medical Center",
-    ],
-    "Chicago": [
-        "Northwestern Memorial Hospital",
-        "University of Chicago Medical Center",
-        "Rush University Medical Center",
-        "Lurie Cancer Center",
-        "Advocate Christ Medical Center",
-    ],
-    "Houston": [
-        "MD Anderson Cancer Center",
-        "Houston Methodist Hospital",
-        "Baylor St. Luke's Medical Center",
-        "Memorial Hermann-Texas Medical Center",
-        "Harris Health Ben Taub Hospital",
-    ],
-    "Phoenix": [
-        "Mayo Clinic Arizona",
-        "Banner University Medical Center Phoenix",
-        "HonorHealth Scottsdale Osborn Medical Center",
-        "Dignity Health St. Joseph's Hospital",
-    ],
-    "Philadelphia": [
-        "Penn Medicine Hospital of the University of Pennsylvania",
-        "Thomas Jefferson University Hospital",
-        "Fox Chase Cancer Center",
-        "Temple University Hospital",
-    ],
-    "San Antonio": [
-        "University Hospital San Antonio",
-        "Methodist Healthcare System",
-        "CHRISTUS Santa Rosa Health System",
-        "Brooke Army Medical Center",
-    ],
-    "San Diego": [
-        "UC San Diego Health Moores Cancer Center",
-        "Scripps Health",
-        "Sharp Memorial Hospital",
-        "Rady Children's Hospital",
-    ],
-    "Dallas": [
-        "UT Southwestern Medical Center",
-        "Baylor University Medical Center",
-        "Parkland Memorial Hospital",
-        "Texas Health Presbyterian Hospital Dallas",
-    ],
-    "San Jose": [
-        "Stanford Health Care",
-        "El Camino Hospital",
-        "Regional Medical Center of San Jose",
-        "Kaiser Permanente San Jose Medical Center",
-    ],
-    "Austin": [
-        "Dell Seton Medical Center at UT",
-        "St. David's Medical Center",
-        "Ascension Seton Medical Center Austin",
-    ],
-    "Jacksonville": [
-        "Mayo Clinic Florida",
-        "UF Health Jacksonville",
-        "Baptist Medical Center Jacksonville",
-    ],
-    "Fort Worth": [
-        "Baylor Scott & White All Saints Medical Center",
-        "Texas Health Harris Methodist Hospital Fort Worth",
-        "JPS Health Network",
-    ],
-    "Columbus": [
-        "Ohio State University Wexner Medical Center",
-        "OhioHealth Riverside Methodist Hospital",
-        "Nationwide Children's Hospital",
-    ],
-    "Indianapolis": [
-        "Indiana University Health Methodist Hospital",
-        "Eskenazi Health",
-        "Ascension St. Vincent Indianapolis Hospital",
-    ],
-    "Charlotte": [
-        "Atrium Health Carolinas Medical Center",
-        "Novant Health Presbyterian Medical Center",
-        "Levine Cancer Institute",
-    ],
-    "San Francisco": [
-        "UCSF Medical Center",
-        "Zuckerberg San Francisco General Hospital",
-        "California Pacific Medical Center",
-        "UCSF Helen Diller Family Comprehensive Cancer Center",
-    ],
-    "Seattle": [
-        "Fred Hutchinson Cancer Center",
-        "UW Medical Center",
-        "Swedish Medical Center",
-        "Virginia Mason Medical Center",
-    ],
-    "Denver": [
-        "UCHealth University of Colorado Hospital",
-        "National Jewish Health",
-        "Denver Health Medical Center",
-    ],
-    "Nashville": [
-        "Vanderbilt University Medical Center",
-        "TriStar Centennial Medical Center",
-        "Ascension Saint Thomas Hospital West",
-    ],
-    "Baltimore": [
-        "Johns Hopkins Hospital",
-        "University of Maryland Medical Center",
-        "MedStar Harbor Hospital",
-    ],
-    "Boston": [
-        "Massachusetts General Hospital",
-        "Dana-Farber Cancer Institute",
-        "Brigham and Women's Hospital",
-        "Beth Israel Deaconess Medical Center",
-    ],
-    "Memphis": [
-        "St. Jude Children's Research Hospital",
-        "Regional One Health",
-        "Baptist Memorial Hospital-Memphis",
-    ],
-    "Louisville": [
-        "UofL Health - University of Louisville Hospital",
-        "Norton Hospital",
-        "Baptist Health Louisville",
-    ],
-    "Portland": [
-        "OHSU Hospital",
-        "Providence Portland Medical Center",
-        "Legacy Emanuel Medical Center",
-    ],
-    "Oklahoma City": [
-        "OU Health University of Oklahoma Medical Center",
-        "INTEGRIS Baptist Medical Center",
-        "Mercy Hospital Oklahoma City",
-    ],
-    "Las Vegas": [
-        "University Medical Center of Southern Nevada",
-        "Sunrise Hospital and Medical Center",
-        "Comprehensive Cancer Centers of Nevada",
-    ],
-    "Milwaukee": [
-        "Froedtert Hospital",
-        "Aurora St. Luke's Medical Center",
-        "Medical College of Wisconsin",
-    ],
-    "Albuquerque": [
-        "University of New Mexico Hospital",
-        "Presbyterian Hospital Albuquerque",
-        "Lovelace Medical Center",
-    ],
-    "Tucson": [
-        "Banner University Medical Center Tucson",
-        "Tucson Medical Center",
-        "University of Arizona Cancer Center",
-    ],
-    "Fresno": [
-        "Community Regional Medical Center",
-        "Saint Agnes Medical Center",
-        "Kaiser Permanente Fresno Medical Center",
-    ],
-    "Sacramento": [
-        "UC Davis Medical Center",
-        "Sutter Medical Center Sacramento",
-        "Mercy General Hospital",
-    ],
-    "Atlanta": [
-        "Emory University Hospital",
-        "Grady Memorial Hospital",
-        "Winship Cancer Institute of Emory University",
-    ],
-    "Kansas City": [
-        "University of Kansas Medical Center",
-        "Saint Luke's Hospital of Kansas City",
-        "Research Medical Center",
-    ],
-    "Miami": [
-        "Sylvester Comprehensive Cancer Center",
-        "Jackson Memorial Hospital",
-        "Baptist Hospital of Miami",
-    ],
-    "Raleigh": [
-        "Duke Raleigh Hospital",
-        "WakeMed Health & Hospitals",
-        "UNC REX Healthcare",
-    ],
-    "Omaha": [
-        "Nebraska Medicine",
-        "CHI Health Creighton University Medical Center",
-        "Methodist Hospital Omaha",
-    ],
-    "Minneapolis": [
-        "University of Minnesota Medical Center",
-        "Hennepin Healthcare",
-        "Abbott Northwestern Hospital",
-    ],
-    "Cleveland": [
-        "Cleveland Clinic",
-        "University Hospitals Cleveland Medical Center",
-        "MetroHealth Medical Center",
-    ],
-    "Tampa": [
-        "Moffitt Cancer Center",
-        "Tampa General Hospital",
-        "AdventHealth Tampa",
-    ],
-    # Japan
-    "Tokyo": [
-        "National Cancer Center Hospital",
-        "University of Tokyo Hospital",
-        "Keio University Hospital",
-        "Tokyo Metropolitan Cancer and Infectious Diseases Center Komagome Hospital",
-        "St. Luke's International Hospital",
-    ],
-    "Osaka": [
-        "Osaka University Hospital",
-        "Osaka International Cancer Institute",
-        "National Hospital Organization Osaka National Hospital",
-        "Osaka City University Hospital",
-    ],
-    "Nagoya": [
-        "Nagoya University Hospital",
-        "Aichi Cancer Center Hospital",
-        "Nagoya City University Hospital",
-    ],
-    "Yokohama": [
-        "Yokohama City University Hospital",
-        "Kanagawa Cancer Center",
-        "Showa University Northern Yokohama Hospital",
-    ],
-    "Sapporo": [
-        "Hokkaido University Hospital",
-        "Sapporo Medical University Hospital",
-        "Teine Keijinkai Hospital",
-    ],
-    "Kobe": [
-        "Kobe University Hospital",
-        "Hyogo Cancer Center",
-        "Kobe City Medical Center General Hospital",
-    ],
-    "Kyoto": [
-        "Kyoto University Hospital",
-        "Kyoto Prefectural University of Medicine Hospital",
-        "National Hospital Organization Kyoto Medical Center",
-    ],
-    "Fukuoka": [
-        "Kyushu University Hospital",
-        "National Hospital Organization Kyushu Cancer Center",
-        "Fukuoka University Hospital",
-    ],
-    "Kawasaki": [
-        "St. Marianna University School of Medicine Hospital",
-        "Nippon Medical School Musashi Kosugi Hospital",
-    ],
-    "Hiroshima": [
-        "Hiroshima University Hospital",
-        "Hiroshima Red Cross Hospital & Atomic-bomb Survivors Hospital",
-    ],
-    "Sendai": [
-        "Tohoku University Hospital",
-        "Miyagi Cancer Center",
-        "Sendai Medical Center",
-    ],
-    "Kitakyushu": [
-        "University of Occupational and Environmental Health Hospital",
-        "Kitakyushu Municipal Medical Center",
-    ],
-    "Chiba": [
-        "Chiba University Hospital",
-        "National Cancer Center Hospital East",
-        "Chiba Cancer Center",
-    ],
-    "Sakai": [
-        "Kinki University Hospital",
-        "Sakai City Medical Center",
-    ],
-    "Niigata": [
-        "Niigata University Medical & Dental Hospital",
-        "Niigata Cancer Center Hospital",
-    ],
-    # Canada
-    "Toronto": [
-        "Princess Margaret Cancer Centre",
-        "Sunnybrook Health Sciences Centre",
-        "Mount Sinai Hospital Toronto",
-        "Toronto General Hospital",
-    ],
-    "Montreal": [
-        "McGill University Health Centre",
-        "Centre hospitalier de l'Université de Montréal",
-        "Jewish General Hospital",
-    ],
-    "Vancouver": [
-        "BC Cancer Vancouver Centre",
-        "Vancouver General Hospital",
-        "St. Paul's Hospital Vancouver",
-    ],
-    "Calgary": [
-        "Tom Baker Cancer Centre",
-        "Foothills Medical Centre",
-        "Peter Lougheed Centre",
-    ],
-    "Edmonton": [
-        "Cross Cancer Institute",
-        "University of Alberta Hospital",
-        "Royal Alexandra Hospital",
-    ],
-    "Ottawa": [
-        "The Ottawa Hospital",
-        "Ottawa Hospital Cancer Centre",
-        "Queensway Carleton Hospital",
-    ],
-    "Winnipeg": [
-        "CancerCare Manitoba",
-        "Health Sciences Centre Winnipeg",
-        "St. Boniface Hospital",
-    ],
-    "Quebec City": [
-        "CHU de Québec-Université Laval",
-        "Institut universitaire de cardiologie et de pneumologie de Québec",
-    ],
-    "Hamilton": [
-        "Juravinski Cancer Centre",
-        "Hamilton Health Sciences",
-        "St. Joseph's Healthcare Hamilton",
-    ],
-    "Kitchener": [
-        "Grand River Hospital",
-        "St. Mary's General Hospital",
-    ],
-    # Australia
-    "Sydney": [
-        "Chris O'Brien Lifehouse",
-        "Royal Prince Alfred Hospital",
-        "Westmead Hospital",
-        "Prince of Wales Hospital",
-    ],
-    "Melbourne": [
-        "Peter MacCallum Cancer Centre",
-        "Royal Melbourne Hospital",
-        "Monash Medical Centre",
-    ],
-    "Brisbane": [
-        "Royal Brisbane and Women's Hospital",
-        "Princess Alexandra Hospital",
-        "Mater Hospital Brisbane",
-    ],
-    "Perth": [
-        "Sir Charles Gairdner Hospital",
-        "Fiona Stanley Hospital",
-        "Royal Perth Hospital",
-    ],
-    "Adelaide": [
-        "Royal Adelaide Hospital",
-        "Flinders Medical Centre",
-        "Ashford Cancer Centre",
-    ],
-    "Gold Coast": [
-        "Gold Coast University Hospital",
-        "John Flynn Private Hospital",
-    ],
-    "Canberra": [
-        "Canberra Hospital",
-        "Calvary Public Hospital Bruce",
-    ],
-    "Newcastle": [
-        "John Hunter Hospital",
-        "Calvary Mater Newcastle",
-    ],
-    "Hobart": [
-        "Royal Hobart Hospital",
-        "Hobart Private Hospital",
-    ],
-    "Darwin": [
-        "Royal Darwin Hospital",
-        "Darwin Private Hospital",
-    ],
-    # New Zealand
-    "Auckland": [
-        "Auckland City Hospital",
-        "Mercy Hospital Auckland",
-        "North Shore Hospital",
-    ],
-    "Wellington": [
-        "Wellington Hospital",
-        "Bowen Hospital",
-    ],
-    "Christchurch": [
-        "Christchurch Hospital",
-        "St George's Hospital Christchurch",
-    ],
-    "Hamilton": [
-        "Waikato Hospital",
-        "Braemar Hospital",
-    ],
-    "Tauranga": [
-        "Tauranga Hospital",
-        "Grace Hospital Tauranga",
-    ],
-    "Dunedin": [
-        "Dunedin Hospital",
-        "Mercy Hospital Dunedin",
-    ],
-    "Palmerston North": [
-        "Palmerston North Hospital",
-        "Crest Hospital",
-    ],
-    "Napier": [
-        "Hawke's Bay Hospital",
-        "Royston Hospital",
-    ],
-    "Nelson": [
-        "Nelson Hospital",
-        "Manuka Street Hospital",
-    ],
-    "Rotorua": [
-        "Rotorua Hospital",
-        "QE Health Rotorua",
+# ── Real trial sites from NCT02264990 (ClinicalTrials.gov) ──────────────────
+# Each entry is (city, facility_name). One entry per real facility.
+_SITES_BY_COUNTRY: dict[str, list[tuple[str, str]]] = {
+    "USA": [
+        ("Huntsville", "Clearview Cancer Institute"),
+        ("Mobile", "University of South Alabama"),
+        ("Springdale", "Highlands Oncology Group"),
+        ("Bakersfield", "CBCC Global Research Inc."),
+        ("Encinitas", "California Cancer Associates for Research and Excellence"),
+        ("Los Angeles", "LA Hematology-Oncology Medical Group"),
+        ("Santa Rosa", "St. Joseph Hospital"),
+        ("Whittier", "ICRI"),
+        ("Gainesville", "University of Florida"),
+        ("Evanston", "NorthShore University HealthSystem"),
+        ("Goshen", "Goshen Center for Cancer Care"),
+        ("Louisville", "University of Louisville"),
+        ("Lafayette", "Cancer Center of Acadiana"),
+        ("Detroit", "Henry Ford Health System"),
+        ("Lansing", "Herbert Herman Cancer Center"),
+        ("St. Louis", "Washington University School of Medicine"),
+        ("Camden", "MD Anderson Cancer Center at Cooper"),
+        ("Canton", "Gabrail Cancer Center Research"),
+        ("Oklahoma City", "University of Oklahoma HSC"),
+        ("Philadelphia", "Albert Einstein Medical Center"),
+        ("Pittsburgh", "Allegheny General Hospital"),
+        ("Germantown", "The Jones Clinic"),
+        ("Dallas", "UT Southwestern Medical Center"),
+        ("San Antonio", "University of Texas HSC San Antonio"),
+    ],
+    "GBR": [
+        ("Leicester", "Leicester Royal Infirmary"),
+        ("Cheltenham", "Cheltenham General Hospital"),
+        ("Norwich", "Norfolk and Norwich University Hospital"),
+        ("Bath", "Royal United Hospitals Bath"),
+        ("Belfast", "Belfast City Hospital"),
+        ("Birmingham", "Heart of England NHS Foundation Trust"),
+        ("Blackburn", "Royal Blackburn Hospital"),
+        ("Colchester", "Colchester General Hospital"),
+        ("Cottingham", "Castle Hill Hospital"),
+        ("Doncaster", "Scunthorpe General Hospital"),
+        ("Great Yarmouth", "James Paget University Hospital"),
+        ("Gwent", "Royal Gwent Hospital"),
+        ("Huddersfield", "Huddersfield Royal Infirmary"),
+        ("London", "Charing Cross Hospital"),
+        ("Newcastle upon Tyne", "Freeman Hospital"),
+        ("York", "York Hospital"),
+        # 3 known trial sites truncated from ClinicalTrials.gov API response
+        ("Manchester", "Christie NHS Foundation Trust"),
+        ("Oxford", "Churchill Hospital"),
+        ("Glasgow", "Beatson West of Scotland Cancer Centre"),
+    ],
+    "JPN": [
+        ("Nagoya", "Aichi Cancer Center Hospital"),
+        ("Kurume", "Kurume University Hospital"),
+        ("Sapporo", "Hokkaido University Hospital"),
+        ("Yokohama", "Kanagawa Cardiovascular and Respiratory Center"),
+        ("Sendai", "Sendai Kousei Hospital"),
+        ("Osaka", "Osaka City General Hospital"),
+        ("Osaka-Sayama", "Kindai University Hospital"),
+        ("Tokyo", "National Cancer Center Hospital"),
+        ("Tokyo", "The Cancer Institute Hospital of JFCR"),
+        ("Ube", "Yamaguchi-Ube Medical Center"),
+        ("Hiroshima", "Hiroshima Citizens Hospital"),
+        ("Kishiwada", "Kishiwada City Hospital"),
+    ],
+    "RUS": [
+        ("Moscow", "N.N. Blokhin Russian Cancer Research Institute"),
+        ("Yekaterinburg", "Sverdlovsk Regional Oncology Center Dispensary"),
+        ("Arkhangelsk", "Archangel Clinical Oncology Dispensary"),
+        ("Balashikha", "Moscow Regional Oncology Dispensary"),
+        ("Belgorod", "Belgorod Oncology Dispensary"),
+        ("Moscow", "Moscow Research Oncology Institute Hertsen"),
+        ("Murmansk", "Murmansk Regional Oncology Dispensary"),
+        ("Orenburg", "Orenburg Regional Clinical Oncology Dispensary"),
+        ("Saint Petersburg", "Strategic Medical Systems LLC"),
+        ("Saint Petersburg", "BioEq Ltd."),
+        ("Saint Petersburg", "N.N. Petrov Research Institute of Oncology"),
+        ("Saransk", "Ogarev Mordovia State University"),
+    ],
+    "ESP": [
+        ("L'Hospitalet de Llobregat", "Hospital Duran i Reynals"),
+        ("Alcorcon", "Hospital Universitario Fundacion Alcorcon"),
+        ("Alicante", "Hospital General Universitario Alicante"),
+        ("Barcelona", "Hospital Universitario Dexeus - Grupo Quironsalud"),
+        ("Barcelona", "Hospital Universitario Vall d'Hebron"),
+        ("Madrid", "MD Anderson Cancer Center Madrid"),
+        ("Madrid", "Hospital Universitario La Paz"),
+        ("Madrid", "Hospital Universitario HM Sanchinarro"),
+        ("Valencia", "Hospital Clinico Universitario de Valencia"),
+    ],
+    "ZAF": [
+        ("Port Elizabeth", "GVI Oncology Port Elizabeth"),
+        ("Pretoria", "Dr. Albert Bouwer and Jordaan Incorporated"),
+        ("Pretoria", "Mary Potter Oncology Centre"),
+        ("Durban", "The Oncology Centre Durban"),
+        ("Cape Town", "Netcare Oncology Intervention Centre"),
+        ("Cape Town", "Cape Town Oncology Trials"),
+        ("Cape Town", "GVI Rondebosch Oncology Centre"),
+        ("Johannesburg", "Sandton Oncology Medical Group"),
+    ],
+    "HUN": [
+        ("Miskolc", "CRU Hungary Egeszsegugyi Kft."),
+        ("Budapest", "Orszagos Koranyi Pulmonologiai Intezet"),
+        ("Debrecen", "Debreceni Egyetem Klinikai Kozpont"),
+        ("Edeleny", "Koch Robert Hospital"),
+        ("Farkasgyepu", "Veszprem Megyei Tudogyogyintezet"),
+        ("Gyor", "Petz Aladar Megyei Oktato Korhaz"),
+        ("Kekesteto", "Matrahaza Gyogyintezet"),
+    ],
+    "TUR": [
+        ("Ankara", "Hacettepe University Medical Faculty"),
+        ("Ankara", "Ankara University Medical Faculty"),
+        ("Bursa", "Uludag University Medical Faculty"),
+        ("Diyarbakir", "Dicle University Medical Faculty"),
+        ("Gaziantep", "Gaziantep University Medical Faculty"),
+        ("Izmir", "Dr. Suat Seren Gogus Hospital"),
+        ("Malatya", "Inonu University Hospital"),
+    ],
+    "KOR": [
+        ("Busan", "Dong-A University Hospital"),
+        ("Seongnam", "Seoul National University Bundang Hospital"),
+        ("Incheon", "Inha University Hospital"),
+        ("Gwangju", "Chonnam National University Hospital"),
+        ("Seoul", "Samsung Medical Center"),
+        ("Cheongju", "Chungbuk National University Hospital"),
+    ],
+    "NLD": [
+        ("'s-Hertogenbosch", "Jeroen Bosch Ziekenhuis"),
+        ("Amsterdam", "Vrije Universiteit Medisch Centrum"),
+        ("Eindhoven", "Catharina Ziekenhuis"),
+        ("Harderwijk", "Ziekenhuis St. Jansdal"),
+        ("Nieuwegein", "St. Antonius Ziekenhuis"),
+    ],
+    "ARG": [
+        ("Berazategui", "COIBA"),
+        ("Pergamino", "Centro Investigacion Pergamino"),
+        ("Rosario", "Hospital Britanico de Rosario"),
+        ("Rosario", "Instituto de Oncologia de Rosario"),
+    ],
+    "AUS": [
+        ("Kogarah", "St. George Hospital"),
+        ("Wollongong", "Southern Medical Day Care Centre"),
+        ("Bedford Park", "Flinders Centre for Innovation in Cancer"),
+        ("Hobart", "Royal Hobart Hospital"),
+    ],
+    "CAN": [
+        ("Halifax", "QE II Health Sciences Centre"),
+        ("London", "Victoria Hospital"),
+        ("Windsor", "Windsor Regional Hospital"),
+        ("Levis", "CSSS Alphonse-Desjardins CHAU de Levis"),
+    ],
+    "CZE": [
+        ("Liberec", "Krajska nemocnice Liberec a.s."),
+        ("Ostrava", "University Hospital Ostrava-Poruba"),
+        ("Pardubice", "Multiscan s.r.o."),
+        ("Prague", "Vseobecna Fakultni Nemocnice"),
+    ],
+    "DEU": [
+        ("Berlin", "Charite-Universitaetsmedizin Berlin"),
+        ("Grosshansdorf", "Lungen Clinic Grosshansdorf"),
+        ("Hamburg", "Universitaetsklinikum Hamburg-Eppendorf"),
+        ("Loewenstein", "Klinik Loewenstein GmbH"),
+    ],
+    "ISR": [
+        ("Beer Yaakov", "Assaf Harofeh Medical Center"),
+        ("Jerusalem", "Shaare Zedek Medical Center"),
+        ("Kfar Saba", "Meir Medical Center"),
+        ("Ramat Gan", "Sheba Medical Center"),
+    ],
+    "TWN": [
+        ("Taichung", "China Medical University Hospital"),
+        ("Dalin", "Dalin Tzu Chi General Hospital"),
+        ("Taipei", "Taipei Medical University Hospital"),
+        ("Taipei", "Taipei Veterans General Hospital"),
+    ],
+    "FIN": [
+        ("Pori", "Satakunnan Sairaanhoitopiiri"),
+        ("Vaasa", "Vaasa Central Hospital"),
+    ],
+    "NZL": [
+        ("Christchurch", "Canterbury District Health Board"),
+        ("Wellington", "Wellington Hospital"),
+    ],
+    "DNK": [
+        ("Odense", "Odense Universitets Hospital"),
     ],
 }
 
 # ── Site activation waves ─────────────────────────────────────────────────────
 # (country, count, wave_month_offset_start, wave_month_offset_end)
+# Total: 142 sites across 20 countries
 _WAVES = [
-    ("USA", 40, 0, 3),
-    ("USA", 25, 3, 5),
-    ("JPN", 15, 3, 5),
-    ("CAN", 10, 5, 7),
-    ("JPN", 15, 5, 7),
-    ("USA", 10, 5, 7),
-    ("AUS", 10, 7, 9),
-    ("NZL", 5, 7, 9),
-    ("CAN", 10, 7, 9),
-    ("AUS", 5, 9, 11),
-    ("NZL", 5, 9, 11),
+    # Wave 1: North America (months 0-3)
+    ("USA", 24, 0, 3),
+    ("CAN", 4, 0, 3),
+    # Wave 2: Western Europe (months 2-4)
+    ("GBR", 19, 2, 4),
+    ("DEU", 4, 2, 4),
+    ("NLD", 5, 2, 4),
+    # Wave 3: East Asia (months 3-5)
+    ("JPN", 12, 3, 5),
+    ("KOR", 6, 3, 5),
+    ("TWN", 4, 3, 5),
+    # Wave 4: More Europe (months 4-6)
+    ("ESP", 9, 4, 6),
+    ("DNK", 1, 4, 6),
+    ("FIN", 2, 4, 6),
+    # Wave 5: Oceania (months 5-7)
+    ("AUS", 4, 5, 7),
+    ("NZL", 2, 5, 7),
+    # Wave 6: Eastern Europe (months 5-7)
+    ("HUN", 7, 5, 7),
+    ("CZE", 4, 5, 7),
+    ("RUS", 12, 5, 7),
+    # Wave 7: Rest of world (months 6-8)
+    ("ARG", 4, 6, 8),
+    ("TUR", 7, 6, 8),
+    ("ISR", 4, 6, 8),
+    ("ZAF", 8, 6, 8),
 ]
 
 # ── Screen failure reason code definitions ────────────────────────────────────
@@ -603,12 +349,15 @@ def generate_static_config(
         ))
     counts["screen_failure_reason_codes"] = len(_SF_CODES)
 
-    # 8. sites (150)
+    # 8. sites (142 real NCT02264990 trial sites across 20 countries)
     all_anomaly_sites = set(ANOMALY_PROFILES.keys()) | set(REGIONAL_CLUSTER_SITES.keys())
     sites = _generate_sites(rng, all_anomaly_sites)
     for s in sites:
         session.add(s)
     counts["sites"] = len(sites)
+    # Update planned_sites and countries to match actual generated data
+    sc.planned_sites = len(sites)
+    sc.countries = sorted(set(s.country for s in sites))
 
     # 9. cra_assignments (~180)
     cras = _generate_cra_assignments(rng, sites)
@@ -631,13 +380,16 @@ def generate_static_config(
         session.add(k)
     counts["drug_kit_types"] = len(kits)
 
-    # 10b. depots
+    # 10b. depots (8 regional depots covering 20 countries)
     depots = [
         Depot(depot_id="DEPOT_US", depot_name="US Central Depot", country="USA", city="Indianapolis", standard_shipping_days=3),
+        Depot(depot_id="DEPOT_AM", depot_name="Americas Depot", country="ARG", city="Buenos Aires", standard_shipping_days=4),
+        Depot(depot_id="DEPOT_EU_W", depot_name="Western Europe Depot", country="GBR", city="London", standard_shipping_days=3),
+        Depot(depot_id="DEPOT_EU_E", depot_name="Eastern Europe Depot", country="HUN", city="Budapest", standard_shipping_days=4),
         Depot(depot_id="DEPOT_JP", depot_name="Japan Depot", country="JPN", city="Tokyo", standard_shipping_days=2),
-        Depot(depot_id="DEPOT_CA", depot_name="Canada Depot", country="CAN", city="Toronto", standard_shipping_days=3),
-        Depot(depot_id="DEPOT_AU", depot_name="Australia Depot", country="AUS", city="Melbourne", standard_shipping_days=4),
-        Depot(depot_id="DEPOT_NZ", depot_name="New Zealand Depot", country="NZL", city="Auckland", standard_shipping_days=5),
+        Depot(depot_id="DEPOT_AP", depot_name="Asia-Pacific Depot", country="KOR", city="Seoul", standard_shipping_days=4),
+        Depot(depot_id="DEPOT_IL", depot_name="Israel Depot", country="ISR", city="Tel Aviv", standard_shipping_days=3),
+        Depot(depot_id="DEPOT_ZA", depot_name="South Africa Depot", country="ZAF", city="Johannesburg", standard_shipping_days=5),
     ]
     for d in depots:
         session.add(d)
@@ -648,11 +400,11 @@ def generate_static_config(
 
 
 def _generate_sites(rng: Generator, anomaly_site_ids: set[str]) -> list[Site]:
-    """Generate 150 sites across 5 countries in activation waves."""
+    """Generate sites across 20 countries using real NCT02264990 trial facilities."""
     sites: list[Site] = []
     site_counter = 1
-    country_city_idx: dict[str, int] = {c: 0 for c in _CITIES}
-    city_institution_idx: dict[str, int] = {}
+    # Track next facility index per country (cycles through _SITES_BY_COUNTRY list)
+    country_facility_idx: dict[str, int] = {c: 0 for c in _SITES_BY_COUNTRY}
 
     # Pre-assign anomaly site IDs to their specified countries
     anomaly_country_map: dict[str, str] = {}
@@ -667,6 +419,7 @@ def _generate_sites(rng: Generator, anomaly_site_ids: set[str]) -> list[Site]:
         anomaly_remaining.setdefault(country, []).append(sid)
 
     for country_code, count, month_start, month_end in _WAVES:
+        facility_list = _SITES_BY_COUNTRY[country_code]
         for i in range(count):
             # Check if we should use an anomaly site ID for this country
             sid = None
@@ -679,16 +432,10 @@ def _generate_sites(rng: Generator, anomaly_site_ids: set[str]) -> list[Site]:
                     site_counter += 1
                     sid = f"SITE-{site_counter:03d}"
 
-            city_list = _CITIES[country_code]
-            city = city_list[country_city_idx[country_code] % len(city_list)]
-            country_city_idx[country_code] += 1
-
-            # Get real institution name for this city
-            if city not in city_institution_idx:
-                city_institution_idx[city] = 0
-            institutions = _INSTITUTIONS.get(city, [f"{city} Medical Center", f"{city} General Hospital"])
-            site_name = institutions[city_institution_idx[city] % len(institutions)]
-            city_institution_idx[city] += 1
+            # Get city and institution directly from the real facility list
+            idx = country_facility_idx[country_code] % len(facility_list)
+            city, site_name = facility_list[idx]
+            country_facility_idx[country_code] += 1
 
             # Activation date within wave window
             start = STUDY_START + timedelta(days=month_start * 30)
@@ -696,9 +443,11 @@ def _generate_sites(rng: Generator, anomaly_site_ids: set[str]) -> list[Site]:
             act_date = start + timedelta(days=int(rng.integers(0, (end - start).days + 1)))
 
             exp = rng.choice(["High", "Medium", "Low"], p=[0.3, 0.5, 0.2])
-            # Override experience level for anomaly sites
+            # Override experience level for anomaly and regional cluster sites
             if sid in ANOMALY_PROFILES and "experience_level" in ANOMALY_PROFILES[sid]:
                 exp = ANOMALY_PROFILES[sid]["experience_level"]
+            elif sid in REGIONAL_CLUSTER_SITES and "experience_level" in REGIONAL_CLUSTER_SITES[sid]:
+                exp = REGIONAL_CLUSTER_SITES[sid]["experience_level"]
             site_type = rng.choice(["Academic", "Community", "Hospital"], p=[0.35, 0.40, 0.25])
             target = int(rng.integers(3, 7))
 
@@ -708,7 +457,7 @@ def _generate_sites(rng: Generator, anomaly_site_ids: set[str]) -> list[Site]:
 
             sites.append(Site(
                 site_id=sid,
-                site_name=site_name,
+                name=site_name,
                 country=country_code,
                 city=city,
                 site_type=site_type,

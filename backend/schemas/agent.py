@@ -12,7 +12,7 @@ class AgentInvokeResponse(BaseModel):
     summary: str
     detail: dict | None = None
     confidence: float | None = None
-    reasoning_trace: dict | None = None
+    reasoning_trace: list[dict] | None = None
     findings: list[dict] | None = None
 
     model_config = {

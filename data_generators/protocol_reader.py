@@ -109,7 +109,12 @@ def _parse_usdm(data: dict, ctx: ProtocolContext) -> None:
     ctx.target_enrollment = design.get("targetEnrollment", 595)
     ctx.planned_sites = design.get("plannedSites", 150)
     countries_raw = design.get("countries", {}).get("values", [])
-    ctx.countries = countries_raw if countries_raw else ["USA", "Japan", "Australia", "New Zealand", "Canada"]
+    ctx.countries = countries_raw if countries_raw else [
+        "USA", "Japan", "Australia", "New Zealand", "Canada",
+        "United Kingdom", "Spain", "Germany", "Netherlands", "Denmark",
+        "Finland", "Hungary", "Czechia", "Russia", "Turkey",
+        "Argentina", "South Korea", "Taiwan", "Israel", "South Africa",
+    ]
     milestones = study.get("studyMilestones", {})
     ctx.screening_window_days = milestones.get("estimatedDurations", {}).get("screeningPeriodDays", 28)
     # Arms

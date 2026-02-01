@@ -1,6 +1,6 @@
 """Gemini LLM client implementation using google-genai SDK.
 
-This uses Replit AI Integrations for Gemini access without requiring your own API key.
+Supports both direct Gemini API key and Replit AI Integrations.
 """
 
 import asyncio
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class GeminiClient(LLMClient):
-    """Gemini client via google-genai SDK using Replit AI Integrations."""
+    """Gemini client via google-genai SDK."""
 
     def __init__(self, settings: Settings):
         self._model_name = settings.primary_llm
@@ -23,13 +23,21 @@ class GeminiClient(LLMClient):
         self._max_tokens = settings.gemini_max_output_tokens
         self._top_p = settings.gemini_top_p
         self._timeout = settings.gemini_timeout
-        self._client = genai.Client(
-            api_key=settings.ai_integrations_gemini_api_key,
-            http_options={
-                'api_version': '',
-                'base_url': settings.ai_integrations_gemini_base_url
+
+        # Prefer direct API key; fall back to Replit AI Integrations
+        api_key = settings.gemini_api_key or settings.ai_integrations_gemini_api_key
+        if not api_key:
+            raise ValueError("No Gemini API key configured. Set GEMINI_API_KEY or AI_INTEGRATIONS_GEMINI_API_KEY in .env")
+
+        client_kwargs = {"api_key": api_key}
+        # Only use custom base_url when Replit AI Integrations is configured
+        if settings.ai_integrations_gemini_base_url:
+            client_kwargs["http_options"] = {
+                "api_version": "",
+                "base_url": settings.ai_integrations_gemini_base_url,
             }
-        )
+
+        self._client = genai.Client(**client_kwargs)
 
     async def generate(self, prompt: str, *, system: str = "", temperature: float | None = None) -> LLMResponse:
         temp = temperature if temperature is not None else self._default_temp
@@ -39,14 +47,29 @@ class GeminiClient(LLMClient):
             max_output_tokens=self._max_tokens,
             system_instruction=system if system else None,
         )
-        response = await asyncio.wait_for(
-            self._client.aio.models.generate_content(
-                model=self._model_name,
-                contents=prompt,
-                config=config,
-            ),
-            timeout=self._timeout,
-        )
+
+        last_err = None
+        for attempt in range(self._max_retries):
+            try:
+                response = await asyncio.wait_for(
+                    self._client.aio.models.generate_content(
+                        model=self._model_name,
+                        contents=prompt,
+                        config=config,
+                    ),
+                    timeout=self._timeout,
+                )
+                break
+            except (asyncio.TimeoutError, TimeoutError) as e:
+                last_err = e
+                if attempt < self._max_retries - 1:
+                    wait = 2 ** attempt
+                    logger.warning(f"Gemini timeout on attempt {attempt + 1}/{self._max_retries}, retrying in {wait}s")
+                    await asyncio.sleep(wait)
+                else:
+                    raise
+            except Exception:
+                raise
 
         # Detect empty/blocked responses and raise so failover triggers
         if not response.text or not response.text.strip():

@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, ArrowRight, AlertCircle, TrendingUp, Users } from 'lucide-react'
+import { Search, ArrowRight, AlertCircle, TrendingDown, Users } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { getAttentionSites } from '../lib/api'
 
 const suggestions = [
-  { icon: AlertCircle, text: 'Which sites need attention?', category: 'Alerts' },
-  { icon: TrendingUp, text: 'Show enrollment trends', category: 'Enrollment' },
-  { icon: Users, text: 'Sites behind on enrollment', category: 'Sites' },
-  { icon: AlertCircle, text: 'Data quality issues this week', category: 'Data Quality' },
-  { icon: TrendingUp, text: 'Screen failure analysis', category: 'Enrollment' }
+  { icon: AlertCircle, text: 'Investigate data quality issues at SITE-022', category: 'Chain 1' },
+  { icon: TrendingDown, text: 'Why are patients withdrawing consent at SITE-041?', category: 'Chain 2' },
+  { icon: AlertCircle, text: 'Analyze query backlog trends at SITE-033', category: 'Chain 3' },
+  { icon: Users, text: 'Why does SITE-031 have high screen failures but excellent data?', category: 'Chain 4' },
+  { icon: AlertCircle, text: 'Investigate synchronized lag spikes across Japanese sites', category: 'Chain 5' },
+  { icon: TrendingDown, text: 'Why has enrollment declined at SITE-055?', category: 'Chain 6' },
 ]
 
 export function CommandPalette() {
@@ -128,7 +129,7 @@ export function CommandPalette() {
             {filteredSuggestions.length > 0 && (
               <div className="p-2">
                 <p className="px-2 py-1 text-caption text-apple-secondary uppercase tracking-wide">
-                  Suggestions
+                  {query ? 'Suggestions' : 'Demo Scenarios'}
                 </p>
                 {filteredSuggestions.map((suggestion, i) => (
                   <SuggestionItem
@@ -229,7 +230,7 @@ function SiteItem({ site, isSelected, onSelect, onHover }) {
       }`}
     >
       <div className={`w-2 h-2 rounded-full ${statusColors[site.status]}`} />
-      <span className="font-medium text-body">{site.id}</span>
+      <span className="font-medium text-body">{site.name || site.id}</span>
       <span className={`flex-1 text-left text-caption ${isSelected ? 'text-white/70' : 'text-apple-secondary'}`}>
         {site.finding}
       </span>

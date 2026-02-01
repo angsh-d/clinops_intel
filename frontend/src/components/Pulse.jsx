@@ -141,6 +141,7 @@ function Header({ studyData, onSearch, onBack }) {
 }
 
 function EnrollmentHero({ enrolled, target, percentage, onExplore }) {
+  const { studyData } = useStore()
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -180,11 +181,11 @@ function EnrollmentHero({ enrolled, target, percentage, onExplore }) {
         <div className="flex items-center gap-4 text-apple-secondary">
           <span className="flex items-center gap-1">
             <Users className="w-3.5 h-3.5" />
-            149 active sites
+            {studyData.activeSites || 0} active sites
           </span>
           <span className="flex items-center gap-1">
             <Clock className="w-3.5 h-3.5" />
-            Updated 2h ago
+            Updated {studyData.lastUpdated ? new Date(studyData.lastUpdated).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : 'recently'}
           </span>
         </div>
       </div>
@@ -373,11 +374,11 @@ function AttentionRequired({ sites, onSiteClick }) {
         {sites.map((site) => (
           <button
             key={site.site_id}
-            onClick={() => onSiteClick({ id: site.site_id, ...site })}
+            onClick={() => onSiteClick({ id: site.site_id, name: site.site_name, ...site })}
             className="w-full text-left p-3 bg-apple-bg rounded-xl hover:bg-apple-border/50 transition-colors"
           >
             <div className="flex items-center justify-between mb-1">
-              <span className="text-caption text-apple-text font-medium">{site.site_id}</span>
+              <span className="text-caption text-apple-text font-medium">{site.site_name || site.site_id}</span>
               <span className={`w-2 h-2 rounded-full ${
                 site.severity === 'critical' ? 'bg-apple-critical' : 'bg-apple-warning'
               }`} />

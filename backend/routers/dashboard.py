@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, case
 from sqlalchemy.orm import Session
 
-from backend.dependencies import get_db
+from backend.dependencies import get_db, get_settings_dep
+from backend.config import Settings
 from backend.schemas.dashboard import (
     DataQualityDashboard, SiteDataQualityMetrics,
     EnrollmentDashboard, SiteEnrollmentMetrics,
@@ -38,7 +39,10 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
     "corrections, and missing critical fields. Pure SQL, no LLM.",
     response_description="Per-site data quality metrics with study-level totals.",
 )
-def data_quality_dashboard(db: Session = Depends(get_db)):
+def data_quality_dashboard(
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_dep),
+):
     """Data quality metrics by site — pure SQL aggregation."""
     sites = db.query(
         ECRFEntry.site_id,
@@ -50,7 +54,7 @@ def data_quality_dashboard(db: Session = Depends(get_db)):
         Query.site_id,
         func.count(Query.id).label("total_queries"),
         func.sum(case((Query.status == "Open", 1), else_=0)).label("open_queries"),
-        func.sum(case((Query.age_days > 14, 1), else_=0)).label("aging_over_14d"),
+        func.sum(case((Query.age_days > settings.query_aging_amber_days, 1), else_=0)).label("aging_over_14d"),
     ).group_by(Query.site_id).all()
 
     corrections = db.query(
@@ -114,7 +118,10 @@ def enrollment_funnel_dashboard(db: Session = Depends(get_db)):
     site_targets = {s.site_id: s.target_enrollment for s in db.query(Site.site_id, Site.target_enrollment).all()}
 
     study_config = db.query(StudyConfig).first()
-    study_target = study_config.target_enrollment if study_config else 595
+    if not study_config:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail="StudyConfig not found in database")
+    study_target = study_config.target_enrollment
 
     site_metrics = []
     total_screened = 0
@@ -310,34 +317,24 @@ def study_summary(db: Session = Depends(get_db)):
     
     study_config = db.query(StudyConfig).first()
     if not study_config:
-        return StudySummary(
-            study_id="Unknown",
-            study_name="Unknown Study",
-            phase="Unknown",
-            enrolled=0,
-            target=0,
-            pct_enrolled=0.0,
-            total_sites=0,
-            active_sites=0,
-            countries=[],
-            last_updated=datetime.now().isoformat(),
-        )
-    
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail="StudyConfig not found in database")
+
     enrolled = db.query(func.count(RandomizationLog.id)).scalar() or 0
     total_sites = db.query(func.count(Site.id)).scalar() or 0
-    
-    # Sites with at least one randomization
-    active_sites = db.query(func.count(func.distinct(RandomizationLog.site_id))).scalar() or 0
-    
+
+    # Sites with at least one screening (operationally active)
+    active_sites = db.query(func.count(func.distinct(ScreeningLog.site_id))).scalar() or 0
+
     # Distinct countries
     countries = [r[0] for r in db.query(func.distinct(Site.country)).all() if r[0]]
-    
+
     pct = round((enrolled / study_config.target_enrollment * 100), 1) if study_config.target_enrollment else 0
-    
+
     return StudySummary(
         study_id=study_config.study_id,
         study_name=study_config.study_id,
-        phase=study_config.phase or "Phase 3",
+        phase=study_config.phase,
         enrolled=enrolled,
         target=study_config.target_enrollment or 0,
         pct_enrolled=pct,
@@ -354,21 +351,24 @@ def study_summary(db: Session = Depends(get_db)):
     summary="Sites requiring attention",
     description="Sites with elevated metrics, high query counts, or anomalies that need review.",
 )
-def attention_sites(db: Session = Depends(get_db)):
+def attention_sites(
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_dep),
+):
     """Sites requiring attention based on data quality and enrollment issues."""
     attention_list = []
-    
+
     # Get sites with high open query counts
     high_query_sites = db.query(
         Query.site_id,
         func.count(Query.id).filter(Query.status == "Open").label("open_queries"),
     ).group_by(Query.site_id).having(
-        func.count(Query.id).filter(Query.status == "Open") > 15
+        func.count(Query.id).filter(Query.status == "Open") > settings.attention_open_query_threshold
     ).all()
-    
+
     # Get site details
     site_map = {s.site_id: s for s in db.query(Site).all()}
-    
+
     for row in high_query_sites:
         site = site_map.get(row.site_id)
         if site:
@@ -378,17 +378,17 @@ def attention_sites(db: Session = Depends(get_db)):
                 country=site.country,
                 city=site.city,
                 issue="High open query count",
-                severity="critical" if row.open_queries > 25 else "warning",
+                severity="critical" if row.open_queries > settings.attention_open_query_critical else "warning",
                 metric=f"{row.open_queries} open queries",
                 metric_value=float(row.open_queries),
             ))
-    
+
     # Get sites with high entry lag
     high_lag_sites = db.query(
         ECRFEntry.site_id,
         func.avg(ECRFEntry.entry_lag_days).label("avg_lag"),
     ).group_by(ECRFEntry.site_id).having(
-        func.avg(ECRFEntry.entry_lag_days) > 5
+        func.avg(ECRFEntry.entry_lag_days) > settings.attention_entry_lag_threshold
     ).all()
     
     existing_ids = {s.site_id for s in attention_list}
@@ -444,20 +444,21 @@ def attention_sites(db: Session = Depends(get_db)):
     summary="All sites with status overview",
     description="Returns all sites with enrollment %, data quality, and status.",
 )
-def sites_overview(db: Session = Depends(get_db)):
+def sites_overview(
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_dep),
+):
     """All sites with computed metrics."""
-    from datetime import datetime, timedelta
-    
+
     sites = db.query(Site).all()
-    study_config = db.query(StudyConfig).first()
-    
+
     # Get enrollment counts per site
     enrollment_counts = dict(
         db.query(RandomizationLog.site_id, func.count(RandomizationLog.id))
         .group_by(RandomizationLog.site_id)
         .all()
     )
-    
+
     # Get open query counts per site
     query_counts = dict(
         db.query(Query.site_id, func.count(Query.id))
@@ -465,7 +466,7 @@ def sites_overview(db: Session = Depends(get_db)):
         .group_by(Query.site_id)
         .all()
     )
-    
+
     # Get alert counts per site
     alert_counts = dict(
         db.query(AlertLog.site_id, func.count(AlertLog.id))
@@ -473,30 +474,30 @@ def sites_overview(db: Session = Depends(get_db)):
         .group_by(AlertLog.site_id)
         .all()
     )
-    
+
     site_list = []
     for site in sites:
-        site_target = site.target_enrollment or 4
+        site_target = site.target_enrollment or 0
         enrolled = enrollment_counts.get(site.site_id, 0)
         enrollment_pct = min(100.0, round((enrolled / site_target) * 100, 1)) if site_target else 0
-        
+
         open_queries = query_counts.get(site.site_id, 0)
         alert_count = alert_counts.get(site.site_id, 0)
-        
+
         # Compute data quality score (inverse of query rate)
-        dq_score = max(0, 100 - (open_queries * 5))
-        
+        dq_score = max(0, settings.dq_score_base - (open_queries * settings.dq_score_penalty_per_query))
+
         # Determine status
-        if site.anomaly_type or open_queries > 20 or alert_count > 2:
+        if site.anomaly_type or open_queries > settings.status_critical_open_queries or alert_count > settings.status_critical_alert_count:
             status = "critical"
-        elif open_queries > 10 or enrollment_pct < 50:
+        elif open_queries > settings.status_warning_open_queries or enrollment_pct < settings.status_warning_enrollment_pct:
             status = "warning"
         else:
             status = "healthy"
-        
+
         finding = site.anomaly_type or (
-            f"{open_queries} open queries" if open_queries > 5 else 
-            "On track" if enrollment_pct >= 75 else
+            f"{open_queries} open queries" if open_queries > settings.site_entry_lag_elevated else
+            "On track" if enrollment_pct >= settings.site_enrollment_below_target_pct else
             "Below target"
         )
         
@@ -578,7 +579,7 @@ def agent_insights(db: Session = Depends(get_db)):
             title=title,
             summary=finding.summary or "",
             recommendation=rec,
-            confidence=finding.confidence or 85.0,
+            confidence=finding.confidence,
             timestamp=timestamp,
             sites=sites,
             impact=None,
@@ -678,9 +679,13 @@ def agent_activity(db: Session = Depends(get_db)):
     summary="Site detail with metrics",
     description="Returns detailed site data including metrics, alerts, and AI summary.",
 )
-def site_detail(site_id: str, db: Session = Depends(get_db)):
+def site_detail(
+    site_id: str,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_dep),
+):
     """Get detailed site data from database."""
-    from datetime import datetime, timedelta
+    from datetime import datetime
     
     site = db.query(Site).filter(Site.site_id == site_id).first()
     if not site:
@@ -690,51 +695,51 @@ def site_detail(site_id: str, db: Session = Depends(get_db)):
     # Get enrollment data
     screened = db.query(func.count(ScreeningLog.id)).filter(ScreeningLog.site_id == site_id).scalar() or 0
     randomized = db.query(func.count(RandomizationLog.id)).filter(RandomizationLog.site_id == site_id).scalar() or 0
-    site_target = site.target_enrollment or 4
+    site_target = site.target_enrollment or 0
     enrollment_pct = min(100.0, round((randomized / site_target) * 100, 1)) if site_target else 0
-    
+
     # Get data quality metrics
     entry_lag = db.query(func.avg(ECRFEntry.entry_lag_days)).filter(ECRFEntry.site_id == site_id).scalar()
     open_queries = db.query(func.count(Query.id)).filter(Query.site_id == site_id, Query.status == "Open").scalar() or 0
     total_queries = db.query(func.count(Query.id)).filter(Query.site_id == site_id).scalar() or 0
-    
+
     # Calculate query rate (queries per subject)
     query_rate = round(total_queries / max(1, screened), 2) if screened else 0
-    
+
     # Compute study-level averages from database
     study_avg_lag = db.query(func.avg(ECRFEntry.entry_lag_days)).scalar()
     study_total_screened = db.query(func.count(ScreeningLog.id)).scalar() or 1
     study_total_queries = db.query(func.count(Query.id)).scalar() or 0
     avg_query_rate = round(study_total_queries / max(1, study_total_screened), 2)
-    
+
     # Data quality score
-    dq_score = max(0, 100 - (open_queries * 5))
-    
+    dq_score = max(0, settings.dq_score_base - (open_queries * settings.dq_score_penalty_per_query))
+
     # Determine status
-    if site.anomaly_type or open_queries > 20:
+    if site.anomaly_type or open_queries > settings.status_critical_open_queries:
         status = "critical"
-    elif open_queries > 10 or enrollment_pct < 50:
+    elif open_queries > settings.status_warning_open_queries or enrollment_pct < settings.status_warning_enrollment_pct:
         status = "warning"
     else:
         status = "healthy"
-    
+
     # Build AI summary based on actual data
     summary_parts = []
-    if entry_lag and entry_lag > 5:
+    if entry_lag and entry_lag > settings.site_entry_lag_elevated:
         summary_parts.append(f"Entry lag elevated at {round(entry_lag, 1)} days")
-    if open_queries > 10:
+    if open_queries > settings.site_open_queries_warning:
         summary_parts.append(f"Query backlog of {open_queries} open queries needs attention")
-    if enrollment_pct < 75:
+    if enrollment_pct < settings.site_enrollment_below_target_pct:
         summary_parts.append(f"Enrollment at {enrollment_pct}% of target")
     if site.anomaly_type:
         summary_parts.append(f"Flagged for: {site.anomaly_type}")
     if not summary_parts:
         summary_parts.append("Site performing within expected parameters")
     ai_summary = ". ".join(summary_parts) + "."
-    
+
     # Build data quality metrics
     study_avg_lag_val = round(float(study_avg_lag), 1) if study_avg_lag else 0
-    lag_trend = "down" if entry_lag and entry_lag < study_avg_lag_val else "up" if entry_lag and entry_lag > study_avg_lag_val + 2 else "stable"
+    lag_trend = "down" if entry_lag and entry_lag < study_avg_lag_val else "up" if entry_lag and entry_lag > study_avg_lag_val + settings.site_lag_trend_delta else "stable"
     data_quality_metrics = [
         SiteMetricDetail(
             label="Entry Lag",
@@ -745,7 +750,7 @@ def site_detail(site_id: str, db: Session = Depends(get_db)):
         SiteMetricDetail(
             label="Open Queries",
             value=str(open_queries),
-            trend="stable" if open_queries < 15 else "up"
+            trend="stable" if open_queries < settings.site_open_queries_high else "up"
         ),
         SiteMetricDetail(
             label="Query Rate",
@@ -753,7 +758,7 @@ def site_detail(site_id: str, db: Session = Depends(get_db)):
             note=f"avg: {avg_query_rate}"
         ),
     ]
-    
+
     # Build enrollment metrics
     enrollment_metrics = [
         SiteMetricDetail(
@@ -769,7 +774,7 @@ def site_detail(site_id: str, db: Session = Depends(get_db)):
         SiteMetricDetail(
             label="Enrollment %",
             value=f"{enrollment_pct}%",
-            trend="up" if enrollment_pct > 75 else "down"
+            trend="up" if enrollment_pct > settings.site_enrollment_trend_up_pct else "down"
         ),
     ]
     

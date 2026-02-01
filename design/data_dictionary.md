@@ -189,7 +189,7 @@ Lookup table mapping screen failure codes to eligibility criteria. 15 rows.
 
 ### 2.8 `sites`
 
-Investigator sites. 150 rows across 5 countries.
+Investigator sites. 142 rows across 20 countries (real facilities from NCT02264990).
 
 > **Production sources:** CTMS site management module (Veeva Vault CTMS, Oracle Siebel CTMS) — the authoritative source for site identifiers, activation dates, countries, and status. Enriched with: site feasibility data (Citeline TrialScope, WCG SiteIntel) for site type and experience level; IRT/IWRS for per-site enrollment targets. The `anomaly_type` column is a demo-only field not present in production; in production, anomalies are detected by the agents, not pre-labeled.
 > **Refresh cadence:** Weekly — new sites activate, site status changes, enrollment targets may be redistributed.
@@ -197,12 +197,12 @@ Investigator sites. 150 rows across 5 countries.
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | Integer PK | Auto-increment |
-| `site_id` | String(20) UNIQUE | Site identifier: `SITE-001` through `SITE-163` (non-contiguous due to anomaly site ID reservations) |
-| `country` | String(3) | ISO-3166 alpha-3: `USA` (75), `JPN` (30), `CAN` (20), `AUS` (15), `NZL` (10) |
-| `city` | String(100) | City name |
+| `site_id` | String(20) UNIQUE | Site identifier: `SITE-001` through `SITE-157` (non-contiguous due to anomaly site ID reservations) |
+| `country` | String(3) | ISO-3166 alpha-3: `USA` (24), `GBR` (19), `JPN` (12), `RUS` (12), `ESP` (9), `ZAF` (8), `HUN` (7), `TUR` (7), `KOR` (6), `NLD` (5), `ARG` (4), `AUS` (4), `CAN` (4), `CZE` (4), `DEU` (4), `ISR` (4), `TWN` (4), `FIN` (2), `NZL` (2), `DNK` (1) |
+| `city` | String(100) | City name (real trial site cities from NCT02264990) |
 | `site_type` | String(30) | `Academic` (35%), `Community` (40%), `Hospital` (25%) |
 | `experience_level` | String(20) | `High` (30%), `Medium` (50%), `Low` (20%). Anomaly sites have overridden experience levels |
-| `activation_date` | Date | Date site was activated for enrollment. Range: 2024-03-01 to 2025-01-29 across 5 waves |
+| `activation_date` | Date | Date site was activated for enrollment. Range: 2024-03-01 to 2024-11-30 across 7 waves |
 | `target_enrollment` | Integer | Per-site enrollment target (3-6 subjects) |
 | `anomaly_type` | String(50) | NULL for normal sites. Values: `high_query_burden`, `enrollment_stall`, `entry_lag_spike`, `supply_constraint`, `monitoring_gap` for the 13 anomaly sites |
 
@@ -212,11 +212,13 @@ Investigator sites. 150 rows across 5 countries.
 
 | Wave | Period | Countries | Count |
 |------|--------|-----------|-------|
-| 1 | Month 0-3 | USA | 40 |
-| 2 | Month 3-5 | USA, JPN | 40 |
-| 3 | Month 5-7 | USA, JPN, CAN | 35 |
-| 4 | Month 7-9 | AUS, NZL, CAN | 25 |
-| 5 | Month 9-11 | AUS, NZL | 10 |
+| 1 | Month 0-3 | USA, CAN | 28 |
+| 2 | Month 2-4 | GBR, DEU, NLD | 28 |
+| 3 | Month 3-5 | JPN, KOR, TWN | 22 |
+| 4 | Month 4-6 | ESP, DNK, FIN | 12 |
+| 5 | Month 5-7 | AUS, NZL | 6 |
+| 6 | Month 5-7 | HUN, CZE, RUS | 23 |
+| 7 | Month 6-8 | ARG, TUR, ISR, ZAF | 23 |
 
 ### 2.9 `cra_assignments`
 
@@ -254,7 +256,7 @@ Drug kit definitions by treatment arm. 4 rows.
 
 ### 2.11 `depots`
 
-Regional drug supply depots. 5 rows.
+Regional drug supply depots. 8 rows.
 
 > **Production sources:** IRT/IWRS supply management module; Clinical Supply Management systems (Almac Group, Catalent, Fisher Clinical Services); or sponsor logistics/supply chain teams. Depot-to-site mapping and standard shipping times are typically maintained in the IRT system.
 > **Refresh cadence:** Static — loaded at study setup. Updated if new depots are added or shipping routes change.
@@ -262,7 +264,7 @@ Regional drug supply depots. 5 rows.
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | Integer PK | Auto-increment |
-| `depot_id` | String(20) UNIQUE | `DEPOT_US`, `DEPOT_JP`, `DEPOT_CA`, `DEPOT_AU`, `DEPOT_NZ` |
+| `depot_id` | String(20) UNIQUE | `DEPOT_US`, `DEPOT_AM`, `DEPOT_EU_W`, `DEPOT_EU_E`, `DEPOT_JP`, `DEPOT_AP`, `DEPOT_IL`, `DEPOT_ZA` |
 | `depot_name` | String(100) | Full depot name |
 | `country` | String(3) | Country served |
 | `city` | String(100) | Depot location |
@@ -324,7 +326,7 @@ Subjects who passed screening and were randomized. 595 rows.
 
 **Key data characteristics:**
 - Arm balance: ~295 ARM_A / ~300 ARM_B (block randomization ensures near-equal allocation)
-- 149/150 sites have at least one randomized subject
+- 141/142 sites have at least one randomized subject
 
 ### 3.3 `enrollment_velocity`
 

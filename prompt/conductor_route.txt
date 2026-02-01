@@ -23,5 +23,6 @@ Produce a JSON routing decision:
   "routing_rationale": "Why these agents were selected — semantic reasoning about the query intent",
   "query_interpretation": "What the user is really asking about",
   "expected_cross_domain_insights": "What cross-domain connections might emerge",
-  "requires_synthesis": true/false
+  "requires_synthesis": true/false,
+  "signal_summary": "Brief description of the signals, anomalies, or concerns detected in this query that justify launching an investigation"
 }}

@@ -12,16 +12,25 @@ const geoUrl = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
 
 const countryCoordinates = {
   'USA': { lat: 39.8283, lng: -98.5795 },
-  'UK': { lat: 55.3781, lng: -3.436 },
-  'Japan': { lat: 36.2048, lng: 138.2529 },
-  'Germany': { lat: 51.1657, lng: 10.4515 },
-  'France': { lat: 46.6034, lng: 1.8883 },
-  'Canada': { lat: 56.1304, lng: -106.3468 },
+  'CAN': { lat: 56.1304, lng: -106.3468 },
+  'GBR': { lat: 55.3781, lng: -3.436 },
   'JPN': { lat: 36.2048, lng: 138.2529 },
   'DEU': { lat: 51.1657, lng: 10.4515 },
-  'FRA': { lat: 46.6034, lng: 1.8883 },
-  'CAN': { lat: 56.1304, lng: -106.3468 },
-  'GBR': { lat: 55.3781, lng: -3.436 }
+  'ESP': { lat: 40.4637, lng: -3.7492 },
+  'NLD': { lat: 52.1326, lng: 5.2913 },
+  'DNK': { lat: 56.2639, lng: 9.5018 },
+  'FIN': { lat: 61.9241, lng: 25.7482 },
+  'HUN': { lat: 47.1625, lng: 19.5033 },
+  'CZE': { lat: 49.8175, lng: 15.473 },
+  'RUS': { lat: 55.7558, lng: 37.6173 },
+  'TUR': { lat: 38.9637, lng: 35.2433 },
+  'KOR': { lat: 35.9078, lng: 127.7669 },
+  'TWN': { lat: 23.6978, lng: 120.9605 },
+  'AUS': { lat: -25.2744, lng: 133.7751 },
+  'NZL': { lat: -40.9006, lng: 174.886 },
+  'ARG': { lat: -38.4161, lng: -63.6167 },
+  'ISR': { lat: 31.0461, lng: 34.8516 },
+  'ZAF': { lat: -30.5595, lng: 22.9375 },
 }
 
 function getCoordinatesForCountry(country, index = 0) {
@@ -153,7 +162,7 @@ export const WorldMap = memo(function WorldMap({ sites, onSiteClick, onSiteHover
           className="absolute top-4 right-4 card p-3 min-w-48"
         >
           <div className="flex items-center justify-between mb-1">
-            <span className="font-medium text-apple-text">{hoveredSite.id}</span>
+            <span className="font-medium text-apple-text">{hoveredSite.name || hoveredSite.id}</span>
             <span className={`px-2 py-0.5 rounded-full text-xs text-white ${
               hoveredSite.status === 'critical' ? 'bg-apple-critical' :
               hoveredSite.status === 'warning' ? 'bg-apple-warning' :

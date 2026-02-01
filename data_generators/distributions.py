@@ -6,7 +6,7 @@ import numpy as np
 from numpy.random import Generator
 
 
-def enrollment_s_curve(t: float, K: int = 595, r: float = 0.08, t_mid: float = 40.0) -> float:
+def enrollment_s_curve(t: float, K: int = 595, r: float = 0.055, t_mid: float = 65.0) -> float:
     """Logistic S-curve: cumulative enrollment at week t."""
     return K / (1.0 + np.exp(-r * (t - t_mid)))
 
@@ -22,11 +22,34 @@ def seasonal_factor(d: date) -> float:
 
 
 ENTRY_LAG_PARAMS: dict[str, tuple[float, float]] = {
+    # North America
     "USA": (1.0, 0.7),
-    "JPN": (0.5, 0.5),
     "CAN": (1.1, 0.7),
+    # Western Europe
+    "GBR": (1.1, 0.7),
+    "DEU": (1.1, 0.7),
+    "NLD": (1.1, 0.7),
+    "ESP": (1.1, 0.7),
+    "DNK": (1.1, 0.7),
+    "FIN": (1.1, 0.7),
+    # Eastern Europe
+    "HUN": (1.3, 0.8),
+    "CZE": (1.3, 0.8),
+    "RUS": (1.3, 0.8),
+    "TUR": (1.3, 0.8),
+    # East Asia
+    "JPN": (0.5, 0.5),
+    "KOR": (0.5, 0.5),
+    "TWN": (0.5, 0.5),
+    # Oceania
     "AUS": (1.3, 0.8),
     "NZL": (1.2, 0.8),
+    # South America
+    "ARG": (1.4, 0.9),
+    # Middle East
+    "ISR": (1.0, 0.7),
+    # Africa
+    "ZAF": (1.5, 0.9),
 }
 
 
