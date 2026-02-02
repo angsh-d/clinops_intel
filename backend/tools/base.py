@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from typing import Any
 import logging
 
+from backend.cache import sql_tool_cache, cache_key
+
 logger = logging.getLogger(__name__)
 
 
@@ -62,7 +64,15 @@ class ToolRegistry:
         if not tool:
             return ToolResult(tool_name=name, success=False, error=f"Tool '{name}' not found")
         try:
-            return await tool.execute(db_session, **kwargs)
+            ck = cache_key(name, **kwargs)
+            cached = sql_tool_cache.get(ck)
+            if cached is not None:
+                logger.debug("SQL tool cache hit: %s", name)
+                return cached
+            result = await tool.execute(db_session, **kwargs)
+            if result.success:
+                sql_tool_cache.set(ck, result)
+            return result
         except Exception as e:
             logger.error("Tool %s failed: %s", name, e, exc_info=True)
             return ToolResult(tool_name=name, success=False, error=str(e))

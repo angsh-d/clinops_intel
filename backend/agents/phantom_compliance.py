@@ -1,7 +1,9 @@
-"""Agent 3: Enrollment Funnel Agent — investigates screening volume, screen failure
-rates, randomization, enrollment velocity, consent withdrawals, and regional patterns.
+"""Phantom Compliance Detection Agent — detects suspiciously perfect data
+that may indicate fabrication or variance suppression.
 
-All reasoning is LLM-driven. No hardcoded thresholds or pattern matching.
+Cross-references entry lag variance, query aging, monitoring findings, and
+randomization patterns. Near-zero variance across multiple domains simultaneously
+is the key signal.
 """
 
 import json
@@ -12,48 +14,43 @@ from backend.agents.base import BaseAgent, AgentContext, AgentOutput
 logger = logging.getLogger(__name__)
 
 
-class EnrollmentFunnelAgent(BaseAgent):
-    agent_id = "enrollment_funnel"
-    agent_name = "Enrollment Funnel Agent"
+class PhantomComplianceAgent(BaseAgent):
+    agent_id = "phantom_compliance"
+    agent_name = "Data Integrity Agent"
     description = (
-        "Investigates screening volume, screen failure rates, randomization velocity, "
-        "consent withdrawals, and regional enrollment patterns. Detects competing trials, "
-        "supply-chain-masked withdrawals, strict PI paradoxes, and funnel stage decomposition."
+        "Detects suspiciously perfect data that may indicate fabrication or variance suppression. "
+        "Cross-references entry lag variance, query aging, monitoring findings, and randomization "
+        "patterns across sites. Flags sites where multiple domains simultaneously show near-zero "
+        "variance — a statistical impossibility in real clinical operations."
     )
 
     async def perceive(self, ctx: AgentContext) -> dict:
-        """Broad data ingestion — screening, randomization, velocity, failure patterns."""
-        logger.info("[%s] PERCEIVE: gathering enrollment funnel signals", self.agent_id)
+        """Broad variance analysis across sites to detect suppressed randomness."""
+        logger.info("[%s] PERCEIVE: gathering data variance signals", self.agent_id)
 
-        funnel = await self.tools.invoke("screening_funnel", self.db)
-        velocity = await self.tools.invoke("enrollment_velocity", self.db)
-        failures = await self.tools.invoke("screen_failure_pattern", self.db, include_narratives=True)
-        regional = await self.tools.invoke("regional_comparison", self.db)
+        variance = await self.tools.invoke("data_variance_analysis", self.db)
         sites = await self.tools.invoke("site_summary", self.db)
-        kit_inv = await self.tools.invoke("kit_inventory", self.db)
+        query_burden = await self.tools.invoke("query_burden", self.db)
+        monitoring = await self.tools.invoke("monitoring_visit_history", self.db)
 
         perceptions = {
-            "screening_funnel": funnel.data if funnel.success else [],
-            "enrollment_velocity": velocity.data if velocity.success else [],
-            "failure_patterns": failures.data if failures.success else {},
-            "regional_comparison": regional.data if regional.success else {},
             "site_metadata": sites.data if sites.success else [],
-            "kit_inventory": kit_inv.data if kit_inv.success else [],
+            "data_variance": variance.data if variance.success else [],
+            "query_burden": query_burden.data if query_burden.success else [],
+            "monitoring_visits": monitoring.data if monitoring.success else [],
         }
-        logger.info("[%s] PERCEIVE: gathered %d funnel, %d velocity records",
+        logger.info("[%s] PERCEIVE: gathered %d sites, %d variance, %d query, %d monitoring records",
                      self.agent_id,
-                     len(perceptions["screening_funnel"]),
-                     len(perceptions["enrollment_velocity"]))
+                     len(perceptions["site_metadata"]),
+                     len(perceptions["data_variance"]),
+                     len(perceptions["query_burden"]),
+                     len(perceptions["monitoring_visits"]))
         return perceptions
 
     async def reason(self, ctx: AgentContext) -> list:
-        """LLM-driven hypothesis generation for enrollment signals."""
+        """LLM identifies sites with suppressed variance across multiple domains."""
         logger.info("[%s] REASON: generating hypotheses via LLM", self.agent_id)
 
-        # Compact site directory (site_id + name only) passed separately to avoid
-        # truncation by _safe_json_str — the full perceptions dict gets trimmed to
-        # ~30K chars which can drop sites beyond the first 10-20, making entity
-        # resolution impossible for mid/high-numbered site IDs.
         site_directory = json.dumps(
             [{"site_id": s["site_id"], "name": s["name"]}
              for s in ctx.perceptions.get("site_metadata", [])
@@ -62,14 +59,14 @@ class EnrollmentFunnelAgent(BaseAgent):
         )
 
         prompt = self.prompts.render(
-            "enrollment_funnel_reason",
+            "phantom_compliance_reason",
             perceptions=self._safe_json_str(ctx.perceptions),
             query=ctx.query,
             site_directory=site_directory,
         )
         response = await self.llm.generate_structured(
             prompt,
-            system="You are a clinical operations enrollment expert. Respond with valid JSON only.",
+            system="You are a clinical data integrity expert specializing in fraud detection. Respond with valid JSON only.",
         )
         try:
             parsed = self._parse_json(response.text)
@@ -77,15 +74,15 @@ class EnrollmentFunnelAgent(BaseAgent):
             logger.info("[%s] REASON: generated %d hypotheses", self.agent_id, len(hypotheses))
             return hypotheses
         except (json.JSONDecodeError, KeyError) as e:
-            logger.error("[%s] REASON: failed to parse LLM response: %s\nRaw text: %s", self.agent_id, e, response.text[:500])
-            raise RuntimeError(f"[{self.agent_id}] REASON phase failed to parse LLM response: {e}") from e
+            logger.error("[%s] REASON: failed to parse LLM response: %s", self.agent_id, e)
+            raise RuntimeError(f"[{self.agent_id}] REASON phase failed: {e}") from e
 
     async def plan(self, ctx: AgentContext) -> list:
-        """LLM decides which tools to invoke and in what order."""
+        """LLM plans deep-dive tools for suspect sites."""
         logger.info("[%s] PLAN: generating investigation plan via LLM", self.agent_id)
 
         prompt = self.prompts.render(
-            "enrollment_funnel_plan",
+            "phantom_compliance_plan",
             hypotheses=self._safe_json_str(ctx.hypotheses),
             tool_descriptions=self.tools.list_tools_text(),
             prior_results=self._safe_json_str(ctx.action_results) if ctx.iteration > 1 else "First iteration — no prior results.",
@@ -94,7 +91,7 @@ class EnrollmentFunnelAgent(BaseAgent):
         )
         response = await self.llm.generate_structured(
             prompt,
-            system="You are a clinical operations investigator. Respond with valid JSON only.",
+            system="You are a clinical data integrity investigator. Respond with valid JSON only.",
         )
         try:
             parsed = self._parse_json(response.text)
@@ -130,11 +127,11 @@ class EnrollmentFunnelAgent(BaseAgent):
         return results
 
     async def reflect(self, ctx: AgentContext) -> dict:
-        """LLM evaluates whether the investigation identified binding constraints."""
+        """LLM evaluates whether the integrity investigation is complete."""
         logger.info("[%s] REFLECT: evaluating completeness via LLM", self.agent_id)
 
         prompt = self.prompts.render(
-            "enrollment_funnel_reflect",
+            "phantom_compliance_reflect",
             query=ctx.query,
             hypotheses=self._safe_json_str(ctx.hypotheses),
             action_results=self._safe_json_str(ctx.action_results),
@@ -143,7 +140,7 @@ class EnrollmentFunnelAgent(BaseAgent):
         )
         response = await self.llm.generate_structured(
             prompt,
-            system="You are a clinical operations enrollment expert. Respond with valid JSON only.",
+            system="You are a clinical data integrity expert. Respond with valid JSON only.",
         )
         try:
             parsed = self._parse_json(response.text)
@@ -153,11 +150,11 @@ class EnrollmentFunnelAgent(BaseAgent):
                         len(parsed.get("findings_summary", [])))
             return parsed
         except (json.JSONDecodeError, KeyError) as e:
-            logger.error("[%s] REFLECT: failed to parse: %s\nRaw text: %s", self.agent_id, e, response.text[:500])
-            raise RuntimeError(f"[{self.agent_id}] REFLECT phase failed to parse LLM response: {e}") from e
+            logger.error("[%s] REFLECT: failed to parse: %s", self.agent_id, e)
+            raise RuntimeError(f"[{self.agent_id}] REFLECT phase failed: {e}") from e
 
     async def _build_output(self, ctx: AgentContext) -> AgentOutput:
-        """Build structured output from completed PRPA context."""
+        """Build structured output from the completed PRPA context."""
         findings = ctx.reflection.get("findings_summary", [])
 
         confidences = [f.get("confidence", 0) for f in findings]
@@ -176,9 +173,9 @@ class EnrollmentFunnelAgent(BaseAgent):
 
         return AgentOutput(
             agent_id=self.agent_id,
-            finding_type="enrollment_funnel_analysis",
+            finding_type="phantom_compliance_analysis",
             severity=severity,
-            summary="; ".join(summary_parts) if summary_parts else "No significant enrollment issues detected.",
+            summary="; ".join(summary_parts) if summary_parts else "No data integrity concerns detected.",
             detail={
                 "findings": findings,
                 "remaining_gaps": ctx.reflection.get("remaining_gaps", []),

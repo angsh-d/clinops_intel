@@ -2,7 +2,6 @@
 
 import logging
 import uuid
-from collections import OrderedDict
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query as QueryParam
@@ -10,11 +9,13 @@ from sqlalchemy.orm import Session
 
 from backend.dependencies import get_db, get_settings_dep
 from backend.config import Settings, SessionLocal
+from backend.cache import query_results_cache, invalidate_all
 from backend.schemas.query import QueryRequest, QueryResponse, QueryStatus, FollowUpRequest
 from backend.schemas.errors import ErrorResponse, ValidationErrorDetail
 from backend.models.governance import ConversationalInteraction
 from backend.conductor.router import ConductorRouter
 from backend.llm.failover import FailoverLLMClient
+from backend.llm.cached import CachedLLMClient
 from backend.prompts.manager import get_prompt_manager
 from backend.agents.registry import build_agent_registry
 from backend.tools.sql_tools import build_tool_registry
@@ -25,23 +26,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["query"])
 
 
-# ── Bounded in-memory cache (Phase 2: Redis) ────────────────────────────────
-class _BoundedCache(OrderedDict):
-    def __init__(self, max_size: int = 500):
-        super().__init__()
-        self._max_size = max_size
-
-    def __setitem__(self, key, value):
-        super().__setitem__(key, value)
-        if len(self) > self._max_size:
-            self.popitem(last=False)
-
-
-_query_results: _BoundedCache = _BoundedCache(max_size=500)
+_query_results = query_results_cache
 
 
 def _build_conductor(settings: Settings) -> ConductorRouter:
-    llm = FailoverLLMClient(settings)
+    llm = CachedLLMClient(FailoverLLMClient(settings))
     prompts = get_prompt_manager()
     agents = build_agent_registry()
     tools = build_tool_registry()
@@ -62,7 +51,7 @@ async def _process_query(query_id: str, question: str, session_id: str, settings
             interaction.status = "processing"
             db.commit()
 
-        llm = FailoverLLMClient(settings)
+        llm = CachedLLMClient(FailoverLLMClient(settings))
         prompts = get_prompt_manager()
         conductor = ConductorRouter(llm, prompts, build_agent_registry(), build_tool_registry())
 
@@ -95,7 +84,10 @@ async def _process_query(query_id: str, question: str, session_id: str, settings
         result = await conductor.execute_query(effective_question, session_context, db)
 
         # Store result in bounded cache
-        _query_results[query_id] = result
+        _query_results.set(query_id, result)
+
+        # Invalidate dashboard/tool/LLM caches so next load gets fresh data
+        invalidate_all()
 
         # Update DB
         interaction = db.query(ConversationalInteraction).filter_by(query_id=query_id).first()
@@ -104,12 +96,13 @@ async def _process_query(query_id: str, question: str, session_id: str, settings
             interaction.routed_agents = result.get("routing", {}).get("selected_agents", [])
             interaction.agent_responses = result.get("agent_outputs", {})
             interaction.synthesized_response = result.get("synthesis", {}).get("executive_summary", "")
+            interaction.synthesis_data = result.get("synthesis", {})
             interaction.completed_at = datetime.now(timezone.utc)
             db.commit()
 
     except Exception as e:
         logger.error("Query processing failed for %s: %s", query_id, e, exc_info=True)
-        _query_results[query_id] = {"error": str(e), "status": "failed"}
+        _query_results.set(query_id, {"error": str(e), "status": "failed"})
         try:
             db.rollback()  # Clear any dirty transaction state before re-querying
             interaction = db.query(ConversationalInteraction).filter_by(query_id=query_id).first()

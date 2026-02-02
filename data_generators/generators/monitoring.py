@@ -72,6 +72,10 @@ def generate_monitoring_visits(
         ).order_by(CRAAssignment.start_date).all()
         current_cra = cras[-1].cra_id if cras else "CRA-UNKNOWN"
 
+        # Determine monitoring interval based on anomaly type
+        is_suspicious_perfection = prof and prof.get("anomaly_type") == "suspicious_perfection"
+        is_monitoring_anxiety = prof and prof.get("anomaly_type") == "monitoring_anxiety"
+
         interval_weeks = int(rng.integers(6, 9))
         visit_date = act + timedelta(weeks=interval_weeks)
         visit_counter = 0
@@ -109,6 +113,20 @@ def generate_monitoring_visits(
                     "days_overdue": (SNAPSHOT_DATE - planned_date).days,
                     "status": "Missed",
                 })
+            elif is_suspicious_perfection:
+                # All visits completed exactly on planned date with minimal findings
+                mv_rows.append({
+                    "site_id": site.site_id,
+                    "cra_id": cra_id,
+                    "planned_date": planned_date,
+                    "actual_date": planned_date,
+                    "visit_type": "On-Site" if visit_counter % 3 != 2 else "Remote",
+                    "findings_count": int(rng.integers(0, 2)),  # 0-1 findings
+                    "critical_findings": 0,
+                    "queries_generated": 0,
+                    "days_overdue": 0,
+                    "status": "Completed",
+                })
             else:
                 actual = planned_date + timedelta(days=int(rng.integers(-3, 5)))
                 actual = min(actual, SNAPSHOT_DATE)
@@ -116,6 +134,11 @@ def generate_monitoring_visits(
                 visit_type = "On-Site" if visit_counter % 3 != 2 else "Remote"
                 findings = int(rng.poisson(3))
                 critical = min(int(rng.poisson(0.3)), findings)
+
+                # Monitoring anxiety: after frequency increase, fewer findings (PI extra careful)
+                if is_monitoring_anxiety and planned_date >= prof["monitoring_frequency_change_date"]:
+                    findings = int(rng.poisson(1.0))
+                    critical = 0
 
                 mv_rows.append({
                     "site_id": site.site_id,
@@ -153,7 +176,11 @@ def generate_monitoring_visits(
                         "status": action_status,
                     })
 
-            visit_date += timedelta(weeks=int(rng.integers(6, 9)))
+            # Monitoring anxiety: shortened interval after change date
+            if is_monitoring_anxiety and planned_date >= prof["monitoring_frequency_change_date"]:
+                visit_date += timedelta(weeks=prof["monitoring_interval_after_weeks"])
+            else:
+                visit_date += timedelta(weeks=int(rng.integers(6, 9)))
             visit_counter += 1
 
     session.bulk_insert_mappings(MonitoringVisit, mv_rows)

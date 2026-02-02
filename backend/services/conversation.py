@@ -60,6 +60,6 @@ class ConversationService:
             return {
                 "query_type": "new_topic",
                 "contextualized_query": followup_query,
-                "selected_agents": ["agent_1", "agent_3"],
+                "selected_agents": ["data_quality", "enrollment_funnel"],
                 "requires_synthesis": True,
             }

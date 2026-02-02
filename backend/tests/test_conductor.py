@@ -24,13 +24,13 @@ from backend.prompts.manager import PromptManager
 # ── Canned responses ─────────────────────────────────────────────────────────
 
 ROUTE_SINGLE_AGENT = json.dumps({
-    "selected_agents": ["agent_1"],
+    "selected_agents": ["data_quality"],
     "routing_rationale": "Query is about data quality only",
     "requires_synthesis": False,
 })
 
 ROUTE_MULTI_AGENT = json.dumps({
-    "selected_agents": ["agent_1", "agent_3"],
+    "selected_agents": ["data_quality", "enrollment_funnel"],
     "routing_rationale": "Query spans data quality and enrollment",
     "requires_synthesis": True,
 })
@@ -107,20 +107,20 @@ def _make_conductor(llm_responses: list[str]) -> ConductorRouter:
     registry = AgentRegistry()
 
     class FakeAgent1(_FakeAgent):
-        agent_id = "agent_1"
+        agent_id = "data_quality"
         agent_name = "Data Quality Agent"
         description = "Test DQ agent"
 
         def __init__(self, **kwargs):
-            super().__init__(agent_id_val="agent_1", **kwargs)
+            super().__init__(agent_id_val="data_quality", **kwargs)
 
     class FakeAgent3(_FakeAgent):
-        agent_id = "agent_3"
+        agent_id = "enrollment_funnel"
         agent_name = "Enrollment Funnel Agent"
         description = "Test enrollment agent"
 
         def __init__(self, **kwargs):
-            super().__init__(agent_id_val="agent_3", **kwargs)
+            super().__init__(agent_id_val="enrollment_funnel", **kwargs)
 
     registry.register(FakeAgent1)
     registry.register(FakeAgent3)
@@ -136,22 +136,22 @@ class TestConductorRouting:
     async def test_route_single_agent(self):
         conductor = _make_conductor([ROUTE_SINGLE_AGENT])
         routing = await conductor.route_query("How is data quality?")
-        assert routing["selected_agents"] == ["agent_1"]
+        assert routing["selected_agents"] == ["data_quality"]
         assert routing["requires_synthesis"] is False
 
     @pytest.mark.asyncio
     async def test_route_multi_agent(self):
         conductor = _make_conductor([ROUTE_MULTI_AGENT])
         routing = await conductor.route_query("Overview of data quality and enrollment")
-        assert set(routing["selected_agents"]) == {"agent_1", "agent_3"}
+        assert set(routing["selected_agents"]) == {"data_quality", "enrollment_funnel"}
         assert routing["requires_synthesis"] is True
 
     @pytest.mark.asyncio
-    async def test_route_parse_failure_defaults_to_agent_1(self):
-        """If LLM returns garbage, conductor defaults to agent_1."""
+    async def test_route_parse_failure_defaults_to_data_quality(self):
+        """If LLM returns garbage, conductor defaults to data_quality."""
         conductor = _make_conductor(["not json at all !!!"])
         routing = await conductor.route_query("test")
-        assert routing["selected_agents"] == ["agent_1"]
+        assert routing["selected_agents"] == ["data_quality"]
         assert "parse error" in routing["routing_rationale"].lower()
 
 
@@ -170,7 +170,7 @@ class TestConductorExecution:
         # Single agent: executive_summary comes from agent, not LLM synthesis
         assert result["synthesis"]["cross_domain_findings"] == []
         assert len(result["agent_outputs"]) == 1
-        assert "agent_1" in result["agent_outputs"]
+        assert "data_quality" in result["agent_outputs"]
 
     @pytest.mark.asyncio
     async def test_multi_agent_triggers_synthesis(self):
@@ -182,8 +182,8 @@ class TestConductorExecution:
             result = await conductor.execute_query("Full overview", "", MagicMock())
 
         assert len(result["agent_outputs"]) == 2
-        assert "agent_1" in result["agent_outputs"]
-        assert "agent_3" in result["agent_outputs"]
+        assert "data_quality" in result["agent_outputs"]
+        assert "enrollment_funnel" in result["agent_outputs"]
         # Synthesis was called
         assert "cross_domain_findings" in result["synthesis"]
         assert len(result["synthesis"]["cross_domain_findings"]) > 0
@@ -204,7 +204,7 @@ class TestConductorExecution:
     async def test_unknown_agent_in_routing_is_skipped(self):
         """If LLM routes to a nonexistent agent, it is silently skipped."""
         bad_route = json.dumps({
-            "selected_agents": ["agent_1", "nonexistent_agent"],
+            "selected_agents": ["data_quality", "nonexistent_agent"],
             "routing_rationale": "test",
             "requires_synthesis": False,
         })
@@ -214,8 +214,8 @@ class TestConductorExecution:
             mock_sl.return_value = MagicMock()
             result = await conductor.execute_query("test", "", MagicMock())
 
-        # Only agent_1 should produce output
-        assert "agent_1" in result["agent_outputs"]
+        # Only data_quality should produce output
+        assert "data_quality" in result["agent_outputs"]
         assert "nonexistent_agent" not in result["agent_outputs"]
 
     @pytest.mark.asyncio

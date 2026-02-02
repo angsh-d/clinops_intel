@@ -154,6 +154,16 @@ def generate_edc_telemetry(
                 page_name = CRF_PAGES[pi]
                 lag = int(entry_lag_sample(rng, country, 1)[0])
 
+                # Suspicious perfection: clamp lag to forced range, suppress variance
+                if prof and prof.get("variance_suppression"):
+                    lo, hi = prof["entry_lag_forced_range"]
+                    lag = int(rng.integers(lo, hi + 1))
+
+                # Monitoring anxiety: extra lag after frequency change date
+                if prof and prof.get("post_increase_lag_extra_days") and prof.get("monitoring_frequency_change_date"):
+                    if actual >= prof["monitoring_frequency_change_date"]:
+                        lag += prof["post_increase_lag_extra_days"]
+
                 # Anomaly: entry lag spike
                 if prof and prof.get("lag_spike_start"):
                     spike_start = prof["lag_spike_start"]
@@ -168,7 +178,7 @@ def generate_edc_telemetry(
                     if r_start <= actual <= r_end:
                         lag += int(regional["lag_extra_days"])
 
-                if is_holiday_window(actual):
+                if is_holiday_window(actual) and not (prof and prof.get("variance_suppression")):
                     lag += 3
 
                 # CRA transition spike
@@ -183,11 +193,18 @@ def generate_edc_telemetry(
                     entry_date = SNAPSHOT_DATE
 
                 completeness = float(rng.beta(15, 1.5) * 100)
-                if prof and prof.get("completeness_offset"):
+                if prof and prof.get("completeness_forced"):
+                    completeness = prof["completeness_forced"] + float(rng.normal(0, 0.15))
+                    completeness = min(100.0, max(99.0, completeness))
+                elif prof and prof.get("completeness_offset"):
                     completeness = max(50, completeness + prof["completeness_offset"])
                 completeness = min(100.0, completeness)
                 has_missing = completeness < 85
                 missing_count = 0 if not has_missing else int(rng.integers(1, 5))
+                # Suspicious perfection: force zero missing fields
+                if prof and prof.get("variance_suppression"):
+                    has_missing = False
+                    missing_count = 0
 
                 ecrf_rows.append({
                     "subject_visit_id": sv_id_counter,
@@ -300,6 +317,22 @@ def _generate_queries_for_entry(
             if gap_start <= open_date <= gap_end:
                 response_lag += int(rng.integers(10, 25))
                 close_lag += int(rng.integers(5, 15))
+
+            # Chain 3 (post-gap backlog): first monitoring visits after
+            # a gap discover accumulated issues. These backlog queries
+            # take much longer to resolve — many remain Open at
+            # SNAPSHOT_DATE, producing the "hidden debt" KRI signal.
+            # Monitoring-triggered queries get the longest lags (primary
+            # signal); non-monitoring queries also get extended absolute
+            # lags so they contribute to the Open backlog.
+            post_gap_window = gap_end + timedelta(days=90)
+            if gap_end < open_date <= post_gap_window:
+                if triggered_by == "Monitoring Visit":
+                    response_lag = int(rng.integers(120, 200))
+                    close_lag = int(rng.integers(60, 120))
+                else:
+                    response_lag = int(rng.integers(80, 160))
+                    close_lag = int(rng.integers(40, 80))
 
         response_date = open_date + timedelta(days=response_lag)
         close_date = response_date + timedelta(days=close_lag)

@@ -138,7 +138,7 @@ class TestDataQualityAgentPRPA:
         output = await agent.run("Which sites have data quality issues?", session_id="test-sess")
 
         assert isinstance(output, AgentOutput)
-        assert output.agent_id == "agent_1"
+        assert output.agent_id == "data_quality"
         assert output.finding_type == "data_quality_analysis"
         assert output.severity == "high"
         assert output.confidence > 0
@@ -169,8 +169,8 @@ class TestDataQualityAgentPRPA:
         assert output.severity == "high"
 
     @pytest.mark.asyncio
-    async def test_perceive_invokes_all_five_tools(self):
-        """Perceive phase should invoke all 5 data quality tools."""
+    async def test_perceive_invokes_all_six_tools(self):
+        """Perceive phase should invoke all 6 data quality tools."""
         llm = _make_mock_llm([REASON_RESPONSE, PLAN_RESPONSE, REFLECT_GOAL_SATISFIED])
         tools = _make_mock_tools()
         prompts = _make_mock_prompts()
@@ -179,10 +179,10 @@ class TestDataQualityAgentPRPA:
         agent = DataQualityAgent(llm_client=llm, tool_registry=tools, prompt_manager=prompts, db_session=db)
         await agent.run("test", session_id="s")
 
-        # First 5 calls are perceive, then act calls follow
-        perceive_tools = {c[0][0] for c in tools.invoke.call_args_list[:5]}
+        # First 6 calls are perceive, then act calls follow
+        perceive_tools = {c[0][0] for c in tools.invoke.call_args_list[:6]}
         expected = {"entry_lag_analysis", "query_burden", "data_correction_analysis",
-                    "cra_assignment_history", "monitoring_visit_history"}
+                    "cra_assignment_history", "monitoring_visit_history", "site_summary"}
         assert perceive_tools == expected
 
     @pytest.mark.asyncio
@@ -236,7 +236,7 @@ class TestDataQualityAgentPRPA:
         agent = DataQualityAgent(llm_client=llm, tool_registry=tools, prompt_manager=prompts, db_session=db)
         output = await agent.run("test", session_id="s", on_step=bad_callback)
         # Agent should still complete despite callback errors
-        assert output.agent_id == "agent_1"
+        assert output.agent_id == "data_quality"
 
     @pytest.mark.asyncio
     async def test_malformed_llm_json_in_reason_returns_fallback(self):
@@ -253,7 +253,7 @@ class TestDataQualityAgentPRPA:
         agent = DataQualityAgent(llm_client=llm, tool_registry=tools, prompt_manager=prompts, db_session=db)
         output = await agent.run("test", session_id="s")
         # Should get fallback hypothesis
-        assert output.agent_id == "agent_1"
+        assert output.agent_id == "data_quality"
 
     @pytest.mark.asyncio
     async def test_empty_plan_steps_skips_act(self):
@@ -267,10 +267,10 @@ class TestDataQualityAgentPRPA:
         agent = DataQualityAgent(llm_client=llm, tool_registry=tools, prompt_manager=prompts, db_session=db)
         output = await agent.run("test", session_id="s")
 
-        # Only perceive tools should have been called (5), no act tools
+        # Only perceive tools should have been called (6), no act tools
         act_calls = [c for c in tools.invoke.call_args_list if c[0][0] not in {
             "entry_lag_analysis", "query_burden", "data_correction_analysis",
-            "cra_assignment_history", "monitoring_visit_history",
+            "cra_assignment_history", "monitoring_visit_history", "site_summary",
         }]
         assert len(act_calls) == 0
 
@@ -318,7 +318,7 @@ class TestEnrollmentFunnelAgentPRPA:
         agent = EnrollmentFunnelAgent(llm_client=llm, tool_registry=tools, prompt_manager=prompts, db_session=db)
         output = await agent.run("Which sites have high screen failure?", session_id="test-sess")
 
-        assert output.agent_id == "agent_3"
+        assert output.agent_id == "enrollment_funnel"
         assert output.finding_type == "enrollment_funnel_analysis"
         assert output.severity == "high"
         assert len(output.findings) == 1

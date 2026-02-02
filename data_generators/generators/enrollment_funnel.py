@@ -45,6 +45,9 @@ def generate_enrollment(
     # Block randomization per site (blocks of 4: AABB permuted)
     site_arm_blocks: dict[str, list[str]] = {}
 
+    # Track per-site randomization counts to cap at site target
+    site_randomized: dict[str, int] = {s.site_id: 0 for s in sites}
+
     # Pre-compute weekly S-curve scale factor: fraction of peak rate
     weekly_deriv = []
     for w in range(STUDY_WEEKS + 1):
@@ -93,6 +96,9 @@ def generate_enrollment(
                     # For competing-trial sites, only apply multiplier before competition starts
                     if prof.get("competing_trial_start_week") and week_num >= prof["competing_trial_start_week"]:
                         pass  # don't apply pre-competition boost after competition starts
+                    # For monitoring-anxiety sites, only apply multiplier before frequency change
+                    elif prof.get("monitoring_frequency_change_date") and week_start >= prof["monitoring_frequency_change_date"]:
+                        pass  # don't apply pre-change boost after monitoring increase
                     else:
                         rate *= prof["screening_rate_multiplier"]
                 if prof.get("competing_trial_start_week") and week_num >= prof["competing_trial_start_week"]:
@@ -104,11 +110,15 @@ def generate_enrollment(
                     spike_end = spike_start + timedelta(weeks=prof.get("lag_spike_duration_weeks", 6))
                     if spike_start <= week_start <= spike_end:
                         rate *= (1.0 - prof["enrollment_drop_during_spike_pct"])
+                # Monitoring anxiety: enrollment drops after monitoring frequency increase
+                if prof.get("post_increase_enrollment_drop") and prof.get("monitoring_frequency_change_date"):
+                    if week_start >= prof["monitoring_frequency_change_date"]:
+                        rate *= (1.0 - prof["post_increase_enrollment_drop"])
 
             # Ensure anomaly and regional cluster sites have minimum meaningful enrollment
             # for pattern detection. Disable floor when anomaly profile intentionally
             # suppresses the rate (competing trial drop, CRA-transition enrollment drop)
-            # so that the decline is visible to agents.
+            # so the decline is visible.
             is_anomaly = prof is not None
             is_regional = site.site_id in REGIONAL_CLUSTER_SITES
             apply_floor = True
@@ -123,7 +133,16 @@ def generate_enrollment(
                 if drop_start <= week_start <= drop_end:
                     apply_floor = False
             if (is_anomaly or is_regional) and apply_floor:
-                rate = max(rate, 0.40)  # ~1 screening every 2-3 weeks minimum
+                # Enrollment stall: reduced floor so stall is visible (30-50% enrollment)
+                if prof and prof.get("anomaly_type") == "enrollment_stall":
+                    floor = 0.15
+                else:
+                    floor = 0.40  # ~1 screening every 2-3 weeks minimum
+                # Monitoring anxiety: reduce floor after frequency change (visible drop)
+                if prof and prof.get("post_increase_enrollment_drop") and prof.get("monitoring_frequency_change_date"):
+                    if week_start >= prof["monitoring_frequency_change_date"]:
+                        floor *= (1.0 - prof["post_increase_enrollment_drop"])
+                rate = max(rate, floor)
 
             # Chain 2: boost screening rate during stockout windows so consent
             # withdrawal pattern is clearly visible in the data
@@ -154,6 +173,10 @@ def generate_enrollment(
                             sf_rate = prof["post_competition_sf_rate"]
                 else:
                     sf_rate = float(rng.beta(7, 20))
+                # Monitoring anxiety: SF rate increases after monitoring frequency change
+                if prof and prof.get("post_increase_sf_rate_bump") and prof.get("monitoring_frequency_change_date"):
+                    if screen_date >= prof["monitoring_frequency_change_date"]:
+                        sf_rate += prof["post_increase_sf_rate_bump"]
 
                 passed = rng.random() > sf_rate
                 failure_code = None
@@ -209,7 +232,7 @@ def generate_enrollment(
                     "failure_reason_narrative": failure_narrative,
                 })
 
-                if passed and total_randomized < target_total:
+                if passed and total_randomized < target_total and site_randomized[site.site_id] < site.target_enrollment:
                     rand_date = screen_date + timedelta(days=int(rng.integers(1, 14)))
                     if rand_date > SNAPSHOT_DATE:
                         rand_date = SNAPSHOT_DATE
@@ -229,6 +252,7 @@ def generate_enrollment(
                         "stratum_ecog": ecog,
                     })
                     total_randomized += 1
+                    site_randomized[site.site_id] += 1
                     if total_randomized >= target_total and enrollment_close_week is None:
                         enrollment_close_week = week_num
 

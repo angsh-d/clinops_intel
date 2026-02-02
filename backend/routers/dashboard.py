@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.dependencies import get_db, get_settings_dep
 from backend.config import Settings
+from backend.cache import dashboard_cache, cache_key
 from backend.schemas.dashboard import (
     DataQualityDashboard, SiteDataQualityMetrics,
     EnrollmentDashboard, SiteEnrollmentMetrics,
@@ -44,6 +45,11 @@ def data_quality_dashboard(
     settings: Settings = Depends(get_settings_dep),
 ):
     """Data quality metrics by site — pure SQL aggregation."""
+    ck = cache_key("data_quality")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
     sites = db.query(
         ECRFEntry.site_id,
         func.avg(ECRFEntry.entry_lag_days).label("mean_entry_lag"),
@@ -83,11 +89,13 @@ def data_quality_dashboard(
     study_mean = db.query(func.avg(ECRFEntry.entry_lag_days)).scalar()
     study_total_q = db.query(func.count(Query.id)).scalar()
 
-    return DataQualityDashboard(
+    result = DataQualityDashboard(
         sites=site_metrics,
         study_mean_entry_lag=round(float(study_mean), 1) if study_mean else None,
         study_total_queries=study_total_q or 0,
     )
+    dashboard_cache.set(ck, result)
+    return result
 
 
 @router.get(
@@ -100,6 +108,11 @@ def data_quality_dashboard(
 )
 def enrollment_funnel_dashboard(db: Session = Depends(get_db)):
     """Enrollment funnel metrics by site — pure SQL aggregation."""
+    ck = cache_key("enrollment_funnel")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
     screening = db.query(
         ScreeningLog.site_id,
         func.count(ScreeningLog.id).label("total_screened"),
@@ -146,13 +159,15 @@ def enrollment_funnel_dashboard(db: Session = Depends(get_db)):
         total_screened += s.total_screened
         total_randomized += rand_count
 
-    return EnrollmentDashboard(
+    result = EnrollmentDashboard(
         sites=site_metrics,
         study_total_screened=total_screened,
         study_total_randomized=total_randomized,
         study_target=study_target,
         study_pct_of_target=round((total_randomized / study_target * 100) if study_target > 0 else 0, 1),
     )
+    dashboard_cache.set(ck, result)
+    return result
 
 
 @router.get(
@@ -164,6 +179,11 @@ def enrollment_funnel_dashboard(db: Session = Depends(get_db)):
 )
 def site_metadata_dashboard(db: Session = Depends(get_db)):
     """Site metadata, CRA assignments, and monitoring visits — pure SQL."""
+    ck = cache_key("site_metadata")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
     sites = db.query(Site).all()
     cra_rows = db.query(CRAAssignment).all()
     visit_rows = db.query(MonitoringVisit).order_by(MonitoringVisit.actual_date.desc()).all()
@@ -203,7 +223,9 @@ def site_metadata_dashboard(db: Session = Depends(get_db)):
             monitoring_visits=visit_map.get(s.site_id, [])[:5],
         ))
 
-    return SiteMetadataResponse(sites=result)
+    response = SiteMetadataResponse(sites=result)
+    dashboard_cache.set(ck, response)
+    return response
 
 
 @router.get(
@@ -214,6 +236,11 @@ def site_metadata_dashboard(db: Session = Depends(get_db)):
 )
 def kri_timeseries(site_id: str, db: Session = Depends(get_db)):
     """KRI snapshots for a site — pure SQL."""
+    ck = cache_key("kri_timeseries", site_id)
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
     rows = db.query(KRISnapshot).filter(
         KRISnapshot.site_id == site_id,
     ).order_by(KRISnapshot.snapshot_date).all()
@@ -227,7 +254,9 @@ def kri_timeseries(site_id: str, db: Session = Depends(get_db)):
         status=r.status,
     ) for r in rows]
 
-    return KRITimeSeriesResponse(site_id=site_id, data=data)
+    result = KRITimeSeriesResponse(site_id=site_id, data=data)
+    dashboard_cache.set(ck, result)
+    return result
 
 
 @router.get(
@@ -238,6 +267,11 @@ def kri_timeseries(site_id: str, db: Session = Depends(get_db)):
 )
 def enrollment_velocity(site_id: str, db: Session = Depends(get_db)):
     """Enrollment velocity time series for a site — pure SQL."""
+    ck = cache_key("enrollment_velocity", site_id)
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
     rows = db.query(EnrollmentVelocity).filter(
         EnrollmentVelocity.site_id == site_id,
     ).order_by(EnrollmentVelocity.week_number).all()
@@ -252,7 +286,9 @@ def enrollment_velocity(site_id: str, db: Session = Depends(get_db)):
         target_cumulative=r.target_cumulative or 0,
     ) for r in rows]
 
-    return EnrollmentVelocityResponse(site_id=site_id, data=data)
+    result = EnrollmentVelocityResponse(site_id=site_id, data=data)
+    dashboard_cache.set(ck, result)
+    return result
 
 
 @router.get(
@@ -314,7 +350,12 @@ def alert_detail_enhanced(alert_id: int, db: Session = Depends(get_db)):
 def study_summary(db: Session = Depends(get_db)):
     """Study summary metrics — pure SQL aggregation."""
     from datetime import datetime
-    
+
+    ck = cache_key("study_summary")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
     study_config = db.query(StudyConfig).first()
     if not study_config:
         from fastapi import HTTPException
@@ -331,7 +372,7 @@ def study_summary(db: Session = Depends(get_db)):
 
     pct = round((enrolled / study_config.target_enrollment * 100), 1) if study_config.target_enrollment else 0
 
-    return StudySummary(
+    result = StudySummary(
         study_id=study_config.study_id,
         study_name=study_config.study_id,
         phase=study_config.phase,
@@ -343,6 +384,8 @@ def study_summary(db: Session = Depends(get_db)):
         countries=countries,
         last_updated=datetime.now().isoformat(),
     )
+    dashboard_cache.set(ck, result)
+    return result
 
 
 @router.get(
@@ -356,6 +399,11 @@ def attention_sites(
     settings: Settings = Depends(get_settings_dep),
 ):
     """Sites requiring attention based on data quality and enrollment issues."""
+    ck = cache_key("attention_sites")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
     attention_list = []
 
     # Get sites with high open query counts
@@ -431,11 +479,13 @@ def attention_sites(
     critical_count = sum(1 for s in attention_list if s.severity == "critical")
     warning_count = sum(1 for s in attention_list if s.severity == "warning")
     
-    return AttentionSitesResponse(
+    result = AttentionSitesResponse(
         sites=attention_list,
         critical_count=critical_count,
         warning_count=warning_count,
     )
+    dashboard_cache.set(ck, result)
+    return result
 
 
 @router.get(
@@ -449,6 +499,10 @@ def sites_overview(
     settings: Settings = Depends(get_settings_dep),
 ):
     """All sites with computed metrics."""
+    ck = cache_key("sites_overview")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
 
     sites = db.query(Site).all()
 
@@ -513,7 +567,9 @@ def sites_overview(
             finding=finding,
         ))
     
-    return SitesOverviewResponse(sites=site_list, total=len(site_list))
+    result = SitesOverviewResponse(sites=site_list, total=len(site_list))
+    dashboard_cache.set(ck, result)
+    return result
 
 
 @router.get(
@@ -525,7 +581,12 @@ def sites_overview(
 def agent_insights(db: Session = Depends(get_db)):
     """AI agent insights from findings and alerts."""
     from datetime import datetime, timedelta
-    
+
+    ck = cache_key("agent_insights")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
     insights = []
     
     # Get recent findings
@@ -534,8 +595,8 @@ def agent_insights(db: Session = Depends(get_db)):
     for i, finding in enumerate(findings):
         # Map agent type
         agent_map = {
-            "enrollment": "Enrollment Agent",
             "data_quality": "Data Quality Agent",
+            "enrollment_funnel": "Enrollment Funnel Agent",
             "supply_chain": "Supply Chain Agent",
             "compliance": "Compliance Agent",
         }
@@ -590,8 +651,8 @@ def agent_insights(db: Session = Depends(get_db)):
         alerts = db.query(AlertLog).filter(AlertLog.status == "active").order_by(AlertLog.created_at.desc()).limit(5).all()
         for i, alert in enumerate(alerts):
             agent_map = {
-                "enrollment": "Enrollment Agent",
                 "data_quality": "Data Quality Agent",
+                "enrollment_funnel": "Enrollment Funnel Agent",
                 "supply_chain": "Supply Chain Agent",
             }
             agent = agent_map.get(alert.agent_id, alert.agent_id or "Analysis Agent")
@@ -620,7 +681,9 @@ def agent_insights(db: Session = Depends(get_db)):
                 impact=None,
             ))
     
-    return AgentInsightsResponse(insights=insights, total=len(insights))
+    result = AgentInsightsResponse(insights=insights, total=len(insights))
+    dashboard_cache.set(ck, result)
+    return result
 
 
 @router.get(
@@ -632,10 +695,15 @@ def agent_insights(db: Session = Depends(get_db)):
 def agent_activity(db: Session = Depends(get_db)):
     """Get agent activity status from database."""
     from datetime import datetime, timedelta
-    
+
+    ck = cache_key("agent_activity")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
     agent_definitions = [
-        {"id": "enrollment", "name": "Enrollment Agent"},
         {"id": "data_quality", "name": "Data Quality Agent"},
+        {"id": "enrollment_funnel", "name": "Enrollment Funnel Agent"},
         {"id": "compliance", "name": "Compliance Agent"},
         {"id": "risk", "name": "Risk Agent"},
     ]
@@ -670,7 +738,9 @@ def agent_activity(db: Session = Depends(get_db)):
             findingsCount=findings_count,
         ))
     
-    return AgentActivityResponse(agents=agents)
+    result = AgentActivityResponse(agents=agents)
+    dashboard_cache.set(ck, result)
+    return result
 
 
 @router.get(
@@ -686,7 +756,12 @@ def site_detail(
 ):
     """Get detailed site data from database."""
     from datetime import datetime
-    
+
+    ck = cache_key("site_detail", site_id)
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
     site = db.query(Site).filter(Site.site_id == site_id).first()
     if not site:
         from fastapi import HTTPException
@@ -803,7 +878,7 @@ def site_detail(
             time=time_str,
         ))
     
-    return SiteDetailResponse(
+    result = SiteDetailResponse(
         site_id=site_id,
         site_name=site.name,
         country=site.country,
@@ -816,3 +891,5 @@ def site_detail(
         enrollment_percent=enrollment_pct,
         data_quality_score=float(dq_score),
     )
+    dashboard_cache.set(ck, result)
+    return result

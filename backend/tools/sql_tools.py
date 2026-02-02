@@ -12,6 +12,7 @@ from data_generators.models import (
     Site, ECRFEntry, Query, DataCorrection, CRAAssignment,
     MonitoringVisit, ScreeningLog, RandomizationLog, EnrollmentVelocity,
     ScreenFailureReasonCode, KitInventory, KRISnapshot,
+    RandomizationEvent,
 )
 from backend.tools.base import BaseTool, ToolResult
 from backend.config import get_settings
@@ -205,7 +206,7 @@ class SiteSummaryTool(BaseTool):
         site_id = kwargs.get("site_id")
         country = kwargs.get("country")
         q = db_session.query(
-            Site.site_id, Site.country, Site.city, Site.site_type,
+            Site.site_id, Site.name, Site.country, Site.city, Site.site_type,
             Site.experience_level, Site.activation_date, Site.target_enrollment,
         )
         if site_id:
@@ -493,6 +494,390 @@ class KRISnapshotTool(BaseTool):
         return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHANTOM COMPLIANCE TOOLS (Data Integrity)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class DataVarianceAnalysisTool(BaseTool):
+    name = "data_variance_analysis"
+    description = (
+        "Per-site variance analysis: stddev of entry_lag_days, stddev of completeness_pct, "
+        "correction rate, and entry count. Near-zero stddev across domains = suppressed randomness. "
+        "Args: site_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+        q = db_session.query(
+            ECRFEntry.site_id,
+            func.count(ECRFEntry.id).label("entry_count"),
+            func.avg(ECRFEntry.entry_lag_days).label("mean_entry_lag"),
+            func.stddev(ECRFEntry.entry_lag_days).label("stddev_entry_lag"),
+            func.avg(ECRFEntry.completeness_pct).label("mean_completeness"),
+            func.stddev(ECRFEntry.completeness_pct).label("stddev_completeness"),
+        ).group_by(ECRFEntry.site_id)
+
+        if site_id:
+            q = q.filter(ECRFEntry.site_id == site_id)
+
+        ecrf_rows = q.all()
+        ecrf_data = _serialize_rows(ecrf_rows)
+
+        # Correction rate per site
+        corr_q = db_session.query(
+            DataCorrection.site_id,
+            func.count(DataCorrection.id).label("correction_count"),
+        ).group_by(DataCorrection.site_id)
+        if site_id:
+            corr_q = corr_q.filter(DataCorrection.site_id == site_id)
+        corr_data = {r.site_id: r.correction_count for r in corr_q.all()}
+
+        for row in ecrf_data:
+            sid = row["site_id"]
+            entry_count = row.get("entry_count", 0)
+            row["correction_count"] = corr_data.get(sid, 0)
+            row["correction_rate"] = round(corr_data.get(sid, 0) / entry_count, 4) if entry_count > 0 else 0
+
+        return ToolResult(tool_name=self.name, success=True, data=ecrf_data, row_count=len(ecrf_data))
+
+
+class TimestampClusteringTool(BaseTool):
+    name = "timestamp_clustering"
+    description = (
+        "Per-site coefficient of variation for entry_lag_days and inter-randomization-date intervals. "
+        "CV < 0.1 = unnaturally uniform timing. "
+        "Args: site_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+
+        # Entry lag CV per site
+        lag_q = db_session.query(
+            ECRFEntry.site_id,
+            func.avg(ECRFEntry.entry_lag_days).label("mean_entry_lag"),
+            func.stddev(ECRFEntry.entry_lag_days).label("stddev_entry_lag"),
+            func.count(ECRFEntry.id).label("entry_count"),
+        ).group_by(ECRFEntry.site_id)
+        if site_id:
+            lag_q = lag_q.filter(ECRFEntry.site_id == site_id)
+        lag_rows = _serialize_rows(lag_q.all())
+
+        for row in lag_rows:
+            mean = row.get("mean_entry_lag") or 0
+            std = row.get("stddev_entry_lag") or 0
+            row["entry_lag_cv"] = round(std / mean, 4) if mean > 0 else 0
+
+        # Randomization date intervals per site
+        rand_q = db_session.query(
+            RandomizationLog.site_id,
+            RandomizationLog.randomization_date,
+        ).order_by(RandomizationLog.site_id, RandomizationLog.randomization_date)
+        if site_id:
+            rand_q = rand_q.filter(RandomizationLog.site_id == site_id)
+        rand_rows = rand_q.all()
+
+        # Compute inter-randomization intervals
+        site_intervals: dict[str, list] = {}
+        for r in rand_rows:
+            sid = r.site_id
+            if sid not in site_intervals:
+                site_intervals[sid] = []
+            site_intervals[sid].append(r.randomization_date)
+
+        rand_cv_data = {}
+        for sid, dates in site_intervals.items():
+            if len(dates) < 3:
+                rand_cv_data[sid] = {"randomization_count": len(dates), "inter_rand_cv": None}
+                continue
+            intervals = [(dates[i+1] - dates[i]).days for i in range(len(dates)-1)]
+            mean_iv = sum(intervals) / len(intervals) if intervals else 0
+            if mean_iv > 0 and len(intervals) > 1:
+                var = sum((x - mean_iv) ** 2 for x in intervals) / (len(intervals) - 1)
+                std_iv = var ** 0.5
+                cv = round(std_iv / mean_iv, 4)
+            else:
+                cv = 0
+            rand_cv_data[sid] = {"randomization_count": len(dates), "inter_rand_cv": cv, "mean_interval_days": round(mean_iv, 1)}
+
+        # Merge
+        for row in lag_rows:
+            sid = row["site_id"]
+            row.update(rand_cv_data.get(sid, {"randomization_count": 0, "inter_rand_cv": None}))
+
+        return ToolResult(tool_name=self.name, success=True, data=lag_rows, row_count=len(lag_rows))
+
+
+class QueryLifecycleAnomalyTool(BaseTool):
+    name = "query_lifecycle_anomaly"
+    description = (
+        "Per-site query lifecycle analysis: mean/stddev age_days, % monitoring-triggered queries, "
+        "open/answered/closed counts. Zero aging variance + no monitoring-triggered queries = phantom. "
+        "Args: site_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+
+        q = db_session.query(
+            Query.site_id,
+            func.count(Query.id).label("total_queries"),
+            func.avg(Query.age_days).label("mean_age"),
+            func.stddev(Query.age_days).label("stddev_age"),
+            func.sum(case((Query.status == "Open", 1), else_=0)).label("open_count"),
+            func.sum(case((Query.status == "Answered", 1), else_=0)).label("answered_count"),
+            func.sum(case((Query.status == "Closed", 1), else_=0)).label("closed_count"),
+            func.sum(case((Query.triggered_by == "Monitoring", 1), else_=0)).label("monitoring_triggered"),
+        ).group_by(Query.site_id)
+
+        if site_id:
+            q = q.filter(Query.site_id == site_id)
+
+        rows = q.all()
+        data = _serialize_rows(rows)
+
+        for row in data:
+            total = row.get("total_queries", 0)
+            mon = row.get("monitoring_triggered", 0)
+            row["pct_monitoring_triggered"] = round(mon / total * 100, 1) if total > 0 else 0
+
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class MonitoringFindingsVarianceTool(BaseTool):
+    name = "monitoring_findings_variance"
+    description = (
+        "Per-site monitoring findings analysis: mean/stddev findings_count, % visits with 0 findings, "
+        "mean/stddev days_overdue. Always 0-1 findings + zero schedule variance = phantom. "
+        "Args: site_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+
+        q = db_session.query(
+            MonitoringVisit.site_id,
+            func.count(MonitoringVisit.id).label("visit_count"),
+            func.avg(MonitoringVisit.findings_count).label("mean_findings"),
+            func.stddev(MonitoringVisit.findings_count).label("stddev_findings"),
+            func.sum(case((MonitoringVisit.findings_count == 0, 1), else_=0)).label("zero_findings_visits"),
+            func.avg(MonitoringVisit.days_overdue).label("mean_days_overdue"),
+            func.stddev(MonitoringVisit.days_overdue).label("stddev_days_overdue"),
+        ).group_by(MonitoringVisit.site_id)
+
+        if site_id:
+            q = q.filter(MonitoringVisit.site_id == site_id)
+
+        rows = q.all()
+        data = _serialize_rows(rows)
+
+        for row in data:
+            total = row.get("visit_count", 0)
+            zero = row.get("zero_findings_visits", 0)
+            row["pct_zero_findings"] = round(zero / total * 100, 1) if total > 0 else 0
+
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SITE RESCUE TOOLS (Site Decision)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class EnrollmentTrajectoryTool(BaseTool):
+    name = "enrollment_trajectory"
+    description = (
+        "Per-site enrollment trajectory: 4-week average velocity, velocity trend (slope), "
+        "gap to target, projected weeks to complete at current rate. "
+        "Args: site_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+
+        # Get last 8 weeks of velocity data for trend calculation
+        max_week = db_session.query(func.max(EnrollmentVelocity.week_number)).scalar() or 0
+
+        q = db_session.query(
+            EnrollmentVelocity.site_id,
+            EnrollmentVelocity.week_number,
+            EnrollmentVelocity.randomized_count,
+            EnrollmentVelocity.cumulative_randomized,
+            EnrollmentVelocity.target_cumulative,
+        ).filter(
+            EnrollmentVelocity.week_number > max_week - 8,
+        ).order_by(EnrollmentVelocity.site_id, EnrollmentVelocity.week_number)
+
+        if site_id:
+            q = q.filter(EnrollmentVelocity.site_id == site_id)
+
+        rows = q.all()
+
+        # Group by site and compute trajectory metrics
+        site_weeks: dict[str, list] = {}
+        for r in rows:
+            if r.site_id not in site_weeks:
+                site_weeks[r.site_id] = []
+            site_weeks[r.site_id].append(r)
+
+        data = []
+        for sid, weeks in site_weeks.items():
+            velocities = [w.randomized_count for w in weeks]
+            last_4 = velocities[-4:] if len(velocities) >= 4 else velocities
+            avg_velocity = sum(last_4) / len(last_4) if last_4 else 0
+
+            # Simple linear slope over available weeks
+            if len(velocities) >= 3:
+                n = len(velocities)
+                x_mean = (n - 1) / 2
+                y_mean = sum(velocities) / n
+                num = sum((i - x_mean) * (v - y_mean) for i, v in enumerate(velocities))
+                denom = sum((i - x_mean) ** 2 for i in range(n))
+                slope = round(num / denom, 3) if denom > 0 else 0
+            else:
+                slope = 0
+
+            latest = weeks[-1]
+            gap = (latest.target_cumulative or 0) - (latest.cumulative_randomized or 0)
+            projected_weeks = round(gap / avg_velocity, 1) if avg_velocity > 0 and gap > 0 else None
+
+            data.append({
+                "site_id": sid,
+                "avg_velocity_4wk": round(avg_velocity, 2),
+                "velocity_slope": slope,
+                "cumulative_randomized": latest.cumulative_randomized,
+                "target_cumulative": latest.target_cumulative,
+                "gap_to_target": max(gap, 0),
+                "projected_weeks_to_complete": projected_weeks,
+                "trend": "declining" if slope < -0.1 else "improving" if slope > 0.1 else "flat",
+            })
+
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class ScreenFailureRootCauseTool(BaseTool):
+    name = "screen_failure_root_cause"
+    description = (
+        "Per-site screen failure root cause analysis: failure codes with counts, study-wide comparison, "
+        "top failure narratives. Distinguishes fixable (PI interpretation) from structural (population) causes. "
+        "Args: site_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+
+        # Site-level failure code breakdown
+        site_q = db_session.query(
+            ScreeningLog.site_id,
+            ScreeningLog.failure_reason_code,
+            func.count(ScreeningLog.id).label("count"),
+        ).filter(
+            ScreeningLog.outcome == "Failed",
+            ScreeningLog.failure_reason_code.isnot(None),
+        ).group_by(ScreeningLog.site_id, ScreeningLog.failure_reason_code)
+
+        if site_id:
+            site_q = site_q.filter(ScreeningLog.site_id == site_id)
+
+        site_data = _serialize_rows(site_q.all())
+
+        # Study-wide averages
+        study_total = db_session.query(func.count(ScreeningLog.id)).filter(
+            ScreeningLog.outcome == "Failed",
+            ScreeningLog.failure_reason_code.isnot(None),
+        ).scalar() or 1
+
+        study_q = db_session.query(
+            ScreeningLog.failure_reason_code,
+            func.count(ScreeningLog.id).label("study_count"),
+        ).filter(
+            ScreeningLog.outcome == "Failed",
+            ScreeningLog.failure_reason_code.isnot(None),
+        ).group_by(ScreeningLog.failure_reason_code)
+        study_data = _serialize_rows(study_q.all())
+        for row in study_data:
+            row["study_pct"] = round(row["study_count"] / study_total * 100, 1)
+
+        # Top narratives (limited)
+        narr_q = db_session.query(
+            ScreeningLog.site_id,
+            ScreeningLog.failure_reason_code,
+            ScreeningLog.failure_reason_narrative,
+        ).filter(
+            ScreeningLog.outcome == "Failed",
+            ScreeningLog.failure_reason_narrative.isnot(None),
+        )
+        if site_id:
+            narr_q = narr_q.filter(ScreeningLog.site_id == site_id)
+        narratives = _serialize_rows(narr_q.limit(30).all())
+
+        result = {
+            "site_failure_codes": site_data,
+            "study_average_codes": study_data,
+            "narratives": narratives,
+        }
+        return ToolResult(tool_name=self.name, success=True, data=result, row_count=len(site_data))
+
+
+class SupplyConstraintImpactTool(BaseTool):
+    name = "supply_constraint_impact"
+    description = (
+        "Per-site supply constraint analysis: randomization delay events by reason, stockout episodes "
+        "from kit inventory (with date ranges), and consent withdrawal counts. "
+        "Returns three separate datasets for LLM-driven temporal cross-referencing. "
+        "Args: site_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+
+        # Randomization delay events
+        delay_q = db_session.query(
+            RandomizationEvent.site_id,
+            RandomizationEvent.event_type,
+            RandomizationEvent.delay_reason,
+            func.count(RandomizationEvent.id).label("event_count"),
+            func.avg(RandomizationEvent.delay_duration_hours).label("avg_delay_hours"),
+        ).group_by(
+            RandomizationEvent.site_id,
+            RandomizationEvent.event_type,
+            RandomizationEvent.delay_reason,
+        )
+        if site_id:
+            delay_q = delay_q.filter(RandomizationEvent.site_id == site_id)
+        delay_data = _serialize_rows(delay_q.all())
+
+        # Stockout episodes (below reorder)
+        stock_q = db_session.query(
+            KitInventory.site_id,
+            func.count(KitInventory.id).label("stockout_snapshots"),
+            func.min(KitInventory.snapshot_date).label("first_stockout"),
+            func.max(KitInventory.snapshot_date).label("last_stockout"),
+        ).filter(
+            KitInventory.is_below_reorder.is_(True),
+        ).group_by(KitInventory.site_id)
+        if site_id:
+            stock_q = stock_q.filter(KitInventory.site_id == site_id)
+        stockout_data = _serialize_rows(stock_q.all())
+
+        # Consent withdrawals
+        withdrawal_q = db_session.query(
+            ScreeningLog.site_id,
+            func.count(ScreeningLog.id).label("withdrawal_count"),
+        ).filter(
+            ScreeningLog.outcome == "Withdrawn",
+        ).group_by(ScreeningLog.site_id)
+        if site_id:
+            withdrawal_q = withdrawal_q.filter(ScreeningLog.site_id == site_id)
+        withdrawal_data = _serialize_rows(withdrawal_q.all())
+
+        result = {
+            "randomization_delays": delay_data,
+            "stockout_episodes": stockout_data,
+            "consent_withdrawals": withdrawal_data,
+        }
+        return ToolResult(tool_name=self.name, success=True, data=result, row_count=len(delay_data))
+
+
 def build_tool_registry() -> "ToolRegistry":
     """Create and populate the default tool registry with all tool types."""
     from backend.tools.base import ToolRegistry
@@ -514,7 +899,19 @@ def build_tool_registry() -> "ToolRegistry":
     registry.register(RegionalComparisonTool())
     registry.register(KitInventoryTool())
     registry.register(KRISnapshotTool())
+    # Phantom Compliance tools (Data Integrity)
+    registry.register(DataVarianceAnalysisTool())
+    registry.register(TimestampClusteringTool())
+    registry.register(QueryLifecycleAnomalyTool())
+    registry.register(MonitoringFindingsVarianceTool())
+    # Site Rescue tools (Site Decision)
+    registry.register(EnrollmentTrajectoryTool())
+    registry.register(ScreenFailureRootCauseTool())
+    registry.register(SupplyConstraintImpactTool())
     # Cross-domain tools
     registry.register(ContextSearchTool())
     registry.register(TrendProjectionTool())
+    # Competitive intelligence tools (external API)
+    from backend.tools.ctgov_tools import CompetingTrialSearchTool
+    registry.register(CompetingTrialSearchTool())
     return registry

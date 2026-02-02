@@ -1,5 +1,6 @@
 import { AnimatePresence } from 'framer-motion'
 import { Home } from './components/Home'
+import { StudyDashboard } from './components/StudyDashboard'
 import { Pulse } from './components/Pulse'
 import { Constellation } from './components/Constellation'
 import { SiteSheet } from './components/SiteSheet'
@@ -14,6 +15,7 @@ function App() {
     <div className="min-h-screen bg-apple-bg">
       <AnimatePresence mode="wait">
         {view === 'home' && <Home key="home" />}
+        {view === 'study' && <StudyDashboard key="study" />}
         {view === 'pulse' && <Pulse key="pulse" />}
         {view === 'constellation' && <Constellation key="constellation" />}
       </AnimatePresence>

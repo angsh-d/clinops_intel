@@ -5,6 +5,16 @@ Given the hypotheses and available tools, produce an ordered investigation plan.
 HYPOTHESES TO INVESTIGATE:
 {hypotheses}
 
+ITERATION: {iteration} of 3
+
+PRIOR INVESTIGATION RESULTS (from previous iterations):
+{prior_results}
+
+GAPS IDENTIFIED BY REFLECT PHASE:
+{reflection_gaps}
+
+CRITICAL: If prior results show a tool returned EMPTY data or 0 rows, do NOT call the same tool with the same arguments. Choose a DIFFERENT tool or different parameters to investigate the hypothesis from another angle.
+
 AVAILABLE TOOLS:
 {tool_descriptions}
 

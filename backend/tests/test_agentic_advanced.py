@@ -38,7 +38,7 @@ class ContextAwareMockLLM:
     returns appropriate canned responses, and captures all prompts for assertion."""
 
     def __init__(self, response_map: dict[str, str]):
-        """response_map: keys are prompt name substrings (e.g. 'agent1_reason'),
+        """response_map: keys are prompt name substrings (e.g. 'data_quality_reason'),
         values are JSON response strings."""
         self._response_map = response_map
         self.captured_prompts: list[tuple[str, str]] = []  # [(prompt_text, system), ...]
@@ -239,16 +239,16 @@ class TestDataDependentReasoning:
             ),
         }
         response_map = {
-            "agent1_reason": REASON_WITH_SITE003,
-            "agent1_plan": json.dumps({"plan_steps": []}),
-            "agent1_reflect": REFLECT_SATISFIED,
+            "data_quality_reason": REASON_WITH_SITE003,
+            "data_quality_plan": json.dumps({"plan_steps": []}),
+            "data_quality_reflect": REFLECT_SATISFIED,
         }
         agent, llm, tools, prompts = _build_data_quality_agent(response_map, tool_data)
         await agent.run("Which sites have data quality issues?", session_id="test")
 
         # Find the reason render call
-        reason_calls = [(name, kw) for name, kw in prompts.render_calls if name == "agent1_reason"]
-        assert len(reason_calls) >= 1, "agent1_reason prompt was never rendered"
+        reason_calls = [(name, kw) for name, kw in prompts.render_calls if name == "data_quality_reason"]
+        assert len(reason_calls) >= 1, "data_quality_reason prompt was never rendered"
 
         # The perceptions kwarg should contain actual data from the tools
         perceptions_str = reason_calls[0][1]["perceptions"]
@@ -261,15 +261,15 @@ class TestDataDependentReasoning:
     async def test_hypotheses_flow_into_plan_prompt(self):
         """Plan prompt must contain hypothesis text and tool descriptions."""
         response_map = {
-            "agent1_reason": REASON_WITH_SITE003,
-            "agent1_plan": PLAN_ENTRY_LAG_DRILL,
-            "agent1_reflect": REFLECT_SATISFIED,
+            "data_quality_reason": REASON_WITH_SITE003,
+            "data_quality_plan": PLAN_ENTRY_LAG_DRILL,
+            "data_quality_reflect": REFLECT_SATISFIED,
         }
         agent, llm, tools, prompts = _build_data_quality_agent(response_map)
         await agent.run("Investigate SITE-003", session_id="test")
 
-        plan_calls = [(name, kw) for name, kw in prompts.render_calls if name == "agent1_plan"]
-        assert len(plan_calls) >= 1, "agent1_plan prompt was never rendered"
+        plan_calls = [(name, kw) for name, kw in prompts.render_calls if name == "data_quality_plan"]
+        assert len(plan_calls) >= 1, "data_quality_plan prompt was never rendered"
 
         hypotheses_str = plan_calls[0][1]["hypotheses"]
         assert "SITE-003" in hypotheses_str, "Hypothesis about SITE-003 missing from plan prompt"
@@ -282,9 +282,9 @@ class TestDataDependentReasoning:
     async def test_action_results_flow_into_reflect_prompt(self):
         """Reflect prompt must contain the act phase's tool results."""
         response_map = {
-            "agent1_reason": REASON_WITH_SITE003,
-            "agent1_plan": PLAN_ENTRY_LAG_DRILL,
-            "agent1_reflect": REFLECT_SATISFIED,
+            "data_quality_reason": REASON_WITH_SITE003,
+            "data_quality_plan": PLAN_ENTRY_LAG_DRILL,
+            "data_quality_reflect": REFLECT_SATISFIED,
         }
         tool_data = {
             "entry_lag_analysis": ToolResult(
@@ -299,8 +299,8 @@ class TestDataDependentReasoning:
         agent, llm, tools, prompts = _build_data_quality_agent(response_map, tool_data)
         await agent.run("Check SITE-003", session_id="test")
 
-        reflect_calls = [(name, kw) for name, kw in prompts.render_calls if name == "agent1_reflect"]
-        assert len(reflect_calls) >= 1, "agent1_reflect prompt was never rendered"
+        reflect_calls = [(name, kw) for name, kw in prompts.render_calls if name == "data_quality_reflect"]
+        assert len(reflect_calls) >= 1, "data_quality_reflect prompt was never rendered"
 
         action_results_str = reflect_calls[0][1]["action_results"]
         assert "entry_lag_analysis" in action_results_str, "Tool name missing from reflect prompt"
@@ -319,8 +319,8 @@ class TestAdaptiveMultiIteration:
     async def test_reflect_gaps_drive_second_iteration_reasoning(self):
         """Iteration 2 reason prompt should include accumulated action_results from iteration 1."""
         response_map = {
-            "agent1_reason": REASON_WITH_SITE003,
-            "agent1_plan": PLAN_ENTRY_LAG_DRILL,
+            "data_quality_reason": REASON_WITH_SITE003,
+            "data_quality_plan": PLAN_ENTRY_LAG_DRILL,
             # First reflect: not satisfied, second: satisfied
         }
         # Use a stateful LLM that returns different reflect responses per iteration
@@ -331,14 +331,14 @@ class TestAdaptiveMultiIteration:
 
         async def _gen(prompt, *, system="", temperature=None):
             call_idx["i"] += 1
-            if "agent1_reflect" in prompt:
+            if "data_quality_reflect" in prompt:
                 idx = reflect_idx["i"]
                 reflect_idx["i"] += 1
                 text = reflect_responses[idx] if idx < len(reflect_responses) else REFLECT_SATISFIED
                 return LLMResponse(text=text, model="mock", usage={})
-            if "agent1_reason" in prompt:
+            if "data_quality_reason" in prompt:
                 return LLMResponse(text=REASON_WITH_SITE003, model="mock", usage={})
-            if "agent1_plan" in prompt:
+            if "data_quality_plan" in prompt:
                 return LLMResponse(text=PLAN_ENTRY_LAG_DRILL, model="mock", usage={})
             return LLMResponse(text='{"hypotheses":[],"plan_steps":[],"is_goal_satisfied":true}', model="mock", usage={})
 
@@ -355,7 +355,7 @@ class TestAdaptiveMultiIteration:
         assert perceive_count == 2, f"Expected 2 iterations, got {perceive_count}"
 
         # Iteration 2's reason prompt should contain perceptions (re-gathered each iteration)
-        reason_calls = [(name, kw) for name, kw in prompts.render_calls if name == "agent1_reason"]
+        reason_calls = [(name, kw) for name, kw in prompts.render_calls if name == "data_quality_reason"]
         assert len(reason_calls) == 2, "Expected 2 reason prompt renders"
 
         # Both reason prompts should contain perception data
@@ -369,15 +369,15 @@ class TestAdaptiveMultiIteration:
         reflect_idx = {"i": 0}
 
         async def _gen(prompt, *, system="", temperature=None):
-            if "agent1_reflect" in prompt:
+            if "data_quality_reflect" in prompt:
                 idx = reflect_idx["i"]
                 reflect_idx["i"] += 1
                 if idx == 0:
                     return LLMResponse(text=REFLECT_NOT_SATISFIED_NEEDS_CORRECTION, model="mock", usage={})
                 return LLMResponse(text=REFLECT_SATISFIED, model="mock", usage={})
-            if "agent1_reason" in prompt:
+            if "data_quality_reason" in prompt:
                 return LLMResponse(text=REASON_WITH_SITE003, model="mock", usage={})
-            if "agent1_plan" in prompt:
+            if "data_quality_plan" in prompt:
                 return LLMResponse(text=PLAN_ENTRY_LAG_DRILL, model="mock", usage={})
             return LLMResponse(text='{}', model="mock", usage={})
 
@@ -394,7 +394,7 @@ class TestAdaptiveMultiIteration:
         assert len(act_entries) == 2, "Expected 2 act trace entries"
 
         # Verify the second iteration's reflect prompt has all accumulated results
-        reflect_calls = [(name, kw) for name, kw in prompts.render_calls if name == "agent1_reflect"]
+        reflect_calls = [(name, kw) for name, kw in prompts.render_calls if name == "data_quality_reflect"]
         assert len(reflect_calls) == 2
         # Second reflect should see results from both iterations (4 results)
         second_reflect_results = reflect_calls[1][1]["action_results"]
@@ -406,9 +406,9 @@ class TestAdaptiveMultiIteration:
     async def test_max_iterations_terminates_unsatisfied_loop(self):
         """Agent should stop after max_iterations even if goal never satisfied."""
         response_map = {
-            "agent1_reason": REASON_WITH_SITE003,
-            "agent1_plan": json.dumps({"plan_steps": []}),
-            "agent1_reflect": REFLECT_NEVER_SATISFIED,
+            "data_quality_reason": REASON_WITH_SITE003,
+            "data_quality_plan": json.dumps({"plan_steps": []}),
+            "data_quality_reflect": REFLECT_NEVER_SATISFIED,
         }
         agent, llm, tools, prompts = _build_data_quality_agent(response_map)
         output = await agent.run("Unsolvable query", session_id="test")
@@ -433,9 +433,9 @@ class TestToolFailureRecovery:
     async def test_perceive_tool_failure_produces_empty_signal(self):
         """A failing perceive tool should produce an empty list, not crash the agent."""
         response_map = {
-            "agent1_reason": REASON_WITH_SITE003,
-            "agent1_plan": json.dumps({"plan_steps": []}),
-            "agent1_reflect": REFLECT_SATISFIED,
+            "data_quality_reason": REASON_WITH_SITE003,
+            "data_quality_plan": json.dumps({"plan_steps": []}),
+            "data_quality_reflect": REFLECT_SATISFIED,
         }
         agent, llm, tools, prompts = _build_data_quality_agent(
             response_map, failing_tools={"entry_lag_analysis"}
@@ -443,7 +443,7 @@ class TestToolFailureRecovery:
         output = await agent.run("test", session_id="test")
 
         # Agent should complete successfully
-        assert output.agent_id == "agent_1"
+        assert output.agent_id == "data_quality"
 
         # entry_lag should be empty list in perceptions
         assert output.data_signals["entry_lag"] == [], \
@@ -464,9 +464,9 @@ class TestToolFailureRecovery:
             ]
         })
         response_map = {
-            "agent1_reason": REASON_WITH_SITE003,
-            "agent1_plan": plan_with_three_steps,
-            "agent1_reflect": REFLECT_SATISFIED,
+            "data_quality_reason": REASON_WITH_SITE003,
+            "data_quality_plan": plan_with_three_steps,
+            "data_quality_reflect": REFLECT_SATISFIED,
         }
         # Middle tool fails
         agent, llm, tools, prompts = _build_data_quality_agent(
@@ -475,7 +475,7 @@ class TestToolFailureRecovery:
         output = await agent.run("test", session_id="test")
 
         # Find the reflect prompt to inspect action_results passed to it
-        reflect_calls = [(name, kw) for name, kw in prompts.render_calls if name == "agent1_reflect"]
+        reflect_calls = [(name, kw) for name, kw in prompts.render_calls if name == "data_quality_reflect"]
         assert len(reflect_calls) >= 1
         action_results_str = reflect_calls[0][1]["action_results"]
 
@@ -492,12 +492,12 @@ class TestToolFailureRecovery:
         """Even when all perceive tools fail, agent completes the full PRPA cycle."""
         all_dq_tools = {
             "entry_lag_analysis", "query_burden", "data_correction_analysis",
-            "cra_assignment_history", "monitoring_visit_history",
+            "cra_assignment_history", "monitoring_visit_history", "site_summary",
         }
         response_map = {
-            "agent1_reason": json.dumps({"hypotheses": []}),
-            "agent1_plan": json.dumps({"plan_steps": []}),
-            "agent1_reflect": json.dumps({
+            "data_quality_reason": json.dumps({"hypotheses": []}),
+            "data_quality_plan": json.dumps({"plan_steps": []}),
+            "data_quality_reflect": json.dumps({
                 "is_goal_satisfied": True,
                 "findings_summary": [],
                 "overall_severity": "low",
@@ -509,9 +509,9 @@ class TestToolFailureRecovery:
         output = await agent.run("test", session_id="test")
 
         # Agent should still complete
-        assert output.agent_id == "agent_1"
+        assert output.agent_id == "data_quality"
         # All perceptions should be empty
-        for key in ["entry_lag", "query_burden", "corrections", "cra_history", "monitoring_visits"]:
+        for key in ["site_metadata", "entry_lag", "query_burden", "corrections", "cra_history", "monitoring_visits"]:
             assert output.data_signals[key] == [], f"Expected empty list for {key}"
         # Confidence should be default 0.5 with no findings
         assert output.confidence == 0.5
@@ -534,9 +534,9 @@ class TestGoalDrivenPlanning:
             ]
         })
         response_map = {
-            "agent1_reason": entry_lag_hypothesis,
-            "agent1_plan": PLAN_ENTRY_LAG_DRILL,  # selects entry_lag_analysis + data_correction_analysis
-            "agent1_reflect": REFLECT_SATISFIED,
+            "data_quality_reason": entry_lag_hypothesis,
+            "data_quality_plan": PLAN_ENTRY_LAG_DRILL,  # selects entry_lag_analysis + data_correction_analysis
+            "data_quality_reflect": REFLECT_SATISFIED,
         }
         agent, llm, tools, prompts = _build_data_quality_agent(response_map)
         await agent.run("Check entry lag", session_id="test")
@@ -555,9 +555,9 @@ class TestGoalDrivenPlanning:
             ]
         })
         response_map2 = {
-            "agent1_reason": cra_hypothesis,
-            "agent1_plan": PLAN_CRA_DRILL,  # selects cra_assignment_history
-            "agent1_reflect": REFLECT_SATISFIED,
+            "data_quality_reason": cra_hypothesis,
+            "data_quality_plan": PLAN_CRA_DRILL,  # selects cra_assignment_history
+            "data_quality_reflect": REFLECT_SATISFIED,
         }
         agent2, llm2, tools2, prompts2 = _build_data_quality_agent(response_map2)
         await agent2.run("Check CRA issues", session_id="test")
@@ -574,9 +574,9 @@ class TestGoalDrivenPlanning:
         empty_reason = json.dumps({"hypotheses": []})
         empty_plan = json.dumps({"plan_steps": []})
         response_map = {
-            "agent1_reason": empty_reason,
-            "agent1_plan": empty_plan,
-            "agent1_reflect": json.dumps({
+            "data_quality_reason": empty_reason,
+            "data_quality_plan": empty_plan,
+            "data_quality_reflect": json.dumps({
                 "is_goal_satisfied": True, "findings_summary": [], "overall_severity": "low",
             }),
         }
@@ -586,7 +586,7 @@ class TestGoalDrivenPlanning:
         # Act phase should have zero additional tool calls (only perceive tools)
         perceive_tools = {
             "entry_lag_analysis", "query_burden", "data_correction_analysis",
-            "cra_assignment_history", "monitoring_visit_history",
+            "cra_assignment_history", "monitoring_visit_history", "site_summary",
         }
         act_invocations = [(name, kw) for name, kw in tools.invocations
                            if name not in perceive_tools or kw]  # perceive has no kwargs
@@ -609,7 +609,7 @@ class TestConductorRealPRPA:
         through complete PRPA cycles."""
         # LLM responses: route → agent1 PRPA → agent3 PRPA → synthesis
         route_response = json.dumps({
-            "selected_agents": ["agent_1", "agent_3"],
+            "selected_agents": ["data_quality", "enrollment_funnel"],
             "routing_rationale": "Query spans both domains",
             "requires_synthesis": True,
         })
@@ -628,17 +628,17 @@ class TestConductorRealPRPA:
                 return LLMResponse(text=route_response, model="mock", usage={})
             if "conductor_synthesize" in prompt:
                 return LLMResponse(text=synthesis_response, model="mock", usage={})
-            if "agent1_reason" in prompt:
+            if "data_quality_reason" in prompt:
                 return LLMResponse(text=REASON_WITH_SITE003, model="mock", usage={})
-            if "agent1_plan" in prompt:
+            if "data_quality_plan" in prompt:
                 return LLMResponse(text=json.dumps({"plan_steps": []}), model="mock", usage={})
-            if "agent1_reflect" in prompt:
+            if "data_quality_reflect" in prompt:
                 return LLMResponse(text=REFLECT_SATISFIED, model="mock", usage={})
-            if "agent3_reason" in prompt:
+            if "enrollment_funnel_reason" in prompt:
                 return LLMResponse(text=ENROLLMENT_REASON, model="mock", usage={})
-            if "agent3_plan" in prompt:
+            if "enrollment_funnel_plan" in prompt:
                 return LLMResponse(text=json.dumps({"plan_steps": []}), model="mock", usage={})
-            if "agent3_reflect" in prompt:
+            if "enrollment_funnel_reflect" in prompt:
                 return LLMResponse(text=ENROLLMENT_REFLECT, model="mock", usage={})
             return LLMResponse(text='{}', model="mock", usage={})
 
@@ -659,11 +659,11 @@ class TestConductorRealPRPA:
             result = await conductor.execute_query("Full overview", "", MagicMock())
 
         # Both agents should have produced output
-        assert "agent_1" in result["agent_outputs"], "DataQualityAgent should produce output"
-        assert "agent_3" in result["agent_outputs"], "EnrollmentFunnelAgent should produce output"
+        assert "data_quality" in result["agent_outputs"], "DataQualityAgent should produce output"
+        assert "enrollment_funnel" in result["agent_outputs"], "EnrollmentFunnelAgent should produce output"
 
         # Each agent should have full reasoning traces (5 phases per iteration)
-        for aid in ["agent_1", "agent_3"]:
+        for aid in ["data_quality", "enrollment_funnel"]:
             trace = result["agent_outputs"][aid]["reasoning_trace"]
             phases = [t["phase"] for t in trace]
             assert "perceive" in phases, f"{aid} missing perceive phase"
@@ -680,7 +680,7 @@ class TestConductorRealPRPA:
         """If one agent's LLM call throws an exception, the other agent should
         still succeed, and conductor should handle the failure gracefully."""
         route_response = json.dumps({
-            "selected_agents": ["agent_1", "agent_3"],
+            "selected_agents": ["data_quality", "enrollment_funnel"],
             "routing_rationale": "Both domains",
             "requires_synthesis": True,
         })
@@ -692,15 +692,15 @@ class TestConductorRealPRPA:
             call_count["i"] += 1
             if "conductor_route" in prompt:
                 return LLMResponse(text=route_response, model="mock", usage={})
-            # agent_1 crashes on reason
-            if "agent1_reason" in prompt:
-                raise RuntimeError("Simulated LLM failure for agent_1")
-            # agent_3 works normally
-            if "agent3_reason" in prompt:
+            # data_quality agent crashes on reason
+            if "data_quality_reason" in prompt:
+                raise RuntimeError("Simulated LLM failure for data_quality")
+            # enrollment_funnel works normally
+            if "enrollment_funnel_reason" in prompt:
                 return LLMResponse(text=ENROLLMENT_REASON, model="mock", usage={})
-            if "agent3_plan" in prompt:
+            if "enrollment_funnel_plan" in prompt:
                 return LLMResponse(text=json.dumps({"plan_steps": []}), model="mock", usage={})
-            if "agent3_reflect" in prompt:
+            if "enrollment_funnel_reflect" in prompt:
                 return LLMResponse(text=ENROLLMENT_REFLECT, model="mock", usage={})
             return LLMResponse(text='{}', model="mock", usage={})
 
@@ -719,11 +719,11 @@ class TestConductorRealPRPA:
             mock_sl.return_value = MagicMock()
             result = await conductor.execute_query("test", "", MagicMock())
 
-        # agent_3 should have succeeded
-        assert "agent_3" in result["agent_outputs"], "agent_3 should complete despite agent_1 crash"
+        # enrollment_funnel should have succeeded
+        assert "enrollment_funnel" in result["agent_outputs"], "enrollment_funnel should complete despite data_quality crash"
 
-        # agent_1 should NOT be in outputs (it crashed)
-        assert "agent_1" not in result["agent_outputs"], "Crashed agent should not produce output"
+        # data_quality should NOT be in outputs (it crashed)
+        assert "data_quality" not in result["agent_outputs"], "Crashed agent should not produce output"
 
         # With only 1 agent output, synthesis should be skipped (requires_synthesis needs >1 outputs)
         assert result["synthesis"]["cross_domain_findings"] == [], \
@@ -733,7 +733,7 @@ class TestConductorRealPRPA:
     async def test_conductor_on_step_traces_full_pipeline(self):
         """on_step callbacks should cover routing → agent PRPA phases → synthesize."""
         route_response = json.dumps({
-            "selected_agents": ["agent_1", "agent_3"],
+            "selected_agents": ["data_quality", "enrollment_funnel"],
             "routing_rationale": "Both", "requires_synthesis": True,
         })
         synthesis_response = json.dumps({
@@ -791,8 +791,8 @@ class TestConductorRealPRPA:
         assert "act" in phases_seen
         assert "reflect" in phases_seen
         # Should see both agent IDs
-        assert "agent_1" in agent_ids_seen
-        assert "agent_3" in agent_ids_seen
+        assert "data_quality" in agent_ids_seen
+        assert "enrollment_funnel" in agent_ids_seen
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -807,7 +807,7 @@ class TestCrossDomainSynthesis:
     async def test_synthesis_prompt_contains_both_agent_findings(self):
         """Synthesis prompt must contain findings from both agents."""
         route_response = json.dumps({
-            "selected_agents": ["agent_1", "agent_3"],
+            "selected_agents": ["data_quality", "enrollment_funnel"],
             "routing_rationale": "Both", "requires_synthesis": True,
         })
         synthesis_response = json.dumps({
@@ -822,17 +822,17 @@ class TestCrossDomainSynthesis:
                 return LLMResponse(text=route_response, model="mock", usage={})
             if "conductor_synthesize" in prompt:
                 return LLMResponse(text=synthesis_response, model="mock", usage={})
-            if "agent1_reason" in prompt:
+            if "data_quality_reason" in prompt:
                 return LLMResponse(text=REASON_WITH_SITE003, model="mock", usage={})
-            if "agent1_plan" in prompt:
+            if "data_quality_plan" in prompt:
                 return LLMResponse(text=json.dumps({"plan_steps": []}), model="mock", usage={})
-            if "agent1_reflect" in prompt:
+            if "data_quality_reflect" in prompt:
                 return LLMResponse(text=REFLECT_SATISFIED, model="mock", usage={})
-            if "agent3_reason" in prompt:
+            if "enrollment_funnel_reason" in prompt:
                 return LLMResponse(text=ENROLLMENT_REASON, model="mock", usage={})
-            if "agent3_plan" in prompt:
+            if "enrollment_funnel_plan" in prompt:
                 return LLMResponse(text=json.dumps({"plan_steps": []}), model="mock", usage={})
-            if "agent3_reflect" in prompt:
+            if "enrollment_funnel_reflect" in prompt:
                 return LLMResponse(text=ENROLLMENT_REFLECT, model="mock", usage={})
             return LLMResponse(text='{}', model="mock", usage={})
 
@@ -856,21 +856,21 @@ class TestCrossDomainSynthesis:
         assert len(synth_calls) == 1, "conductor_synthesize should be rendered exactly once"
 
         synth_kwargs = synth_calls[0][1]
-        # agent1_findings should contain SITE-003 entry lag finding
-        assert "SITE-003" in synth_kwargs["agent1_findings"], \
-            "Synthesis prompt should contain agent_1 findings about SITE-003"
-        assert "12.4" in synth_kwargs["agent1_findings"] or "entry lag" in synth_kwargs["agent1_findings"].lower(), \
-            "agent_1 findings should reference entry lag data"
+        # data_quality_findings should contain SITE-003 entry lag finding
+        assert "SITE-003" in synth_kwargs["data_quality_findings"], \
+            "Synthesis prompt should contain data_quality findings about SITE-003"
+        assert "12.4" in synth_kwargs["data_quality_findings"] or "entry lag" in synth_kwargs["data_quality_findings"].lower(), \
+            "data_quality findings should reference entry lag data"
 
-        # agent3_findings should contain SITE-003 screen failure finding
-        assert "SITE-003" in synth_kwargs["agent3_findings"], \
-            "Synthesis prompt should contain agent_3 findings about SITE-003"
+        # enrollment_funnel_findings should contain SITE-003 screen failure finding
+        assert "SITE-003" in synth_kwargs["enrollment_funnel_findings"], \
+            "Synthesis prompt should contain enrollment_funnel findings about SITE-003"
 
     @pytest.mark.asyncio
     async def test_synthesis_identifies_shared_site(self):
         """When both agents flag the same site, synthesis should contain cross-domain findings."""
         route_response = json.dumps({
-            "selected_agents": ["agent_1", "agent_3"],
+            "selected_agents": ["data_quality", "enrollment_funnel"],
             "routing_rationale": "Both", "requires_synthesis": True,
         })
         synthesis_with_cross_domain = json.dumps({
@@ -890,17 +890,17 @@ class TestCrossDomainSynthesis:
                 return LLMResponse(text=route_response, model="mock", usage={})
             if "conductor_synthesize" in prompt:
                 return LLMResponse(text=synthesis_with_cross_domain, model="mock", usage={})
-            if "agent1_reason" in prompt:
+            if "data_quality_reason" in prompt:
                 return LLMResponse(text=REASON_WITH_SITE003, model="mock", usage={})
-            if "agent1_plan" in prompt:
+            if "data_quality_plan" in prompt:
                 return LLMResponse(text=json.dumps({"plan_steps": []}), model="mock", usage={})
-            if "agent1_reflect" in prompt:
+            if "data_quality_reflect" in prompt:
                 return LLMResponse(text=REFLECT_SATISFIED, model="mock", usage={})
-            if "agent3_reason" in prompt:
+            if "enrollment_funnel_reason" in prompt:
                 return LLMResponse(text=ENROLLMENT_REASON, model="mock", usage={})
-            if "agent3_plan" in prompt:
+            if "enrollment_funnel_plan" in prompt:
                 return LLMResponse(text=json.dumps({"plan_steps": []}), model="mock", usage={})
-            if "agent3_reflect" in prompt:
+            if "enrollment_funnel_reflect" in prompt:
                 return LLMResponse(text=ENROLLMENT_REFLECT, model="mock", usage={})
             return LLMResponse(text='{}', model="mock", usage={})
 
@@ -928,7 +928,7 @@ class TestCrossDomainSynthesis:
     async def test_synthesis_with_single_agent_output_after_failure(self):
         """When routing to 2 agents but one fails, synthesis should be skipped."""
         route_response = json.dumps({
-            "selected_agents": ["agent_1", "agent_3"],
+            "selected_agents": ["data_quality", "enrollment_funnel"],
             "routing_rationale": "Both", "requires_synthesis": True,
         })
 
@@ -937,15 +937,15 @@ class TestCrossDomainSynthesis:
         async def _gen(prompt, *, system="", temperature=None):
             if "conductor_route" in prompt:
                 return LLMResponse(text=route_response, model="mock", usage={})
-            # agent_1 crashes
-            if "agent1_reason" in prompt:
-                raise RuntimeError("agent_1 LLM failure")
-            # agent_3 works
-            if "agent3_reason" in prompt:
+            # data_quality agent crashes
+            if "data_quality_reason" in prompt:
+                raise RuntimeError("data_quality LLM failure")
+            # enrollment_funnel works
+            if "enrollment_funnel_reason" in prompt:
                 return LLMResponse(text=ENROLLMENT_REASON, model="mock", usage={})
-            if "agent3_plan" in prompt:
+            if "enrollment_funnel_plan" in prompt:
                 return LLMResponse(text=json.dumps({"plan_steps": []}), model="mock", usage={})
-            if "agent3_reflect" in prompt:
+            if "enrollment_funnel_reflect" in prompt:
                 return LLMResponse(text=ENROLLMENT_REFLECT, model="mock", usage={})
             return LLMResponse(text='{}', model="mock", usage={})
 
@@ -963,9 +963,9 @@ class TestCrossDomainSynthesis:
             mock_sl.return_value = MagicMock()
             result = await conductor.execute_query("test", "", MagicMock())
 
-        # Only agent_3 succeeded
+        # Only enrollment_funnel succeeded
         assert len(result["agent_outputs"]) == 1
-        assert "agent_3" in result["agent_outputs"]
+        assert "enrollment_funnel" in result["agent_outputs"]
 
         # Synthesis should NOT have been called (only 1 agent output)
         synth_calls = [(name, kw) for name, kw in prompts.render_calls
@@ -986,12 +986,12 @@ class TestPromptContentContracts:
 
     @pytest.mark.asyncio
     async def test_data_quality_agent_prompt_names_and_variables(self):
-        """DataQualityAgent must render agent1_reason, agent1_plan, agent1_reflect
+        """DataQualityAgent must render data_quality_reason, data_quality_plan, data_quality_reflect
         with the correct variable names."""
         response_map = {
-            "agent1_reason": REASON_WITH_SITE003,
-            "agent1_plan": PLAN_ENTRY_LAG_DRILL,
-            "agent1_reflect": REFLECT_SATISFIED,
+            "data_quality_reason": REASON_WITH_SITE003,
+            "data_quality_plan": PLAN_ENTRY_LAG_DRILL,
+            "data_quality_reflect": REFLECT_SATISFIED,
         }
         agent, llm, tools, prompts = _build_data_quality_agent(response_map)
         await agent.run("test query", session_id="test")
@@ -999,57 +999,57 @@ class TestPromptContentContracts:
         rendered_names = [name for name, _ in prompts.render_calls]
 
         # Exact prompt names used
-        assert "agent1_reason" in rendered_names
-        assert "agent1_plan" in rendered_names
-        assert "agent1_reflect" in rendered_names
+        assert "data_quality_reason" in rendered_names
+        assert "data_quality_plan" in rendered_names
+        assert "data_quality_reflect" in rendered_names
 
         # No unexpected prompts
         for name in rendered_names:
-            assert name in {"agent1_reason", "agent1_plan", "agent1_reflect"}, \
+            assert name in {"data_quality_reason", "data_quality_plan", "data_quality_reflect"}, \
                 f"Unexpected prompt rendered: {name}"
 
         # Verify variable names for each prompt
-        reason_kw = next(kw for name, kw in prompts.render_calls if name == "agent1_reason")
-        assert "perceptions" in reason_kw, "agent1_reason must receive 'perceptions'"
-        assert "query" in reason_kw, "agent1_reason must receive 'query'"
+        reason_kw = next(kw for name, kw in prompts.render_calls if name == "data_quality_reason")
+        assert "perceptions" in reason_kw, "data_quality_reason must receive 'perceptions'"
+        assert "query" in reason_kw, "data_quality_reason must receive 'query'"
 
-        plan_kw = next(kw for name, kw in prompts.render_calls if name == "agent1_plan")
-        assert "hypotheses" in plan_kw, "agent1_plan must receive 'hypotheses'"
-        assert "tool_descriptions" in plan_kw, "agent1_plan must receive 'tool_descriptions'"
+        plan_kw = next(kw for name, kw in prompts.render_calls if name == "data_quality_plan")
+        assert "hypotheses" in plan_kw, "data_quality_plan must receive 'hypotheses'"
+        assert "tool_descriptions" in plan_kw, "data_quality_plan must receive 'tool_descriptions'"
 
-        reflect_kw = next(kw for name, kw in prompts.render_calls if name == "agent1_reflect")
-        assert "query" in reflect_kw, "agent1_reflect must receive 'query'"
-        assert "hypotheses" in reflect_kw, "agent1_reflect must receive 'hypotheses'"
-        assert "action_results" in reflect_kw, "agent1_reflect must receive 'action_results'"
-        assert "iteration" in reflect_kw, "agent1_reflect must receive 'iteration'"
-        assert "max_iterations" in reflect_kw, "agent1_reflect must receive 'max_iterations'"
+        reflect_kw = next(kw for name, kw in prompts.render_calls if name == "data_quality_reflect")
+        assert "query" in reflect_kw, "data_quality_reflect must receive 'query'"
+        assert "hypotheses" in reflect_kw, "data_quality_reflect must receive 'hypotheses'"
+        assert "action_results" in reflect_kw, "data_quality_reflect must receive 'action_results'"
+        assert "iteration" in reflect_kw, "data_quality_reflect must receive 'iteration'"
+        assert "max_iterations" in reflect_kw, "data_quality_reflect must receive 'max_iterations'"
 
     @pytest.mark.asyncio
-    async def test_enrollment_agent_uses_agent3_prompts(self):
-        """EnrollmentFunnelAgent must render agent3_reason, agent3_plan, agent3_reflect."""
+    async def test_enrollment_agent_uses_enrollment_funnel_prompts(self):
+        """EnrollmentFunnelAgent must render enrollment_funnel_reason, enrollment_funnel_plan, enrollment_funnel_reflect."""
         response_map = {
-            "agent3_reason": ENROLLMENT_REASON,
-            "agent3_plan": ENROLLMENT_PLAN,
-            "agent3_reflect": ENROLLMENT_REFLECT,
+            "enrollment_funnel_reason": ENROLLMENT_REASON,
+            "enrollment_funnel_plan": ENROLLMENT_PLAN,
+            "enrollment_funnel_reflect": ENROLLMENT_REFLECT,
         }
         agent, llm, tools, prompts = _build_enrollment_agent(response_map)
         await agent.run("enrollment test", session_id="test")
 
         rendered_names = [name for name, _ in prompts.render_calls]
 
-        assert "agent3_reason" in rendered_names
-        assert "agent3_plan" in rendered_names
-        assert "agent3_reflect" in rendered_names
+        assert "enrollment_funnel_reason" in rendered_names
+        assert "enrollment_funnel_plan" in rendered_names
+        assert "enrollment_funnel_reflect" in rendered_names
 
         # No agent1 prompts should appear
         for name in rendered_names:
-            assert "agent1" not in name, f"EnrollmentFunnelAgent rendered agent1 prompt: {name}"
+            assert "data_quality" not in name, f"EnrollmentFunnelAgent rendered data_quality prompt: {name}"
 
     @pytest.mark.asyncio
     async def test_conductor_route_prompt_includes_session_context(self):
         """Conductor routing prompt must include session_context when provided."""
         route_response = json.dumps({
-            "selected_agents": ["agent_1"],
+            "selected_agents": ["data_quality"],
             "routing_rationale": "DQ only", "requires_synthesis": False,
         })
 
@@ -1085,9 +1085,9 @@ class TestReasoningTraceIntegrity:
     async def test_trace_contains_correct_metadata_per_phase(self):
         """Each trace entry should have phase-specific metadata fields."""
         response_map = {
-            "agent1_reason": REASON_WITH_SITE003,
-            "agent1_plan": PLAN_ENTRY_LAG_DRILL,
-            "agent1_reflect": REFLECT_SATISFIED,
+            "data_quality_reason": REASON_WITH_SITE003,
+            "data_quality_plan": PLAN_ENTRY_LAG_DRILL,
+            "data_quality_reflect": REFLECT_SATISFIED,
         }
         agent, llm, tools, prompts = _build_data_quality_agent(response_map)
         output = await agent.run("test", session_id="test")
@@ -1128,15 +1128,15 @@ class TestReasoningTraceIntegrity:
         reflect_idx = {"i": 0}
 
         async def _gen(prompt, *, system="", temperature=None):
-            if "agent1_reflect" in prompt:
+            if "data_quality_reflect" in prompt:
                 idx = reflect_idx["i"]
                 reflect_idx["i"] += 1
                 if idx == 0:
                     return LLMResponse(text=REFLECT_NOT_SATISFIED_NEEDS_CORRECTION, model="mock", usage={})
                 return LLMResponse(text=REFLECT_SATISFIED, model="mock", usage={})
-            if "agent1_reason" in prompt:
+            if "data_quality_reason" in prompt:
                 return LLMResponse(text=REASON_WITH_SITE003, model="mock", usage={})
-            if "agent1_plan" in prompt:
+            if "data_quality_plan" in prompt:
                 return LLMResponse(text=json.dumps({"plan_steps": []}), model="mock", usage={})
             return LLMResponse(text='{}', model="mock", usage={})
 
@@ -1189,9 +1189,9 @@ class TestOutputEdgeCases:
             "overall_severity": "critical",
         })
         response_map = {
-            "agent1_reason": REASON_WITH_SITE003,
-            "agent1_plan": json.dumps({"plan_steps": []}),
-            "agent1_reflect": critical_reflect,
+            "data_quality_reason": REASON_WITH_SITE003,
+            "data_quality_plan": json.dumps({"plan_steps": []}),
+            "data_quality_reflect": critical_reflect,
         }
         agent, llm, tools, prompts = _build_data_quality_agent(response_map)
         output = await agent.run("test", session_id="test")
@@ -1212,9 +1212,9 @@ class TestOutputEdgeCases:
             "overall_severity": "high",
         })
         response_map = {
-            "agent1_reason": REASON_WITH_SITE003,
-            "agent1_plan": json.dumps({"plan_steps": []}),
-            "agent1_reflect": multi_site_reflect,
+            "data_quality_reason": REASON_WITH_SITE003,
+            "data_quality_plan": json.dumps({"plan_steps": []}),
+            "data_quality_reflect": multi_site_reflect,
         }
         agent, llm, tools, prompts = _build_data_quality_agent(response_map)
         output = await agent.run("test", session_id="test")
@@ -1232,9 +1232,9 @@ class TestOutputEdgeCases:
             "overall_severity": "low",
         })
         response_map = {
-            "agent1_reason": json.dumps({"hypotheses": []}),
-            "agent1_plan": json.dumps({"plan_steps": []}),
-            "agent1_reflect": empty_reflect,
+            "data_quality_reason": json.dumps({"hypotheses": []}),
+            "data_quality_plan": json.dumps({"plan_steps": []}),
+            "data_quality_reflect": empty_reflect,
         }
         agent, llm, tools, prompts = _build_data_quality_agent(response_map)
         output = await agent.run("test", session_id="test")
@@ -1250,9 +1250,9 @@ class TestOutputEdgeCases:
             "is_goal_satisfied": True, "findings_summary": [], "overall_severity": "low",
         })
         response_map = {
-            "agent3_reason": json.dumps({"hypotheses": []}),
-            "agent3_plan": json.dumps({"plan_steps": []}),
-            "agent3_reflect": empty_reflect,
+            "enrollment_funnel_reason": json.dumps({"hypotheses": []}),
+            "enrollment_funnel_plan": json.dumps({"plan_steps": []}),
+            "enrollment_funnel_reflect": empty_reflect,
         }
         agent, llm, tools, prompts = _build_enrollment_agent(response_map)
         output = await agent.run("test", session_id="test")

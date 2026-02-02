@@ -14,6 +14,7 @@ from backend.models.governance import AgentFinding, ConversationalInteraction
 from backend.agents.registry import build_agent_registry
 from backend.tools.sql_tools import build_tool_registry
 from backend.llm.failover import FailoverLLMClient
+from backend.llm.cached import CachedLLMClient
 from backend.prompts.manager import get_prompt_manager
 from backend.services.alert_service import AlertService
 
@@ -55,7 +56,7 @@ async def invoke_agent(
     if not agent_cls:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-    llm = FailoverLLMClient(settings)
+    llm = CachedLLMClient(FailoverLLMClient(settings))
     tools = build_tool_registry()
     prompts = get_prompt_manager()
 
@@ -133,17 +134,33 @@ async def investigate(
 ):
     """Create investigation record and return query_id for WS streaming.
 
+    If an identical question was already completed, returns the existing
+    query_id so the WebSocket handler can serve cached results instantly.
+
     The WebSocket endpoint (/ws/query/{query_id}) handles actual execution:
     it detects the pending status, runs the conductor pipeline with on_step
     callbacks, and streams every PRPA phase to the client in real time.
     """
-    query_id = str(uuid.uuid4())
-    session_id = request.session_id or str(uuid.uuid4())
-
     # Prepend site context to the query if a site_id is provided
     question = request.query
     if request.site_id:
         question = f"[Site: {request.site_id}] {request.query}"
+
+    # Check for a completed investigation with the same question text
+    existing = db.query(ConversationalInteraction).filter_by(
+        user_query=question, status="completed",
+    ).order_by(ConversationalInteraction.completed_at.desc()).first()
+
+    if existing:
+        logger.info("Returning cached investigation %s for duplicate question", existing.query_id)
+        return {
+            "query_id": existing.query_id,
+            "status": "accepted",
+            "message": "Returning cached investigation results.",
+        }
+
+    query_id = str(uuid.uuid4())
+    session_id = request.session_id or str(uuid.uuid4())
 
     interaction = ConversationalInteraction(
         query_id=query_id,

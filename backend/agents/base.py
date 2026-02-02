@@ -45,6 +45,8 @@ class AgentOutput:
     reasoning_trace: list
     confidence: float
     findings: list = field(default_factory=list)
+    investigation_complete: bool = True
+    remaining_gaps: list = field(default_factory=list)
 
 
 # Type for the on_step callback used for WebSocket streaming
@@ -124,7 +126,9 @@ class BaseAgent(ABC):
             ctx.reasoning_trace.append({"phase": "reflect", "iteration": ctx.iteration, "goal_satisfied": ctx.is_goal_satisfied})
 
         output = await self._build_output(ctx)
-        logger.info("[%s] Completed in %d iterations, findings: %d", self.agent_id, ctx.iteration, len(output.findings))
+        output.investigation_complete = ctx.is_goal_satisfied
+        output.remaining_gaps = ctx.reflection.get("remaining_gaps", [])
+        logger.info("[%s] Completed in %d iterations, findings: %d, satisfied: %s", self.agent_id, ctx.iteration, len(output.findings), ctx.is_goal_satisfied)
         return output
 
     @staticmethod

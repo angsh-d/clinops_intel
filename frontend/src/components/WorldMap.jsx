@@ -43,7 +43,8 @@ function getCoordinatesForCountry(country, index = 0) {
   ]
 }
 
-export const WorldMap = memo(function WorldMap({ sites, onSiteClick, onSiteHover, hoveredSite }) {
+export const WorldMap = memo(function WorldMap({ sites, onSiteClick, onSiteHover, hoveredSite, height, highlightedSiteNames }) {
+  const highlighted = highlightedSiteNames || new Set()
   const [position, setPosition] = useState({ coordinates: [10, 40], zoom: 2.5 })
 
   const countryGroups = {}
@@ -63,7 +64,7 @@ export const WorldMap = memo(function WorldMap({ sites, onSiteClick, onSiteHover
   })
 
   return (
-    <div className="relative h-[400px] bg-apple-bg rounded-xl overflow-hidden border border-apple-border">
+    <div className={`relative ${height || 'h-[400px]'} bg-apple-bg rounded-xl overflow-hidden border border-apple-border`}>
       <ComposableMap
         projection="geoMercator"
         projectionConfig={{
@@ -98,30 +99,57 @@ export const WorldMap = memo(function WorldMap({ sites, onSiteClick, onSiteHover
             }
           </Geographies>
 
-          {siteMarkers.map((site) => (
-            <Marker
-              key={site.id}
-              coordinates={site.coordinates}
-              onMouseEnter={() => onSiteHover?.(site)}
-              onMouseLeave={() => onSiteHover?.(null)}
-              onClick={() => onSiteClick?.(site)}
-            >
-              <motion.circle
-                initial={{ r: 0 }}
-                animate={{ r: hoveredSite?.id === site.id ? 8 : 5 }}
-                transition={{ type: 'spring', stiffness: 300 }}
-                fill={
-                  site.status === 'critical' ? '#FF3B30' :
-                  site.status === 'warning' ? '#FF9500' :
-                  '#1D1D1F'
-                }
-                stroke="#FFFFFF"
-                strokeWidth={1}
-                style={{ cursor: 'pointer' }}
-                className={site.status === 'critical' ? 'animate-pulse' : ''}
-              />
-            </Marker>
-          ))}
+          {/* Render non-highlighted sites first, then highlighted on top */}
+          {siteMarkers
+            .slice()
+            .sort((a, b) => (highlighted.has(a.name) ? 1 : 0) - (highlighted.has(b.name) ? 1 : 0))
+            .map((site) => {
+            const isSignal = highlighted.has(site.name)
+            const isHovered = hoveredSite?.id === site.id
+            const baseRadius = isSignal ? 7 : 5
+            return (
+              <Marker
+                key={site.id}
+                coordinates={site.coordinates}
+                onMouseEnter={() => onSiteHover?.(site)}
+                onMouseLeave={() => onSiteHover?.(null)}
+                onClick={() => onSiteClick?.(site)}
+              >
+                {/* Animated radar rings — only for intelligence signal sites */}
+                {isSignal && (
+                  <>
+                    <circle r={baseRadius} fill="#5856D6" opacity={0.12}>
+                      <animate attributeName="r" from={baseRadius} to={baseRadius + 20} dur="2.5s" repeatCount="indefinite" />
+                      <animate attributeName="opacity" from="0.25" to="0" dur="2.5s" repeatCount="indefinite" />
+                    </circle>
+                    <circle r={baseRadius} fill="#5856D6" opacity={0.12}>
+                      <animate attributeName="r" from={baseRadius} to={baseRadius + 20} dur="2.5s" begin="0.8s" repeatCount="indefinite" />
+                      <animate attributeName="opacity" from="0.2" to="0" dur="2.5s" begin="0.8s" repeatCount="indefinite" />
+                    </circle>
+                    <circle r={baseRadius} fill="#5856D6" opacity={0.12}>
+                      <animate attributeName="r" from={baseRadius} to={baseRadius + 20} dur="2.5s" begin="1.6s" repeatCount="indefinite" />
+                      <animate attributeName="opacity" from="0.15" to="0" dur="2.5s" begin="1.6s" repeatCount="indefinite" />
+                    </circle>
+                  </>
+                )}
+                {/* Solid dot */}
+                <motion.circle
+                  initial={{ r: 0 }}
+                  animate={{ r: isHovered ? baseRadius + 3 : baseRadius }}
+                  transition={{ type: 'spring', stiffness: 300 }}
+                  fill={
+                    isSignal ? '#5856D6' :
+                    site.status === 'critical' ? '#FF3B30' :
+                    site.status === 'warning' ? '#FF9500' :
+                    '#1D1D1F'
+                  }
+                  stroke="#FFFFFF"
+                  strokeWidth={isSignal ? 2 : 1}
+                  style={{ cursor: 'pointer' }}
+                />
+              </Marker>
+            )
+          })}
         </ZoomableGroup>
       </ComposableMap>
 
@@ -138,6 +166,15 @@ export const WorldMap = memo(function WorldMap({ sites, onSiteClick, onSiteHover
           <div className="w-2.5 h-2.5 rounded-full bg-apple-critical" />
           <span>Critical</span>
         </div>
+        {highlighted.size > 0 && (
+          <div className="flex items-center gap-1.5">
+            <div className="relative w-4 h-4 flex items-center justify-center">
+              <div className="absolute w-4 h-4 rounded-full bg-[#5856D6]/20 animate-ping" />
+              <div className="w-2.5 h-2.5 rounded-full bg-[#5856D6]" />
+            </div>
+            <span>Active Signal</span>
+          </div>
+        )}
       </div>
 
       <div className="absolute bottom-4 right-4 flex gap-2">

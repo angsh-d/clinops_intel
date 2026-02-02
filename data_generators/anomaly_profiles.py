@@ -1,4 +1,4 @@
-"""12 anomaly site profiles with override parameters for generators."""
+"""14 anomaly site profiles with override parameters for generators."""
 
 from datetime import date
 
@@ -130,6 +130,31 @@ ANOMALY_PROFILES: dict[str, dict] = {
             },
         ],
         "description": "1 stockout episode (weather)",
+    },
+    # ── Suspicious perfection ───────────────────────────────────────────
+    "SITE-074": {
+        "country": "HUN",
+        "anomaly_type": "suspicious_perfection",
+        "entry_lag_forced_range": (1, 2),
+        "query_rate_multiplier": 0.05,
+        "completeness_forced": 99.5,
+        "correction_rate": 0.005,
+        "variance_suppression": True,
+        "experience_level": "Medium",
+        "description": "Suspiciously perfect metrics — near-zero variance across all KRIs (Chain 7)",
+    },
+    # ── Monitoring anxiety ──────────────────────────────────────────────
+    "SITE-017": {
+        "country": "GBR",
+        "anomaly_type": "monitoring_anxiety",
+        "monitoring_frequency_change_date": date(2025, 2, 1),
+        "monitoring_interval_after_weeks": 3,
+        "post_increase_sf_rate_bump": 0.15,
+        "post_increase_enrollment_drop": 0.30,
+        "post_increase_lag_extra_days": 3,
+        "screening_rate_multiplier": 2.0,  # strong pipeline for visible before/after contrast
+        "experience_level": "High",
+        "description": "Doubled monitoring frequency → enrollment drops, SF rate increases (Chain 8: audit anxiety)",
     },
     # ── Monitoring gap ────────────────────────────────────────────────────
     "SITE-033": {

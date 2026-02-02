@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean, Column, DateTime, Float, ForeignKey, Index,
-    Integer, String, Text,
+    Integer, LargeBinary, String, Text, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -80,6 +80,7 @@ class ConversationalInteraction(Base):
     routed_agents = Column(JSONB)
     agent_responses = Column(JSONB)
     synthesized_response = Column(Text)
+    synthesis_data = Column(JSONB)  # Full synthesis dict (hypotheses, actions, findings)
     status = Column(String(20), default="pending")  # pending / processing / completed / failed
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime)
@@ -123,3 +124,17 @@ class AgentParameter(Base):
     parameter_name = Column(String(100), nullable=False)
     parameter_value = Column(JSONB)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+# ── cache_entries ───────────────────────────────────────────────────────────
+class CacheEntry(Base):
+    __tablename__ = "cache_entries"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    namespace = Column(String(50), nullable=False)
+    cache_key = Column(String(64), nullable=False)
+    value = Column(LargeBinary, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    __table_args__ = (
+        UniqueConstraint("namespace", "cache_key", name="uq_cache_ns_key"),
+        Index("ix_cache_namespace", "namespace"),
+    )

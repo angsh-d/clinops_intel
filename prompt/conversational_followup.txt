@@ -18,7 +18,7 @@ Produce a JSON response:
 {{
   "query_type": "drill_down/new_aspect/new_topic/clarification/challenge",
   "contextualized_query": "The follow-up rewritten as a standalone query incorporating necessary context from the prior conversation",
-  "selected_agents": ["agent_1", "agent_3"],
+  "selected_agents": ["data_quality", "enrollment_funnel"],
   "routing_rationale": "Why these agents for the follow-up",
   "context_to_inject": "Key context from prior conversation that agents need",
   "requires_synthesis": true/false

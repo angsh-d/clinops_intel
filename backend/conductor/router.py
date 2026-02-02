@@ -49,9 +49,9 @@ class ConductorRouter:
         try:
             return parse_llm_json(response.text)
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            logger.error("Conductor route parse failed: %s — defaulting to agent_1", e)
+            logger.error("Conductor route parse failed: %s — defaulting to data_quality", e)
             return {
-                "selected_agents": ["agent_1"],
+                "selected_agents": ["data_quality"],
                 "routing_rationale": f"Default routing due to parse error: {e}",
                 "signal_summary": "",
                 "requires_synthesis": False,
@@ -182,6 +182,8 @@ class ConductorRouter:
                     "confidence": out.confidence,
                     "reasoning_trace": out.reasoning_trace,
                     "findings": out.findings,
+                    "investigation_complete": out.investigation_complete,
+                    "remaining_gaps": out.remaining_gaps,
                 }
                 for aid, out in agent_outputs.items()
             },
@@ -190,25 +192,41 @@ class ConductorRouter:
 
     async def _synthesize(self, query: str, agent_outputs: dict[str, AgentOutput]) -> dict:
         """Cross-domain synthesis: LLM identifies shared root causes across agents."""
-        agent1_findings = ""
-        agent3_findings = ""
+        data_quality_findings = ""
+        enrollment_funnel_findings = ""
+        clinical_trials_gov_findings = ""
+        phantom_compliance_findings = ""
+        site_rescue_findings = ""
 
         for aid, out in agent_outputs.items():
             data = json.dumps({
                 "summary": out.summary,
                 "findings": out.findings,
                 "detail": out.detail,
+                "agent_confidence": out.confidence,
+                "severity": out.severity,
+                "investigation_complete": out.investigation_complete,
+                "remaining_gaps": out.remaining_gaps,
             }, default=str)
-            if aid == "agent_1":
-                agent1_findings = data
-            elif aid == "agent_3":
-                agent3_findings = data
+            if aid == "data_quality":
+                data_quality_findings = data
+            elif aid == "enrollment_funnel":
+                enrollment_funnel_findings = data
+            elif aid == "clinical_trials_gov":
+                clinical_trials_gov_findings = data
+            elif aid == "phantom_compliance":
+                phantom_compliance_findings = data
+            elif aid == "site_rescue":
+                site_rescue_findings = data
 
         prompt = self.prompts.render(
             "conductor_synthesize",
             query=query,
-            agent1_findings=agent1_findings or "Not invoked.",
-            agent3_findings=agent3_findings or "Not invoked.",
+            data_quality_findings=data_quality_findings or "Not invoked.",
+            enrollment_funnel_findings=enrollment_funnel_findings or "Not invoked.",
+            clinical_trials_gov_findings=clinical_trials_gov_findings or "Not invoked.",
+            phantom_compliance_findings=phantom_compliance_findings or "Not invoked.",
+            site_rescue_findings=site_rescue_findings or "Not invoked.",
         )
         response = await self.llm.generate_structured(
             prompt,

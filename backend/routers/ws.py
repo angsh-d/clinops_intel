@@ -8,6 +8,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from backend.config import SessionLocal, get_settings
 from backend.conductor.router import ConductorRouter
 from backend.llm.failover import FailoverLLMClient
+from backend.llm.cached import CachedLLMClient
+from backend.cache import invalidate_all
 from backend.prompts.manager import get_prompt_manager
 from backend.agents.registry import build_agent_registry
 from backend.tools.sql_tools import build_tool_registry
@@ -36,12 +38,21 @@ async def websocket_query(websocket: WebSocket, query_id: str):
         # If already completed, stream cached results instead of re-executing
         if interaction.status == "completed":
             cached = _query_results.get(query_id)
+            if cached:
+                synthesis = cached.get("synthesis", {})
+                agent_outputs = cached.get("agent_outputs", {})
+                routing = cached.get("routing", {})
+            else:
+                # Fallback: reconstruct from DB columns
+                synthesis = interaction.synthesis_data or {"executive_summary": interaction.synthesized_response or ""}
+                agent_outputs = interaction.agent_responses or {}
+                routing = {}
             await websocket.send_json({
                 "phase": "complete",
                 "query_id": query_id,
-                "synthesis": cached.get("synthesis", {}) if cached else {"executive_summary": interaction.synthesized_response or ""},
-                "agent_outputs": cached.get("agent_outputs", {}) if cached else interaction.agent_responses or {},
-                "routing": cached.get("routing", {}) if cached else {},
+                "synthesis": synthesis,
+                "agent_outputs": agent_outputs,
+                "routing": routing,
                 "cached": True,
             })
             await websocket.close()
@@ -65,7 +76,7 @@ async def websocket_query(websocket: WebSocket, query_id: str):
 
         # Build conductor
         settings = get_settings()
-        llm = FailoverLLMClient(settings)
+        llm = CachedLLMClient(FailoverLLMClient(settings))
         prompts = get_prompt_manager()
         agents = build_agent_registry()
         tools = build_tool_registry()
@@ -92,11 +103,15 @@ async def websocket_query(websocket: WebSocket, query_id: str):
         })
 
         # Store in cache
-        _query_results[query_id] = result
+        _query_results.set(query_id, result)
+
+        # Invalidate dashboard/tool/LLM caches so next load gets fresh data
+        invalidate_all()
 
         # Update DB
         interaction.status = "completed"
         interaction.synthesized_response = result.get("synthesis", {}).get("executive_summary", "")
+        interaction.synthesis_data = result.get("synthesis", {})
         interaction.routed_agents = result.get("routing", {}).get("selected_agents", [])
         interaction.agent_responses = result.get("agent_outputs", {})
         db.commit()

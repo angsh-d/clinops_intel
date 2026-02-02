@@ -82,8 +82,8 @@ React 18 + Vite + Tailwind CSS + Zustand (state management). Key views:
 - `InvestigationTheater.jsx` — displays agent investigation results
 
 ### Active Agents
-- **agent_1** (`DataQualityAgent`) — eCRF entry lags, query burden, data corrections, CRA assignments, monitoring
-- **agent_3** (`EnrollmentFunnelAgent`) — screening volume, screen failures, randomization, consent withdrawals, kit inventory
+- **data_quality** (`DataQualityAgent`) — eCRF entry lags, query burden, data corrections, CRA assignments, monitoring
+- **enrollment_funnel** (`EnrollmentFunnelAgent`) — screening volume, screen failures, randomization, consent withdrawals, kit inventory
 
 ## Environment Variables
 

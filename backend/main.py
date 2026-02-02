@@ -6,6 +6,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from sqlalchemy import inspect, text
+
 from backend.config import engine, get_settings, setup_backend_logging
 from data_generators.models import Base
 
@@ -15,12 +17,29 @@ import backend.models.governance  # noqa: F401
 logger = logging.getLogger(__name__)
 
 
+def _apply_column_migrations(bind):
+    """Add columns that create_all(checkfirst=True) can't add to existing tables."""
+    inspector = inspect(bind)
+    migrations = [
+        ("conversational_interactions", "synthesis_data", "JSONB"),
+    ]
+    with bind.connect() as conn:
+        for table, column, col_type in migrations:
+            if table in inspector.get_table_names():
+                existing = {c["name"] for c in inspector.get_columns(table)}
+                if column not in existing:
+                    conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {column} {col_type}'))
+                    conn.commit()
+                    logger.info("Added column %s.%s (%s)", table, column, col_type)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
     setup_backend_logging()
     logger.info("Creating governance tables (checkfirst=True)")
     Base.metadata.create_all(bind=engine, checkfirst=True)
+    _apply_column_migrations(engine)
     logger.info("Backend startup complete")
     yield
     logger.info("Backend shutdown")

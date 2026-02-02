@@ -23,6 +23,7 @@ class GeminiClient(LLMClient):
         self._max_tokens = settings.gemini_max_output_tokens
         self._top_p = settings.gemini_top_p
         self._timeout = settings.gemini_timeout
+        self._max_retries = settings.gemini_max_retries
 
         # Prefer direct API key; fall back to Replit AI Integrations
         api_key = settings.gemini_api_key or settings.ai_integrations_gemini_api_key

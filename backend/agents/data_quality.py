@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class DataQualityAgent(BaseAgent):
-    agent_id = "agent_1"
+    agent_id = "data_quality"
     agent_name = "Data Quality Agent"
     description = (
         "Investigates eCRF entry lags, query burden, data corrections, CRA assignments, "
@@ -31,16 +31,19 @@ class DataQualityAgent(BaseAgent):
         corrections = await self.tools.invoke("data_correction_analysis", self.db)
         cra_history = await self.tools.invoke("cra_assignment_history", self.db)
         monitoring = await self.tools.invoke("monitoring_visit_history", self.db)
+        sites = await self.tools.invoke("site_summary", self.db)
 
         perceptions = {
+            "site_metadata": sites.data if sites.success else [],
             "entry_lag": entry_lag.data if entry_lag.success else [],
             "query_burden": query_burden.data if query_burden.success else [],
             "corrections": corrections.data if corrections.success else [],
             "cra_history": cra_history.data if cra_history.success else [],
             "monitoring_visits": monitoring.data if monitoring.success else [],
         }
-        logger.info("[%s] PERCEIVE: gathered %d entry lag, %d query, %d correction, %d CRA, %d monitoring records",
+        logger.info("[%s] PERCEIVE: gathered %d sites, %d entry lag, %d query, %d correction, %d CRA, %d monitoring records",
                      self.agent_id,
+                     len(perceptions["site_metadata"]),
                      len(perceptions["entry_lag"]), len(perceptions["query_burden"]),
                      len(perceptions["corrections"]), len(perceptions["cra_history"]),
                      len(perceptions["monitoring_visits"]))
@@ -50,10 +53,22 @@ class DataQualityAgent(BaseAgent):
         """LLM-driven hypothesis generation from perception data."""
         logger.info("[%s] REASON: generating hypotheses via LLM", self.agent_id)
 
+        # Compact site directory (site_id + name only) passed separately to avoid
+        # truncation by _safe_json_str — the full perceptions dict gets trimmed to
+        # ~30K chars which can drop sites beyond the first 10-20, making entity
+        # resolution impossible for mid/high-numbered site IDs.
+        site_directory = json.dumps(
+            [{"site_id": s["site_id"], "name": s["name"]}
+             for s in ctx.perceptions.get("site_metadata", [])
+             if isinstance(s, dict) and "site_id" in s and "name" in s],
+            default=str,
+        )
+
         prompt = self.prompts.render(
-            "agent1_reason",
+            "data_quality_reason",
             perceptions=self._safe_json_str(ctx.perceptions),
             query=ctx.query,
+            site_directory=site_directory,
         )
         response = await self.llm.generate_structured(
             prompt,
@@ -73,9 +88,12 @@ class DataQualityAgent(BaseAgent):
         logger.info("[%s] PLAN: generating investigation plan via LLM", self.agent_id)
 
         prompt = self.prompts.render(
-            "agent1_plan",
+            "data_quality_plan",
             hypotheses=self._safe_json_str(ctx.hypotheses),
             tool_descriptions=self.tools.list_tools_text(),
+            prior_results=self._safe_json_str(ctx.action_results) if ctx.iteration > 1 else "First iteration — no prior results.",
+            iteration=str(ctx.iteration),
+            reflection_gaps=self._safe_json_str(ctx.reflection.get("remaining_gaps", [])) if ctx.iteration > 1 else "N/A",
         )
         response = await self.llm.generate_structured(
             prompt,
@@ -119,7 +137,7 @@ class DataQualityAgent(BaseAgent):
         logger.info("[%s] REFLECT: evaluating completeness via LLM", self.agent_id)
 
         prompt = self.prompts.render(
-            "agent1_reflect",
+            "data_quality_reflect",
             query=ctx.query,
             hypotheses=self._safe_json_str(ctx.hypotheses),
             action_results=self._safe_json_str(ctx.action_results),

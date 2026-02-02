@@ -1,5 +1,36 @@
 const API_BASE = '/api'
 
+// ── Client-side TTL cache with in-flight dedup ───────────────────────────────
+const _cache = new Map()
+const _inflight = new Map()
+const DASHBOARD_TTL = 120_000 // 120 seconds
+
+function cachedFetch(endpoint, ttlMs = DASHBOARD_TTL) {
+  const now = Date.now()
+  const entry = _cache.get(endpoint)
+  if (entry && now - entry.ts < ttlMs) {
+    return Promise.resolve(entry.data)
+  }
+  if (_inflight.has(endpoint)) {
+    return _inflight.get(endpoint)
+  }
+  const promise = fetchApi(endpoint).then((data) => {
+    _cache.set(endpoint, { data, ts: Date.now() })
+    _inflight.delete(endpoint)
+    return data
+  }).catch((err) => {
+    _inflight.delete(endpoint)
+    throw err
+  })
+  _inflight.set(endpoint, promise)
+  return promise
+}
+
+export function invalidateApiCache() {
+  _cache.clear()
+  _inflight.clear()
+}
+
 async function fetchApi(endpoint) {
   try {
     const response = await fetch(`${API_BASE}${endpoint}`)
@@ -14,47 +45,47 @@ async function fetchApi(endpoint) {
 }
 
 export async function getStudySummary() {
-  return fetchApi('/dashboard/study-summary')
+  return cachedFetch('/dashboard/study-summary')
 }
 
 export async function getAttentionSites() {
-  return fetchApi('/dashboard/attention-sites')
+  return cachedFetch('/dashboard/attention-sites')
 }
 
 export async function getSitesOverview() {
-  return fetchApi('/dashboard/sites-overview')
+  return cachedFetch('/dashboard/sites-overview')
 }
 
 export async function getAgentInsights() {
-  return fetchApi('/dashboard/agent-insights')
+  return cachedFetch('/dashboard/agent-insights')
 }
 
 export async function getDataQualityDashboard() {
-  return fetchApi('/dashboard/data-quality')
+  return cachedFetch('/dashboard/data-quality')
 }
 
 export async function getEnrollmentDashboard() {
-  return fetchApi('/dashboard/enrollment-funnel')
+  return cachedFetch('/dashboard/enrollment-funnel')
 }
 
 export async function getSiteMetadata() {
-  return fetchApi('/dashboard/site-metadata')
+  return cachedFetch('/dashboard/site-metadata')
 }
 
 export async function getKRITimeseries(siteId) {
-  return fetchApi(`/dashboard/kri-timeseries/${siteId}`)
+  return cachedFetch(`/dashboard/kri-timeseries/${siteId}`)
 }
 
 export async function getEnrollmentVelocity(siteId) {
-  return fetchApi(`/dashboard/enrollment-velocity/${siteId}`)
+  return cachedFetch(`/dashboard/enrollment-velocity/${siteId}`)
 }
 
 export async function getAgentActivity() {
-  return fetchApi('/dashboard/agent-activity')
+  return cachedFetch('/dashboard/agent-activity')
 }
 
 export async function getSiteDetail(siteId) {
-  return fetchApi(`/dashboard/site/${siteId}`)
+  return cachedFetch(`/dashboard/site/${siteId}`)
 }
 
 export async function startInvestigation(query, siteId) {
@@ -85,6 +116,7 @@ export function connectInvestigationStream(queryId, { onPhase, onComplete, onErr
       }
       if (msg.phase === 'complete') {
         completed = true
+        invalidateApiCache()
         onComplete?.(msg)
       } else if (msg.phase === 'info') {
         // Server info message (e.g. query already processing) — treat as phase

@@ -1,20 +1,23 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, ArrowRight, AlertCircle, TrendingDown, Users } from 'lucide-react'
+import { Search, ArrowRight, AlertCircle, TrendingDown, Users, Shield } from 'lucide-react'
 import { useStore } from '../lib/store'
-import { getAttentionSites } from '../lib/api'
+import { getAttentionSites, getSitesOverview } from '../lib/api'
 
 const suggestions = [
-  { icon: AlertCircle, text: 'Investigate data quality issues at SITE-022', category: 'Chain 1' },
-  { icon: TrendingDown, text: 'Why are patients withdrawing consent at SITE-041?', category: 'Chain 2' },
-  { icon: AlertCircle, text: 'Analyze query backlog trends at SITE-033', category: 'Chain 3' },
-  { icon: Users, text: 'Why does SITE-031 have high screen failures but excellent data?', category: 'Chain 4' },
+  { icon: AlertCircle, text: 'Investigate data quality issues at CBCC Global Research', category: 'Chain 1' },
+  { icon: TrendingDown, text: 'Why are patients withdrawing consent at Canterbury District Health Board?', category: 'Chain 2' },
+  { icon: AlertCircle, text: 'Analyze query backlog trends at California Cancer Associates', category: 'Chain 3' },
+  { icon: Users, text: 'Why does Aichi Cancer Center Hospital have high screen failures but excellent data?', category: 'Chain 4' },
   { icon: AlertCircle, text: 'Investigate synchronized lag spikes across Japanese sites', category: 'Chain 5' },
-  { icon: TrendingDown, text: 'Why has enrollment declined at SITE-055?', category: 'Chain 6' },
+  { icon: TrendingDown, text: 'Why has enrollment declined at Highlands Oncology Group?', category: 'Chain 6' },
+  { icon: Shield, text: 'Is CRU Hungary\'s perfect data quality genuine or is the data too good to be true?', category: 'Chain 7' },
+  { icon: TrendingDown, text: 'Why has enrollment dropped at Leicester Royal Infirmary despite increased monitoring?', category: 'Chain 8' },
+  { icon: AlertCircle, text: 'Should we rescue or close Highlands Oncology Group?', category: 'Chain 9' },
 ]
 
 export function CommandPalette() {
-  const { setCommandOpen, setInvestigation, setSelectedSite, setView } = useStore()
+  const { setCommandOpen, setInvestigation, setSelectedSite, setView, siteNameMap, setSiteNameMap } = useStore()
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [recentSites, setRecentSites] = useState([])
@@ -27,6 +30,7 @@ export function CommandPalette() {
         if (data?.sites) {
           setRecentSites(data.sites.slice(0, 5).map(s => ({
             id: s.site_id,
+            name: s.site_name,
             status: s.severity,
             finding: s.issue
           })))
@@ -35,7 +39,23 @@ export function CommandPalette() {
         console.error('Failed to fetch recent sites:', error)
       }
     }
+    async function ensureSiteNameMap() {
+      if (Object.keys(siteNameMap).length > 0) return
+      try {
+        const data = await getSitesOverview()
+        if (data?.sites) {
+          const nameMap = {}
+          for (const s of data.sites) {
+            if (s.site_name) nameMap[s.site_id] = s.site_name
+          }
+          setSiteNameMap(nameMap)
+        }
+      } catch (error) {
+        console.error('Failed to fetch site names:', error)
+      }
+    }
     fetchRecentSites()
+    ensureSiteNameMap()
   }, [])
   
   const filteredSuggestions = query

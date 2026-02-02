@@ -6,7 +6,7 @@ import { WorldMap } from './WorldMap'
 import { getSitesOverview } from '../lib/api'
 
 export function Constellation() {
-  const { studyData, setView, setSelectedSite, toggleCommand } = useStore()
+  const { studyData, setView, setSelectedSite, toggleCommand, setSiteNameMap } = useStore()
   const [hoveredSite, setHoveredSite] = useState(null)
   const [activeTab, setActiveTab] = useState('map')
   const [sites, setSites] = useState([])
@@ -29,6 +29,12 @@ export function Constellation() {
             finding: s.finding
           }))
           setSites(mappedSites)
+          // Build site name lookup map for use across the app
+          const nameMap = {}
+          for (const s of data.sites) {
+            if (s.site_name) nameMap[s.site_id] = s.site_name
+          }
+          setSiteNameMap(nameMap)
         }
       } catch (error) {
         console.error('Failed to fetch sites:', error)

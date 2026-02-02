@@ -95,7 +95,7 @@ class TestFollowUpContextualization:
         llm_response = json.dumps({
             "query_type": "followup",
             "contextualized_query": "What specific data quality issues does SITE-003 have in terms of entry lag and query burden?",
-            "selected_agents": ["agent_1"],
+            "selected_agents": ["data_quality"],
             "requires_synthesis": False,
         })
 
@@ -114,7 +114,7 @@ class TestFollowUpContextualization:
 
         assert result["query_type"] == "followup"
         assert "SITE-003" in result["contextualized_query"]
-        assert result["selected_agents"] == ["agent_1"]
+        assert result["selected_agents"] == ["data_quality"]
 
     @pytest.mark.asyncio
     async def test_llm_failure_returns_safe_default(self, db_session, mock_prompts):
@@ -145,7 +145,7 @@ class TestFollowUpContextualization:
         # Should return safe defaults
         assert result["query_type"] == "new_topic"
         assert result["contextualized_query"] == "follow up"
-        assert set(result["selected_agents"]) == {"agent_1", "agent_3"}
+        assert set(result["selected_agents"]) == {"data_quality", "enrollment_funnel"}
 
     @pytest.mark.asyncio
     async def test_prompt_includes_conversation_history(self, db_session, mock_prompts):
@@ -163,7 +163,7 @@ class TestFollowUpContextualization:
         llm = MagicMock(spec=LLMClient)
         llm.generate_structured = AsyncMock(
             return_value=LLMResponse(
-                text=json.dumps({"query_type": "followup", "contextualized_query": "q", "selected_agents": ["agent_1"], "requires_synthesis": False}),
+                text=json.dumps({"query_type": "followup", "contextualized_query": "q", "selected_agents": ["data_quality"], "requires_synthesis": False}),
                 model="mock", usage={}
             )
         )

@@ -6,10 +6,10 @@ import {
   BarChart3, Users, Clock, Sparkles
 } from 'lucide-react'
 import { useStore } from '../lib/store'
-import { getStudySummary, getAttentionSites, getAgentInsights, getAgentActivity } from '../lib/api'
+import { getStudySummary, getAttentionSites, getAgentInsights, getAgentActivity, getSitesOverview } from '../lib/api'
 
 export function Pulse() {
-  const { studyData, setStudyData, setView, setSelectedSite, setInvestigation, toggleCommand } = useStore()
+  const { studyData, setStudyData, setView, setSelectedSite, setInvestigation, toggleCommand, setSiteNameMap } = useStore()
   const [expandedInsight, setExpandedInsight] = useState(null)
   const [attentionSites, setAttentionSites] = useState([])
   const [agentInsights, setAgentInsights] = useState([])
@@ -19,11 +19,12 @@ export function Pulse() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [summary, attention, insights, activity] = await Promise.all([
+        const [summary, attention, insights, activity, sitesData] = await Promise.all([
           getStudySummary(),
           getAttentionSites(),
           getAgentInsights(),
-          getAgentActivity()
+          getAgentActivity(),
+          getSitesOverview()
         ])
         
         if (summary) {
@@ -51,6 +52,14 @@ export function Pulse() {
         
         if (activity?.agents?.length > 0) {
           setAgentActivity(activity.agents)
+        }
+
+        if (sitesData?.sites) {
+          const nameMap = {}
+          for (const s of sitesData.sites) {
+            if (s.site_name) nameMap[s.site_id] = s.site_name
+          }
+          setSiteNameMap(nameMap)
         }
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error)

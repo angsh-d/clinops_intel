@@ -30,8 +30,14 @@ def build_agent_registry() -> AgentRegistry:
     """Create and populate the default agent registry."""
     from backend.agents.data_quality import DataQualityAgent
     from backend.agents.enrollment_funnel import EnrollmentFunnelAgent
+    from backend.agents.clinical_trials_gov import ClinicalTrialsGovAgent
+    from backend.agents.phantom_compliance import PhantomComplianceAgent
+    from backend.agents.site_rescue import SiteRescueAgent
 
     registry = AgentRegistry()
     registry.register(DataQualityAgent)
     registry.register(EnrollmentFunnelAgent)
+    registry.register(ClinicalTrialsGovAgent)
+    registry.register(PhantomComplianceAgent)
+    registry.register(SiteRescueAgent)
     return registry

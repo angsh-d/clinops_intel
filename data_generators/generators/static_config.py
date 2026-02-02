@@ -449,7 +449,16 @@ def _generate_sites(rng: Generator, anomaly_site_ids: set[str]) -> list[Site]:
             elif sid in REGIONAL_CLUSTER_SITES and "experience_level" in REGIONAL_CLUSTER_SITES[sid]:
                 exp = REGIONAL_CLUSTER_SITES[sid]["experience_level"]
             site_type = rng.choice(["Academic", "Community", "Hospital"], p=[0.35, 0.40, 0.25])
-            target = int(rng.integers(3, 7))
+            # Realistic per-site enrollment targets scaled by experience.
+            # Anomaly sites have boosted screening rates (floor 0.40/wk)
+            # so they need higher targets to avoid all hitting 100%.
+            # Regional cluster sites are NOT anomalies — they get normal targets.
+            is_anomaly_site = sid in ANOMALY_PROFILES
+            if is_anomaly_site:
+                base_target = {"High": (20, 30), "Medium": (16, 24), "Low": (12, 20)}[exp]
+            else:
+                base_target = {"High": (5, 10), "Medium": (3, 7), "Low": (2, 5)}[exp]
+            target = int(rng.integers(base_target[0], base_target[1] + 1))
 
             anomaly_type = None
             if sid in ANOMALY_PROFILES:

@@ -25,7 +25,7 @@ def alert_service():
 def seed_finding(db_session):
     """Create a finding to generate alerts from."""
     finding = AgentFinding(
-        agent_id="agent_1",
+        agent_id="data_quality",
         finding_type="high_entry_lag",
         severity="warning",
         site_id="SITE-003",
@@ -48,7 +48,7 @@ class TestAlertCreation:
         alert = alerts[0]
         assert alert.status == "open"
         assert alert.suppressed is False
-        assert alert.agent_id == "agent_1"
+        assert alert.agent_id == "data_quality"
         assert alert.severity == "warning"
         assert alert.site_id == "SITE-003"
         assert alert.finding_id == seed_finding.id
@@ -65,7 +65,7 @@ class TestSuppressionRules:
     def test_active_rule_suppresses_alert(self, alert_service, db_session, seed_finding):
         """An active suppression rule matching the agent suppresses the alert."""
         rule = SuppressionRule(
-            agent_id="agent_1",
+            agent_id="data_quality",
             reason="Known issue, remediation scheduled",
             is_active=True,
         )
@@ -81,7 +81,7 @@ class TestSuppressionRules:
     def test_expired_rule_does_not_suppress(self, alert_service, db_session, seed_finding):
         """An expired suppression rule should not suppress the alert."""
         rule = SuppressionRule(
-            agent_id="agent_1",
+            agent_id="data_quality",
             reason="Temporarily suppressed",
             is_active=True,
             expires_at=datetime.utcnow() - timedelta(days=1),  # expired yesterday
@@ -97,7 +97,7 @@ class TestSuppressionRules:
     def test_inactive_rule_does_not_suppress(self, alert_service, db_session, seed_finding):
         """An inactive rule (is_active=False) should not suppress."""
         rule = SuppressionRule(
-            agent_id="agent_1",
+            agent_id="data_quality",
             reason="Deactivated",
             is_active=False,
         )
@@ -111,7 +111,7 @@ class TestSuppressionRules:
     def test_site_specific_rule_only_matches_correct_site(self, alert_service, db_session, seed_finding):
         """A rule for SITE-999 should not suppress an alert for SITE-003."""
         rule = SuppressionRule(
-            agent_id="agent_1",
+            agent_id="data_quality",
             site_id="SITE-999",
             reason="Wrong site",
             is_active=True,
@@ -125,7 +125,7 @@ class TestSuppressionRules:
     def test_site_specific_rule_matches_correct_site(self, alert_service, db_session, seed_finding):
         """A rule for SITE-003 should suppress the alert for SITE-003."""
         rule = SuppressionRule(
-            agent_id="agent_1",
+            agent_id="data_quality",
             site_id="SITE-003",
             reason="Known issue at SITE-003",
             is_active=True,
@@ -140,7 +140,7 @@ class TestSuppressionRules:
         """A rule matching finding_type suppresses, wrong type does not."""
         # Wrong type — should not suppress
         wrong = SuppressionRule(
-            agent_id="agent_1",
+            agent_id="data_quality",
             finding_type="wrong_type",
             reason="Wrong type",
             is_active=True,

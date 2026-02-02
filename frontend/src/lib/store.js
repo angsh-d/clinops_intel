@@ -17,9 +17,15 @@ export const useStore = create((set, get) => ({
 
   // Investigation streaming state
   investigationPhases: [],
-  addInvestigationPhase: (phase) => set((state) => ({
-    investigationPhases: [...state.investigationPhases, phase]
-  })),
+  addInvestigationPhase: (phase) => set((state) => {
+    // Deduplicate: skip if the last phase for this agent has the same phase name and iteration
+    const existing = state.investigationPhases
+    const last = [...existing].reverse().find(p => p.agent_id === phase.agent_id)
+    if (last && last.phase === phase.phase && last.data?.iteration === phase.data?.iteration) {
+      return state
+    }
+    return { investigationPhases: [...existing, phase] }
+  }),
 
   investigationResult: null,
   setInvestigationResult: (result) => set({ investigationResult: result }),
@@ -43,6 +49,9 @@ export const useStore = create((set, get) => ({
 
   sites: [],
   setSites: (sites) => set({ sites }),
+
+  siteNameMap: {},
+  setSiteNameMap: (map) => set({ siteNameMap: map }),
 
   alerts: [],
   setAlerts: (alerts) => set({ alerts })
