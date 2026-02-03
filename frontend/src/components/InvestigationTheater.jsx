@@ -254,7 +254,7 @@ export function InvestigationTheater() {
           transition={{ delay: 0.2 }}
           className="text-caption text-apple-secondary text-center mb-8"
         >
-          {investigation.site?.id || 'Study-wide'} · Live Investigation
+          {investigation.site?.name || investigation.site?.id || 'Study-wide'} · Live Investigation
         </motion.p>
 
         {investigationError && (

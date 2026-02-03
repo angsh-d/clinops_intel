@@ -210,7 +210,7 @@ export function StudyCommandCenter() {
   }, [insights, attentionSites, sites])
 
   const handleSiteClick = (site) => setSelectedSite(site)
-  const handleInvestigate = (query) => setInvestigation({ question: query, status: 'routing' })
+  const handleInvestigate = (query, site = null) => setInvestigation({ question: query, site, status: 'routing' })
 
   const handleRiskFilter = (status) => {
     setRiskFilter(prev => prev === status ? null : status)
@@ -248,7 +248,7 @@ export function StudyCommandCenter() {
                 key={insight.id}
                 insight={insight}
                 defaultExpanded={false}
-                onInvestigate={() => handleInvestigate(insight.query)}
+                onInvestigate={() => handleInvestigate(insight.query, { id: insight.siteId, name: insight.site })}
               />
             ))}
           </div>
