@@ -1,5 +1,6 @@
 """WebSocket router: stream PRPA phases in real time."""
 
+import asyncio
 import json
 import logging
 
@@ -18,6 +19,8 @@ from backend.routers.query import _query_results
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["websocket"])
+
+KEEPALIVE_INTERVAL = 15  # seconds
 
 
 @router.websocket("/ws/query/{query_id}")
@@ -87,11 +90,34 @@ async def websocket_query(websocket: WebSocket, query_id: str):
             msg = {"phase": phase, "agent_id": agent_id, "data": data, "query_id": query_id}
             await websocket.send_json(msg)
 
+        # Keepalive task to prevent proxy/browser timeouts
+        keepalive_stop = asyncio.Event()
+
+        async def keepalive():
+            while not keepalive_stop.is_set():
+                try:
+                    await asyncio.wait_for(keepalive_stop.wait(), timeout=KEEPALIVE_INTERVAL)
+                except asyncio.TimeoutError:
+                    try:
+                        await websocket.send_json({"phase": "keepalive", "query_id": query_id})
+                    except Exception:
+                        break
+
+        keepalive_task = asyncio.create_task(keepalive())
+
         # Execute with streaming
         interaction.status = "processing"
         db.commit()
 
-        result = await conductor.execute_query(question, "", db, on_step=on_step)
+        try:
+            result = await conductor.execute_query(question, "", db, on_step=on_step)
+        finally:
+            keepalive_stop.set()
+            keepalive_task.cancel()
+            try:
+                await keepalive_task
+            except asyncio.CancelledError:
+                pass
 
         # Send final result
         await websocket.send_json({

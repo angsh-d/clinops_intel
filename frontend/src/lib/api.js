@@ -146,6 +146,10 @@ export function connectInvestigationStream(queryId, { onPhase, onComplete, onErr
         onError?.(msg.error)
         return
       }
+      if (msg.phase === 'keepalive') {
+        // Keepalive message to prevent proxy/browser timeout — ignore
+        return
+      }
       if (msg.phase === 'complete') {
         completed = true
         invalidateApiCache()
