@@ -20,84 +20,129 @@ function ExecutiveBrief({ synthesis, hypotheses, nbas, onShowFullAnalysis, resol
   const topHypothesis = hypotheses?.[0]
   const topAction = nbas?.find(n => n.priority === 1) || nbas?.[0]
   
-  const extractKeyMetric = () => {
+  const parseInsights = () => {
     const text = synthesis?.executive_summary || ''
-    const dollarMatch = text.match(/\$[\d,]+(?:\.\d{2})?/)
-    const percentMatch = text.match(/\+?\d+(?:\.\d+)?%/)
-    const daysMatch = text.match(/(\d+)\s*days?\s*overdue/i)
+    const insights = []
     
-    if (dollarMatch) return { value: dollarMatch[0], label: 'Over Plan' }
-    if (percentMatch) return { value: percentMatch[0], label: 'Variance' }
-    if (daysMatch) return { value: `${daysMatch[1]} days`, label: 'Overdue' }
-    return null
+    const dollarMatch = text.match(/\$([\d,]+(?:\.\d{2})?)/)
+    const percentMatch = text.match(/\(?\+?([\d.]+)%\)?/)
+    const daysMatch = text.match(/(\d+)\s*days?\s*overdue/i)
+    const enrollMatch = text.match(/enrolling\s+(\d+)\s*(?:vs|of)\s*(\d+)/i)
+    const delayCostMatch = text.match(/\$([\d,]+(?:\.\d{2})?)\s*delay\s*cost/i)
+    
+    if (dollarMatch) {
+      insights.push({ value: `$${dollarMatch[1]}`, label: 'Over Plan', type: 'primary' })
+    }
+    if (percentMatch) {
+      insights.push({ value: `+${percentMatch[1]}%`, label: 'Variance', type: 'secondary' })
+    }
+    if (daysMatch) {
+      insights.push({ value: daysMatch[1], label: 'Days Overdue', type: 'secondary' })
+    }
+    if (enrollMatch) {
+      insights.push({ value: `${enrollMatch[1]}/${enrollMatch[2]}`, label: 'Enrolled', type: 'secondary' })
+    }
+    if (delayCostMatch) {
+      insights.push({ value: `$${delayCostMatch[1]}`, label: 'Delay Cost', type: 'secondary' })
+    }
+    
+    return insights.slice(0, 3)
   }
   
-  const extractHeadline = () => {
+  const extractStory = () => {
     const text = synthesis?.executive_summary || ''
-    const firstSentence = text.split(/\.\s+/)[0]
-    return firstSentence ? firstSentence + '.' : text
+    const sentences = text.split(/\.\s+/)
+    if (sentences.length <= 1) return { headline: text, detail: null }
+    return {
+      headline: sentences[0] + '.',
+      detail: sentences.slice(1, 2).join('. ') + (sentences[1] ? '.' : '')
+    }
   }
   
-  const keyMetric = extractKeyMetric()
-  const headline = extractHeadline()
+  const insights = parseInsights()
+  const story = extractStory()
+  const primaryInsight = insights.find(i => i.type === 'primary')
+  const secondaryInsights = insights.filter(i => i.type === 'secondary')
   
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
-      className="max-w-3xl mx-auto"
+      transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
+      className="max-w-2xl mx-auto px-4"
     >
-      {/* Hero Section - Apple keynote style */}
-      <div className="text-center mb-16">
-        {keyMetric && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="mb-8"
-          >
-            <span className="text-[72px] font-semibold tracking-tight text-neutral-900 leading-none">
-              {keyMetric.value}
-            </span>
-            <p className="text-[15px] text-neutral-500 font-normal mt-2">{keyMetric.label}</p>
-          </motion.div>
-        )}
-        
-        <motion.p 
-          initial={{ opacity: 0, y: 10 }}
+      {/* Primary Metric - Large hero number */}
+      {primaryInsight && (
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="text-[21px] font-normal text-neutral-600 leading-relaxed max-w-2xl mx-auto"
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="text-center mb-6"
         >
-          {resolveText(headline)}
-        </motion.p>
-      </div>
+          <span className="text-[64px] font-semibold tracking-tight text-neutral-900 leading-none">
+            {primaryInsight.value}
+          </span>
+          <p className="text-[14px] text-neutral-400 mt-1">{primaryInsight.label}</p>
+        </motion.div>
+      )}
       
-      {/* Root Cause - Minimal inline presentation */}
+      {/* Secondary Metrics Row */}
+      {secondaryInsights.length > 0 && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.15 }}
+          className="flex items-center justify-center gap-8 mb-10"
+        >
+          {secondaryInsights.map((insight, i) => (
+            <div key={i} className="text-center">
+              <span className="text-[28px] font-medium text-neutral-700">{insight.value}</span>
+              <p className="text-[12px] text-neutral-400 mt-0.5">{insight.label}</p>
+            </div>
+          ))}
+        </motion.div>
+      )}
+      
+      {/* Story - Headline and detail as separate lines */}
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+        className="text-center mb-10 space-y-3"
+      >
+        <p className="text-[19px] font-medium text-neutral-800 leading-relaxed">
+          {resolveText(story.headline)}
+        </p>
+        {story.detail && (
+          <p className="text-[15px] text-neutral-500 leading-relaxed">
+            {resolveText(story.detail)}
+          </p>
+        )}
+      </motion.div>
+      
+      {/* Divider */}
+      <div className="w-12 h-px bg-neutral-200 mx-auto mb-10" />
+      
+      {/* Root Cause */}
       {topHypothesis && (
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.3 }}
-          className="mb-12"
+          className="text-center mb-10"
         >
-          <p className="text-[13px] font-medium text-neutral-400 mb-4 text-center">Why this happened</p>
-          <p className="text-[17px] text-neutral-800 leading-relaxed text-center max-w-xl mx-auto">
+          <p className="text-[12px] font-medium text-neutral-400 uppercase tracking-wide mb-3">Root Cause</p>
+          <p className="text-[15px] text-neutral-700 leading-relaxed">
             {resolveText(topHypothesis.finding)}
           </p>
           
           {topHypothesis.causal_chain && (
-            <div className="flex items-center justify-center gap-3 mt-6">
+            <div className="flex items-center justify-center gap-2 mt-4 flex-wrap">
               {topHypothesis.causal_chain.split(/\s*(?:→|->)\s*/).filter(Boolean).map((node, i, arr) => (
-                <div key={i} className="flex items-center gap-3">
-                  <span className="text-[13px] text-neutral-600 font-medium">
-                    {node.trim()}
-                  </span>
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-[12px] text-neutral-500">{node.trim()}</span>
                   {i < arr.length - 1 && (
-                    <svg className="w-4 h-4 text-neutral-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                    </svg>
+                    <span className="text-neutral-300">→</span>
                   )}
                 </div>
               ))}
@@ -106,32 +151,32 @@ function ExecutiveBrief({ synthesis, hypotheses, nbas, onShowFullAnalysis, resol
         </motion.div>
       )}
       
-      {/* Priority Action - Clean card with Apple button styling */}
+      {/* Priority Action */}
       {topAction && (
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.4 }}
-          className="bg-neutral-50 rounded-2xl p-8 mb-10"
+          className="bg-neutral-50/80 rounded-xl p-6 mb-8"
         >
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-[13px] font-medium text-neutral-400">Recommended Action</span>
+          <div className="flex items-center gap-2 mb-2">
+            <p className="text-[12px] font-medium text-neutral-400 uppercase tracking-wide">Next Step</p>
             {topAction.urgency === 'immediate' && (
-              <span className="text-[11px] font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded">
-                Immediate
+              <span className="text-[10px] font-medium text-neutral-900 bg-neutral-200 px-1.5 py-0.5 rounded">
+                Now
               </span>
             )}
           </div>
-          <p className="text-[17px] text-neutral-900 leading-relaxed mb-4">
+          <p className="text-[15px] text-neutral-800 leading-relaxed">
             {resolveText(topAction.action)}
           </p>
           {topAction.owner && (
-            <p className="text-[13px] text-neutral-500">Assign to {topAction.owner}</p>
+            <p className="text-[12px] text-neutral-400 mt-2">{topAction.owner}</p>
           )}
         </motion.div>
       )}
       
-      {/* See Full Analysis - Apple text link style */}
+      {/* View More Link */}
       <motion.div 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -140,16 +185,10 @@ function ExecutiveBrief({ synthesis, hypotheses, nbas, onShowFullAnalysis, resol
       >
         <button
           onClick={onShowFullAnalysis}
-          className="inline-flex items-center gap-1.5 text-[15px] text-blue-600 hover:text-blue-700 transition-colors"
+          className="text-[14px] text-blue-600 hover:text-blue-700 transition-colors"
         >
-          View complete analysis
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
+          View {hypotheses?.length || 0} findings and {nbas?.length || 0} actions
         </button>
-        <p className="text-[13px] text-neutral-400 mt-1">
-          {hypotheses?.length || 0} findings and {nbas?.length || 0} recommended actions
-        </p>
       </motion.div>
     </motion.div>
   )
