@@ -91,23 +91,25 @@ export function FinancialDashboard() {
           <section>
             <h2 className="text-xl font-light text-apple-text mb-4">Budget Waterfall</h2>
             <div className="card p-6">
-              <div className="flex items-end gap-3 h-48">
+              <div className="flex gap-4">
                 {waterfall.segments?.map((seg, i) => {
                   const maxVal = Math.max(...waterfall.segments.map(s => Math.abs(s.value)))
                   const heightPct = maxVal > 0 ? (Math.abs(seg.value) / maxVal) * 100 : 0
                   return (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-2">
-                      <span className="text-[11px] font-mono text-apple-text">{formatCurrencyShort(seg.value)}</span>
-                      <div
-                        className={`w-full rounded-t ${
-                          seg.type === 'increase' ? 'bg-amber-400' :
-                          seg.type === 'decrease' ? 'bg-emerald-500' :
-                          seg.type === 'actual' ? 'bg-blue-500' :
-                          'bg-slate-400'
-                        }`}
-                        style={{ height: `${Math.max(heightPct, 5)}%` }}
-                      />
-                      <span className="text-[10px] text-apple-secondary text-center">{seg.label}</span>
+                    <div key={i} className="flex-1 flex flex-col items-center">
+                      <span className="text-[11px] font-mono text-apple-text mb-2">{formatCurrencyShort(seg.value)}</span>
+                      <div className="w-full h-32 flex items-end">
+                        <div
+                          className={`w-full rounded-t ${
+                            seg.type === 'increase' ? 'bg-amber-400' :
+                            seg.type === 'decrease' ? 'bg-emerald-500' :
+                            seg.type === 'actual' ? 'bg-blue-500' :
+                            'bg-slate-400'
+                          }`}
+                          style={{ height: `${Math.max(heightPct, 8)}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-apple-secondary text-center mt-2">{seg.label}</span>
                     </div>
                   )
                 })}
