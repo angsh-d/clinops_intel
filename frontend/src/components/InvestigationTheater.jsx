@@ -186,19 +186,13 @@ export function InvestigationTheater() {
       className="fixed inset-0 bg-apple-bg/95 backdrop-blur-xl z-50 overflow-y-auto"
     >
       <div className="max-w-3xl mx-auto px-6 py-12">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center mb-6">
           <button
-            onClick={() => { setInvestigation(null); setView(studyData?.studyId ? 'study' : 'home'); window.scrollTo(0, 0); }}
+            onClick={() => { setInvestigation(null); setView('study'); window.scrollTo(0, 0); }}
             className="flex items-center gap-1.5 text-body text-apple-secondary hover:text-apple-text transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
-            <span>{studyData?.studyId ? 'Back to Study' : 'Back'}</span>
-          </button>
-          <button
-            onClick={() => { setInvestigation(null); setView(studyData?.studyId ? 'study' : 'home'); window.scrollTo(0, 0); }}
-            className="p-2 hover:bg-apple-border/50 rounded-full transition-colors"
-          >
-            <X className="w-5 h-5 text-apple-secondary" />
+            <span>Back to Study</span>
           </button>
         </div>
 
