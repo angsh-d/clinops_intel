@@ -189,23 +189,23 @@ export function InvestigationTheater() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-apple-bg/95 backdrop-blur-xl z-50 overflow-y-auto"
+      className="fixed inset-0 bg-white z-50 overflow-y-auto"
     >
       {/* Site 360 Overview Phase */}
       {phase === 'overview' && investigation.site && (
-        <div className="h-full">
-          <div className="sticky top-0 bg-apple-bg/90 backdrop-blur-xl border-b border-apple-border z-10 px-6 py-4">
-            <div className="max-w-5xl mx-auto flex items-center justify-between">
+        <div className="h-full bg-white">
+          <div className="sticky top-0 bg-white/95 backdrop-blur-xl border-b border-neutral-100 z-10 px-6 py-5">
+            <div className="max-w-4xl mx-auto flex items-center justify-between">
               <button
                 onClick={() => { setInvestigation(null); setView('study'); window.scrollTo(0, 0); }}
-                className="flex items-center gap-1.5 text-body text-apple-secondary hover:text-apple-text transition-colors"
+                className="flex items-center gap-1.5 text-[13px] text-neutral-500 hover:text-neutral-900 transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
                 <span>Back to Study</span>
               </button>
               <div className="text-center">
-                <h1 className="text-lg font-semibold text-apple-text">Investigation Studio</h1>
-                <p className="text-xs text-apple-secondary">360° Site Analysis</p>
+                <h1 className="text-[17px] font-semibold text-neutral-900 tracking-tight">Investigation Studio</h1>
+                <p className="text-[11px] text-neutral-400 uppercase tracking-wider mt-0.5">360° Site Analysis</p>
               </div>
               <div className="w-24" />
             </div>
@@ -221,8 +221,8 @@ export function InvestigationTheater() {
 
       {/* Analysis Phase - show directly if no site context */}
       {(phase === 'analyzing' || !investigation.site) && (
-      <div className="max-w-3xl mx-auto px-6 py-12">
-        <div className="flex items-center mb-6">
+      <div className="max-w-3xl mx-auto px-6 py-12 bg-white min-h-screen">
+        <div className="flex items-center mb-8">
           <button
             onClick={() => { 
               if (phase === 'analyzing' && investigation.site) {
@@ -233,7 +233,7 @@ export function InvestigationTheater() {
                 window.scrollTo(0, 0);
               }
             }}
-            className="flex items-center gap-1.5 text-body text-apple-secondary hover:text-apple-text transition-colors"
+            className="flex items-center gap-1.5 text-[13px] text-neutral-500 hover:text-neutral-900 transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
             <span>{phase === 'analyzing' && investigation.site ? 'Back to Site Overview' : 'Back to Study'}</span>
@@ -243,7 +243,7 @@ export function InvestigationTheater() {
         <motion.h1
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="text-title text-apple-text mb-2 text-center"
+          className="text-[24px] font-semibold text-neutral-900 tracking-tight mb-2 text-center leading-snug"
         >
           "{investigation.question}"
         </motion.h1>
@@ -252,14 +252,14 @@ export function InvestigationTheater() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="text-caption text-apple-secondary text-center mb-8"
+          className="text-[13px] text-neutral-500 text-center mb-10"
         >
           {investigation.site?.name || investigation.site?.id || 'Study-wide'} · Live Investigation
         </motion.p>
 
         {investigationError && (
-          <div className="card p-4 border-l-4 border-l-red-500 mb-6">
-            <p className="text-body text-red-600">{investigationError}</p>
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+            <p className="text-[14px] text-red-700">{investigationError}</p>
           </div>
         )}
 
@@ -268,15 +268,15 @@ export function InvestigationTheater() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="card p-3 flex items-center justify-between cursor-pointer hover:bg-apple-bg/50 transition-colors"
+            className="bg-neutral-50 rounded-xl p-4 flex items-center justify-between cursor-pointer hover:bg-neutral-100 transition-colors"
             onClick={() => setTimelineCollapsed(false)}
           >
-            <span className="text-caption text-apple-secondary">
+            <span className="text-[13px] text-neutral-600">
               {Object.keys(agentOutputs).length > 0
                 ? `${Object.keys(agentOutputs).length} agent${Object.keys(agentOutputs).length > 1 ? 's' : ''} completed investigation`
                 : 'Investigation complete'}
             </span>
-            <span className="text-xs text-apple-accent hover:underline">Show details</span>
+            <span className="text-[12px] text-neutral-900 font-medium hover:underline">Show details</span>
           </motion.div>
         ) : (
           <div>
@@ -284,7 +284,7 @@ export function InvestigationTheater() {
             {isComplete && revealStep > 0 && (
               <button
                 onClick={() => setTimelineCollapsed(true)}
-                className="text-xs text-apple-accent hover:underline mt-2"
+                className="text-[12px] text-neutral-500 hover:text-neutral-900 transition-colors mt-3"
               >
                 Hide details
               </button>
@@ -301,16 +301,14 @@ export function InvestigationTheater() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="mt-8"
+              className="mt-10"
             >
-              <div className="card p-6 border-l-4 border-l-amber-400 relative overflow-hidden">
-                <div className="flex items-center gap-2.5 mb-3">
-                  <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
-                    <Search className="w-3.5 h-3.5 text-amber-600" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-apple-text tracking-tight">What We Found</h3>
+              <div className="bg-neutral-50 rounded-2xl p-6 relative overflow-hidden">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <Search className="w-4 h-4 text-neutral-400" />
+                  <h3 className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">What We Found</h3>
                 </div>
-                <p className="text-body text-apple-text/90 leading-relaxed">{resolveText(synthesis.signal_detection)}</p>
+                <p className="text-[15px] text-neutral-900 leading-relaxed">{resolveText(synthesis.signal_detection)}</p>
               </div>
             </motion.div>
           )}
@@ -336,15 +334,13 @@ export function InvestigationTheater() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="mt-8"
+              className="mt-10"
             >
-              <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
-                  <BarChart3 className="w-3.5 h-3.5 text-blue-600" />
-                </div>
-                <h3 className="text-sm font-semibold text-apple-text tracking-tight">What the Data Shows</h3>
+              <div className="flex items-center gap-2.5 mb-5">
+                <BarChart3 className="w-4 h-4 text-neutral-400" />
+                <h3 className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">What the Data Shows</h3>
               </div>
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 {singleDomainFindings.map((f, i) => (
                   <FindingCard key={i} finding={f} agentOutput={agentOutputs[f.agent]} resolveText={resolveText} />
                 ))}
@@ -359,13 +355,11 @@ export function InvestigationTheater() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="mt-8"
+              className="mt-10"
             >
-              <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-7 h-7 rounded-lg bg-purple-50 flex items-center justify-center">
-                  <Lightbulb className="w-3.5 h-3.5 text-purple-600" />
-                </div>
-                <h3 className="text-sm font-semibold text-apple-text tracking-tight">Why This Is Happening</h3>
+              <div className="flex items-center gap-2.5 mb-5">
+                <Lightbulb className="w-4 h-4 text-neutral-400" />
+                <h3 className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Why This Is Happening</h3>
               </div>
               <div className="space-y-3">
                 {[...hypotheses]
@@ -384,7 +378,7 @@ export function InvestigationTheater() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="mt-8"
+              className="mt-10"
             >
               <NBAPanel actions={nbas} />
             </motion.div>
@@ -397,24 +391,19 @@ export function InvestigationTheater() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="mt-8"
+              className="mt-10"
             >
-              <div className="card p-6 border-l-4 border-l-[#5856D6] relative overflow-hidden">
-                <div className="absolute inset-0 opacity-[0.03] bg-gradient-to-br from-[#5856D6] to-[#AF52DE]" />
-                <div className="relative">
-                  <div className="flex items-center gap-2.5 mb-3">
-                    <div className="w-7 h-7 rounded-lg bg-[#5856D6]/10 flex items-center justify-center">
-                      <FileText className="w-3.5 h-3.5 text-[#5856D6]" />
-                    </div>
-                    <h3 className="text-sm font-semibold text-apple-text tracking-tight">The Bottom Line</h3>
-                  </div>
-                  <p className="text-body text-apple-text/90 leading-relaxed">{resolveText(synthesis.executive_summary)}</p>
+              <div className="bg-neutral-900 text-white rounded-2xl p-6 relative overflow-hidden">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <FileText className="w-4 h-4 text-neutral-400" />
+                  <h3 className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">The Bottom Line</h3>
                 </div>
+                <p className="text-[15px] text-white/90 leading-relaxed">{resolveText(synthesis.executive_summary)}</p>
               </div>
 
               <button
                 onClick={() => setShowTrace(!showTrace)}
-                className="flex items-center gap-2 mt-6 text-caption text-apple-secondary hover:text-apple-text transition-colors"
+                className="flex items-center gap-2 mt-6 text-[12px] text-neutral-500 hover:text-neutral-900 transition-colors"
               >
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showTrace ? 'rotate-180' : ''}`} />
                 {showTrace ? 'Hide detailed reasoning' : 'View detailed reasoning'}
@@ -424,8 +413,8 @@ export function InvestigationTheater() {
                 {showTrace && <ReasoningTrace agentOutputs={agentOutputs} />}
               </AnimatePresence>
 
-              <div className="flex items-center gap-4 mt-6 pt-4 border-t border-apple-border/60">
-                <span className="text-caption text-apple-secondary">
+              <div className="flex items-center gap-4 mt-6 pt-4 border-t border-neutral-100">
+                <span className="text-[12px] text-neutral-500">
                   {synthesis.confidence_assessment || `${Object.keys(agentOutputs).length} agents analyzed`} · Live data
                 </span>
               </div>
@@ -529,23 +518,23 @@ function FindingCard({ finding, agentOutput, resolveText }) {
   const hasEvidence = agentFindings.length > 0 || actionResults.length > 0
 
   return (
-    <div className="card p-4 hover:shadow-sm transition-shadow">
-      <div className="flex items-center gap-2 flex-wrap mb-1.5">
-        <span className="text-[10px] font-semibold tracking-wider text-apple-accent/80 uppercase">
+    <div className="bg-white border border-neutral-200 rounded-xl p-5 hover:border-neutral-300 transition-colors">
+      <div className="flex items-center gap-2 flex-wrap mb-2">
+        <span className="text-[10px] font-semibold tracking-wider text-neutral-400 uppercase">
           {AGENT_NAMES[finding.agent] || finding.agent}
         </span>
         {finding.site_ids?.length > 0 && (
           <>
-            <span className="w-0.5 h-0.5 rounded-full bg-apple-secondary/40" />
-            <span className="text-xs text-apple-secondary">
+            <span className="w-1 h-1 rounded-full bg-neutral-300" />
+            <span className="text-[11px] text-neutral-500">
               {finding.site_ids.map(id => resolveText(id)).join(', ')}
             </span>
           </>
         )}
       </div>
-      <p className="text-body text-apple-text leading-relaxed">{resolveText(finding.finding)}</p>
+      <p className="text-[14px] text-neutral-900 leading-relaxed">{resolveText(finding.finding)}</p>
       {finding.recommendation && (
-        <p className="text-caption text-apple-secondary mt-1.5 italic">{resolveText(finding.recommendation)}</p>
+        <p className="text-[12px] text-neutral-500 mt-2 italic">{resolveText(finding.recommendation)}</p>
       )}
 
       {/* Provenance toggle */}
@@ -553,7 +542,7 @@ function FindingCard({ finding, agentOutput, resolveText }) {
         <>
           <button
             onClick={() => setShowEvidence(v => !v)}
-            className="mt-2.5 flex items-center gap-1.5 text-[11px] font-medium text-apple-accent hover:text-apple-accent/80 transition-colors"
+            className="mt-3 flex items-center gap-1.5 text-[11px] font-medium text-neutral-500 hover:text-neutral-900 transition-colors"
           >
             <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showEvidence ? 'rotate-180' : ''}`} />
             <span>Supporting evidence ({agentFindings.length} findings, {actionResults.length} queries)</span>

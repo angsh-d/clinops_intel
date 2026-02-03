@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Activity, Users, FileSearch, Shield, Calendar, UserCheck, 
-  TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Clock,
-  ChevronRight, BarChart3, Zap, Target
+  TrendingUp, TrendingDown, AlertTriangle, CheckCircle2,
+  ChevronRight, ChevronDown, ArrowRight
 } from 'lucide-react'
 import { getSiteDetail, getSiteMetadata } from '../lib/api'
 
@@ -11,38 +11,33 @@ const DIMENSION_CONFIG = {
   enrollment: { 
     label: 'Enrollment', 
     icon: Users, 
-    color: '#34C759',
     description: 'Patient recruitment progress'
   },
   dataQuality: { 
     label: 'Data Quality', 
     icon: FileSearch, 
-    color: '#5856D6',
     description: 'eCRF accuracy and completeness'
   },
   monitoring: { 
     label: 'Monitoring', 
     icon: Calendar, 
-    color: '#FF9500',
     description: 'Visit compliance and findings'
   },
   integrity: { 
     label: 'Data Integrity', 
     icon: Shield, 
-    color: '#AF52DE',
     description: 'Fraud risk indicators'
   },
   operations: { 
     label: 'Operations', 
     icon: Activity, 
-    color: '#007AFF',
     description: 'CRA coverage and responsiveness'
   }
 }
 
-function RadarChart({ dimensions, size = 280 }) {
+function RadarChart({ dimensions, size = 260 }) {
   const center = size / 2
-  const radius = (size / 2) - 40
+  const radius = (size / 2) - 45
   const numPoints = Object.keys(dimensions).length
   
   const points = useMemo(() => {
@@ -56,8 +51,8 @@ function RadarChart({ dimensions, size = 280 }) {
         angle,
         x: center + Math.cos(angle) * radius * normalizedValue,
         y: center + Math.sin(angle) * radius * normalizedValue,
-        labelX: center + Math.cos(angle) * (radius + 25),
-        labelY: center + Math.sin(angle) * (radius + 25),
+        labelX: center + Math.cos(angle) * (radius + 28),
+        labelY: center + Math.sin(angle) * (radius + 28),
         gridX: center + Math.cos(angle) * radius,
         gridY: center + Math.sin(angle) * radius,
       }
@@ -82,8 +77,8 @@ function RadarChart({ dimensions, size = 280 }) {
           }).join(' ')}
           fill="none"
           stroke="currentColor"
-          strokeWidth="1"
-          className="text-apple-border/40"
+          strokeWidth="0.5"
+          className="text-neutral-200"
         />
       ))}
       
@@ -95,61 +90,55 @@ function RadarChart({ dimensions, size = 280 }) {
           x2={p.gridX}
           y2={p.gridY}
           stroke="currentColor"
-          strokeWidth="1"
-          className="text-apple-border/30"
+          strokeWidth="0.5"
+          className="text-neutral-200"
         />
       ))}
-      
-      <defs>
-        <linearGradient id="radarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#5856D6" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="#AF52DE" stopOpacity="0.3" />
-        </linearGradient>
-      </defs>
       
       <motion.path
         initial={{ pathLength: 0, opacity: 0 }}
         animate={{ pathLength: 1, opacity: 1 }}
-        transition={{ duration: 1.2, ease: "easeOut" }}
+        transition={{ duration: 1, ease: "easeOut" }}
         d={pathData}
-        fill="url(#radarGradient)"
-        stroke="url(#radarGradient)"
-        strokeWidth="2"
-        className="drop-shadow-lg"
+        fill="rgba(0, 0, 0, 0.04)"
+        stroke="rgba(0, 0, 0, 0.5)"
+        strokeWidth="1.5"
       />
       
       {points.map((p, i) => {
         const config = DIMENSION_CONFIG[p.key]
         const score = dimensions[p.key]?.score || 0
+        const status = score >= 80 ? 'healthy' : score >= 60 ? 'warning' : 'critical'
+        const dotColor = status === 'critical' ? '#EF4444' : status === 'warning' ? '#F59E0B' : '#22C55E'
+        
         return (
           <g key={`label-${p.key}`}>
             <motion.circle
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              transition={{ delay: 0.3 + i * 0.1, duration: 0.3 }}
+              transition={{ delay: 0.2 + i * 0.08, duration: 0.25 }}
               cx={p.x}
               cy={p.y}
-              r={6}
-              fill={config?.color || '#5856D6'}
-              className="drop-shadow-md"
+              r={4}
+              fill={dotColor}
             />
             <text
               x={p.labelX}
-              y={p.labelY}
+              y={p.labelY - 6}
               textAnchor="middle"
               dominantBaseline="middle"
-              className="text-[10px] font-medium fill-apple-secondary"
+              className="text-[9px] font-medium fill-neutral-400 uppercase tracking-wide"
             >
               {config?.label || p.key}
             </text>
             <text
               x={p.labelX}
-              y={p.labelY + 12}
+              y={p.labelY + 8}
               textAnchor="middle"
               dominantBaseline="middle"
-              className="text-[11px] font-semibold fill-apple-text"
+              className="text-[13px] font-semibold fill-neutral-900 tabular-nums"
             >
-              {Math.round(score)}%
+              {Math.round(score)}
             </text>
           </g>
         )
@@ -158,47 +147,39 @@ function RadarChart({ dimensions, size = 280 }) {
   )
 }
 
-function DimensionCard({ dimension, data, isExpanded, onToggle }) {
+function DimensionRow({ dimension, data, isExpanded, onToggle }) {
   const config = DIMENSION_CONFIG[dimension]
   const Icon = config?.icon || Activity
   const score = data?.score || 0
   const status = score >= 80 ? 'healthy' : score >= 60 ? 'warning' : 'critical'
   
-  const statusColors = {
-    healthy: 'bg-apple-success/10 text-apple-success',
-    warning: 'bg-apple-warning/10 text-apple-warning',
-    critical: 'bg-apple-critical/10 text-apple-critical'
+  const statusDot = {
+    healthy: 'bg-green-500',
+    warning: 'bg-amber-500',
+    critical: 'bg-red-500'
   }
 
   return (
-    <motion.div
-      layout
-      className="bg-apple-surface rounded-2xl border border-apple-border overflow-hidden"
-    >
+    <div className="border-b border-neutral-100 last:border-b-0">
       <button
         onClick={onToggle}
-        className="w-full p-4 flex items-center gap-4 hover:bg-apple-bg/50 transition-colors"
+        className="w-full py-4 px-1 flex items-center gap-4 hover:bg-neutral-50/50 transition-colors"
       >
-        <div 
-          className="w-10 h-10 rounded-xl flex items-center justify-center"
-          style={{ backgroundColor: `${config?.color}15` }}
-        >
-          <Icon className="w-5 h-5" style={{ color: config?.color }} />
-        </div>
+        <Icon className="w-4 h-4 text-neutral-400 flex-shrink-0" />
         
         <div className="flex-1 text-left">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-apple-text">{config?.label}</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[status]}`}>
-              {Math.round(score)}%
-            </span>
-          </div>
-          <p className="text-xs text-apple-secondary mt-0.5">{config?.description}</p>
+          <span className="text-[15px] font-medium text-neutral-900">{config?.label}</span>
         </div>
         
-        <ChevronRight 
-          className={`w-4 h-4 text-apple-secondary transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-        />
+        <div className="flex items-center gap-3">
+          <div className={`w-2 h-2 rounded-full ${statusDot[status]}`} />
+          <span className="text-[15px] font-semibold text-neutral-900 tabular-nums w-8 text-right">
+            {Math.round(score)}
+          </span>
+          <ChevronDown 
+            className={`w-4 h-4 text-neutral-300 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+          />
+        </div>
       </button>
       
       <AnimatePresence>
@@ -208,21 +189,21 @@ function DimensionCard({ dimension, data, isExpanded, onToggle }) {
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="border-t border-apple-border"
+            className="overflow-hidden"
           >
-            <div className="p-4 grid grid-cols-2 gap-3">
+            <div className="px-1 pb-4 grid grid-cols-2 gap-2">
               {data.metrics.map((metric, i) => (
-                <div key={i} className="bg-apple-bg rounded-xl p-3">
-                  <div className="text-xs text-apple-secondary mb-1">{metric.label}</div>
+                <div key={i} className="bg-neutral-50 rounded-lg p-3">
+                  <div className="text-[11px] text-neutral-500 uppercase tracking-wide mb-1">{metric.label}</div>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-lg font-semibold text-apple-text">
+                    <span className="text-[17px] font-semibold text-neutral-900 tabular-nums">
                       {metric.value}
                     </span>
-                    {metric.trend === 'up' && <TrendingUp className="w-3.5 h-3.5 text-apple-critical" />}
-                    {metric.trend === 'down' && <TrendingDown className="w-3.5 h-3.5 text-apple-success" />}
+                    {metric.trend === 'up' && <TrendingUp className="w-3 h-3 text-red-500" />}
+                    {metric.trend === 'down' && <TrendingDown className="w-3 h-3 text-green-500" />}
                   </div>
                   {metric.note && (
-                    <div className="text-[10px] text-apple-secondary/70 mt-1">{metric.note}</div>
+                    <div className="text-[10px] text-neutral-400 mt-0.5">{metric.note}</div>
                   )}
                 </div>
               ))}
@@ -230,7 +211,7 @@ function DimensionCard({ dimension, data, isExpanded, onToggle }) {
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   )
 }
 
@@ -238,230 +219,166 @@ function MonitoringTimeline({ visits }) {
   if (!visits || visits.length === 0) return null
 
   return (
-    <div className="bg-apple-surface rounded-2xl border border-apple-border p-4">
+    <div>
       <div className="flex items-center gap-2 mb-4">
-        <Calendar className="w-4 h-4 text-apple-secondary" />
-        <h3 className="font-medium text-apple-text">Monitoring Activity</h3>
-      </div>
-      
-      <div className="relative">
-        <div className="absolute left-3 top-2 bottom-2 w-px bg-apple-border" />
-        
-        <div className="space-y-3">
-          {visits.slice(0, 4).map((visit, i) => {
-            const hasCritical = visit.critical_findings > 0
-            const hasFindings = visit.findings_count > 0
-            
-            return (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.1 }}
-                className="flex items-start gap-3 pl-6 relative"
-              >
-                <div className={`absolute left-1.5 top-1.5 w-3 h-3 rounded-full border-2 ${
-                  hasCritical ? 'bg-apple-critical border-apple-critical' :
-                  hasFindings ? 'bg-apple-warning border-apple-warning' :
-                  'bg-apple-success border-apple-success'
-                }`} />
-                
-                <div className="flex-1 bg-apple-bg rounded-xl p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-apple-text">
-                      {visit.visit_type || 'Monitoring Visit'}
-                    </span>
-                    <span className="text-xs text-apple-secondary">
-                      {visit.visit_date}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-apple-secondary">
-                    {visit.findings_count > 0 && (
-                      <span className={hasCritical ? 'text-apple-critical' : 'text-apple-warning'}>
-                        {visit.findings_count} finding{visit.findings_count !== 1 ? 's' : ''}
-                        {hasCritical && ` (${visit.critical_findings} critical)`}
-                      </span>
-                    )}
-                    {visit.findings_count === 0 && (
-                      <span className="text-apple-success">No findings</span>
-                    )}
-                    {visit.days_overdue > 0 && (
-                      <span className="text-apple-critical">
-                        {visit.days_overdue}d overdue
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            )
-          })}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function CRAPanel({ assignments }) {
-  const currentCRA = assignments?.find(a => a.is_current)
-  const pastCRAs = assignments?.filter(a => !a.is_current) || []
-  
-  if (!currentCRA && pastCRAs.length === 0) return null
-
-  return (
-    <div className="bg-apple-surface rounded-2xl border border-apple-border p-4">
-      <div className="flex items-center gap-2 mb-4">
-        <UserCheck className="w-4 h-4 text-apple-secondary" />
-        <h3 className="font-medium text-apple-text">CRA Coverage</h3>
-      </div>
-      
-      {currentCRA ? (
-        <div className="bg-apple-bg rounded-xl p-3 mb-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-apple-text">{currentCRA.cra_id}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-apple-success/10 text-apple-success">
-                  Active
-                </span>
-              </div>
-              <div className="text-xs text-apple-secondary mt-1">
-                Since {currentCRA.start_date}
-              </div>
-            </div>
-            <CheckCircle2 className="w-5 h-5 text-apple-success" />
-          </div>
-        </div>
-      ) : (
-        <div className="bg-apple-warning/10 rounded-xl p-3 mb-3">
-          <div className="flex items-center gap-2 text-apple-warning">
-            <AlertTriangle className="w-4 h-4" />
-            <span className="text-sm font-medium">No active CRA assigned</span>
-          </div>
-        </div>
-      )}
-      
-      {pastCRAs.length > 0 && (
-        <div className="text-xs text-apple-secondary">
-          {pastCRAs.length} previous CRA assignment{pastCRAs.length !== 1 ? 's' : ''}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function AlertsPanel({ alerts }) {
-  if (!alerts || alerts.length === 0) return null
-
-  return (
-    <div className="bg-apple-surface rounded-2xl border border-apple-border p-4">
-      <div className="flex items-center gap-2 mb-4">
-        <AlertTriangle className="w-4 h-4 text-apple-warning" />
-        <h3 className="font-medium text-apple-text">Active Signals</h3>
-        <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-apple-warning/10 text-apple-warning">
-          {alerts.length}
-        </span>
+        <Calendar className="w-4 h-4 text-neutral-400" />
+        <h3 className="text-[13px] font-semibold text-neutral-900 uppercase tracking-wide">Recent Monitoring</h3>
       </div>
       
       <div className="space-y-2">
-        {alerts.slice(0, 3).map((alert, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-            className="flex items-start gap-3 p-2 rounded-xl bg-apple-bg"
-          >
-            <div className={`w-2 h-2 rounded-full mt-1.5 ${
-              alert.severity === 'critical' ? 'bg-apple-critical' :
-              alert.severity === 'warning' ? 'bg-apple-warning' :
-              'bg-apple-info'
-            }`} />
-            <div className="flex-1">
-              <p className="text-sm text-apple-text">{alert.message}</p>
-              <p className="text-xs text-apple-secondary mt-0.5">{alert.time}</p>
-            </div>
-          </motion.div>
-        ))}
+        {visits.slice(0, 3).map((visit, i) => {
+          const hasCritical = visit.critical_findings > 0
+          const hasFindings = visit.findings_count > 0
+          const dotColor = hasCritical ? 'bg-red-500' : hasFindings ? 'bg-amber-500' : 'bg-green-500'
+          
+          return (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.08 }}
+              className="flex items-center gap-3 py-2"
+            >
+              <div className={`w-2 h-2 rounded-full ${dotColor}`} />
+              <div className="flex-1">
+                <span className="text-[13px] text-neutral-900">
+                  {visit.visit_type || 'Monitoring Visit'}
+                </span>
+              </div>
+              <span className="text-[12px] text-neutral-400 tabular-nums">
+                {visit.visit_date}
+              </span>
+            </motion.div>
+          )
+        })}
       </div>
     </div>
   )
 }
 
-function SignalBanner({ question, siteName }) {
+function CRAStatus({ assignments }) {
+  const currentCRA = assignments?.find(a => a.is_current)
+  const pastCount = assignments?.filter(a => !a.is_current).length || 0
+  
+  if (!currentCRA && pastCount === 0) return null
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-gradient-to-r from-[#5856D6]/10 via-[#AF52DE]/10 to-[#5856D6]/10 rounded-2xl p-4 border border-[#5856D6]/20"
-    >
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#5856D6] to-[#AF52DE] flex items-center justify-center">
-          <Zap className="w-5 h-5 text-white" />
-        </div>
-        <div className="flex-1">
-          <div className="text-xs font-medium text-apple-secondary mb-1">Signal Under Investigation</div>
-          <p className="text-sm text-apple-text font-medium">{question}</p>
-        </div>
+    <div>
+      <div className="flex items-center gap-2 mb-4">
+        <UserCheck className="w-4 h-4 text-neutral-400" />
+        <h3 className="text-[13px] font-semibold text-neutral-900 uppercase tracking-wide">CRA Coverage</h3>
       </div>
-    </motion.div>
+      
+      {currentCRA ? (
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full bg-green-500" />
+          <div className="flex-1">
+            <div className="text-[13px] text-neutral-900">{currentCRA.cra_id}</div>
+            <div className="text-[11px] text-neutral-400">Since {currentCRA.start_date}</div>
+          </div>
+          <CheckCircle2 className="w-4 h-4 text-green-500" />
+        </div>
+      ) : (
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full bg-amber-500" />
+          <span className="text-[13px] text-neutral-900">No active CRA assigned</span>
+        </div>
+      )}
+      
+      {pastCount > 0 && (
+        <div className="text-[11px] text-neutral-400 mt-2">
+          {pastCount} previous assignment{pastCount !== 1 ? 's' : ''}
+        </div>
+      )}
+    </div>
   )
 }
 
-function OverallHealthScore({ dimensions }) {
+function AlertsList({ alerts }) {
+  if (!alerts || alerts.length === 0) return null
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-4">
+        <AlertTriangle className="w-4 h-4 text-neutral-400" />
+        <h3 className="text-[13px] font-semibold text-neutral-900 uppercase tracking-wide">Active Signals</h3>
+        <span className="ml-auto text-[11px] text-neutral-400 tabular-nums">{alerts.length}</span>
+      </div>
+      
+      <div className="space-y-2">
+        {alerts.slice(0, 3).map((alert, i) => {
+          const dotColor = alert.severity === 'critical' ? 'bg-red-500' : 
+                          alert.severity === 'warning' ? 'bg-amber-500' : 'bg-neutral-400'
+          return (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.08 }}
+              className="flex items-start gap-3 py-1"
+            >
+              <div className={`w-2 h-2 rounded-full mt-1.5 ${dotColor}`} />
+              <div className="flex-1">
+                <p className="text-[13px] text-neutral-900 leading-snug">{alert.message}</p>
+                <p className="text-[11px] text-neutral-400 mt-0.5">{alert.time}</p>
+              </div>
+            </motion.div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function HealthScore({ dimensions }) {
   const scores = Object.values(dimensions).map(d => d?.score || 0)
   const average = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0
   const status = average >= 80 ? 'healthy' : average >= 60 ? 'warning' : 'critical'
   
   const statusConfig = {
-    healthy: { color: 'text-apple-success', bg: 'bg-apple-success', label: 'On Track' },
-    warning: { color: 'text-apple-warning', bg: 'bg-apple-warning', label: 'Needs Attention' },
-    critical: { color: 'text-apple-critical', bg: 'bg-apple-critical', label: 'At Risk' }
+    healthy: { color: 'text-green-500', ring: 'stroke-green-500', label: 'On Track' },
+    warning: { color: 'text-amber-500', ring: 'stroke-amber-500', label: 'Needs Attention' },
+    critical: { color: 'text-red-500', ring: 'stroke-red-500', label: 'At Risk' }
   }
 
+  const circumference = 2 * Math.PI * 45
+  const offset = circumference * (1 - average / 100)
+
   return (
-    <motion.div
-      initial={{ scale: 0.95, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      className="text-center mb-6"
-    >
-      <div className="relative inline-block">
-        <svg width="120" height="120" className="transform -rotate-90">
+    <div className="flex flex-col items-center">
+      <div className="relative">
+        <svg width="100" height="100" className="transform -rotate-90">
           <circle
-            cx="60"
-            cy="60"
-            r="50"
+            cx="50"
+            cy="50"
+            r="45"
             fill="none"
             stroke="currentColor"
-            strokeWidth="8"
-            className="text-apple-border/30"
+            strokeWidth="6"
+            className="text-neutral-100"
           />
           <motion.circle
-            cx="60"
-            cy="60"
-            r="50"
+            cx="50"
+            cy="50"
+            r="45"
             fill="none"
-            stroke="currentColor"
-            strokeWidth="8"
+            strokeWidth="6"
             strokeLinecap="round"
-            strokeDasharray={`${2 * Math.PI * 50}`}
-            initial={{ strokeDashoffset: 2 * Math.PI * 50 }}
-            animate={{ strokeDashoffset: 2 * Math.PI * 50 * (1 - average / 100) }}
-            transition={{ duration: 1.2, ease: "easeOut" }}
-            className={statusConfig[status].color}
+            strokeDasharray={circumference}
+            initial={{ strokeDashoffset: circumference }}
+            animate={{ strokeDashoffset: offset }}
+            transition={{ duration: 1, ease: "easeOut" }}
+            className={statusConfig[status].ring}
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-3xl font-semibold text-apple-text">{Math.round(average)}</span>
-          <span className="text-xs text-apple-secondary">Health Score</span>
+          <span className="text-[28px] font-semibold text-neutral-900 tabular-nums">{Math.round(average)}</span>
         </div>
       </div>
-      <div className={`inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full ${statusConfig[status].bg}/10`}>
-        <div className={`w-2 h-2 rounded-full ${statusConfig[status].bg}`} />
-        <span className={`text-sm font-medium ${statusConfig[status].color}`}>
-          {statusConfig[status].label}
-        </span>
-      </div>
-    </motion.div>
+      <span className={`text-[13px] font-medium mt-3 ${statusConfig[status].color}`}>
+        {statusConfig[status].label}
+      </span>
+    </div>
   )
 }
 
@@ -553,9 +470,9 @@ export function Site360Panel({ siteId, siteName, question, onLaunchAnalysis }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-full border-2 border-apple-border border-t-apple-accent animate-spin" />
-          <span className="text-sm text-apple-secondary">Loading site profile...</span>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 rounded-full border-2 border-neutral-200 border-t-neutral-600 animate-spin" />
+          <span className="text-[13px] text-neutral-500">Loading site profile</span>
         </div>
       </div>
     )
@@ -565,53 +482,106 @@ export function Site360Panel({ siteId, siteName, question, onLaunchAnalysis }) {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="h-full overflow-y-auto"
+      className="h-full overflow-y-auto bg-white"
     >
-      <div className="max-w-5xl mx-auto p-6 space-y-6">
-        <SignalBanner question={question} siteName={siteName} />
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-apple-surface rounded-2xl border border-apple-border p-6">
-            <h3 className="text-lg font-semibold text-apple-text mb-2 text-center">
-              {siteName || siteId}
-            </h3>
-            <p className="text-sm text-apple-secondary text-center mb-4">
-              {siteData?.country}{siteData?.city ? `, ${siteData.city}` : ''}
-            </p>
-            
-            <OverallHealthScore dimensions={dimensions} />
-            <RadarChart dimensions={dimensions} />
-          </div>
-          
-          <div className="space-y-3">
-            {Object.entries(dimensions).map(([key, data]) => (
-              <DimensionCard
-                key={key}
-                dimension={key}
-                data={data}
-                isExpanded={expandedDimension === key}
-                onToggle={() => setExpandedDimension(expandedDimension === key ? null : key)}
-              />
-            ))}
-          </div>
+      <div className="max-w-4xl mx-auto px-6 py-10">
+        {/* Header */}
+        <div className="text-center mb-10">
+          <motion.h1 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-[28px] font-semibold text-neutral-900 tracking-tight"
+          >
+            {siteName || siteId}
+          </motion.h1>
+          <motion.p 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="text-[15px] text-neutral-500 mt-1"
+          >
+            {siteData?.country}{siteData?.city ? ` · ${siteData.city}` : ''}
+          </motion.p>
         </div>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <MonitoringTimeline visits={metadata?.monitoring_visits} />
-          <CRAPanel assignments={metadata?.cra_assignments} />
-          <AlertsPanel alerts={siteData?.alerts} />
-        </div>
-        
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={onLaunchAnalysis}
-          className="w-full py-4 px-6 bg-gradient-to-r from-[#5856D6] to-[#AF52DE] rounded-2xl text-white font-medium flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transition-shadow"
+
+        {/* Signal Banner */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-neutral-50 rounded-2xl p-5 mb-10"
         >
-          <Target className="w-5 h-5" />
-          Launch Causal Analysis
-          <ChevronRight className="w-5 h-5" />
-        </motion.button>
+          <div className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-2">
+            Signal Under Investigation
+          </div>
+          <p className="text-[15px] text-neutral-900 leading-relaxed">{question}</p>
+        </motion.div>
+
+        {/* Main Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mb-10">
+          {/* Left: Health + Radar */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="flex flex-col items-center"
+          >
+            <HealthScore dimensions={dimensions} />
+            <div className="mt-6">
+              <RadarChart dimensions={dimensions} />
+            </div>
+          </motion.div>
+
+          {/* Right: Dimensions */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <div className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-4">
+              Performance by Dimension
+            </div>
+            <div className="bg-white rounded-xl border border-neutral-200">
+              {Object.entries(dimensions).map(([key, data]) => (
+                <DimensionRow
+                  key={key}
+                  dimension={key}
+                  data={data}
+                  isExpanded={expandedDimension === key}
+                  onToggle={() => setExpandedDimension(expandedDimension === key ? null : key)}
+                />
+              ))}
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Secondary Grid */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12 pt-8 border-t border-neutral-100"
+        >
+          <MonitoringTimeline visits={metadata?.monitoring_visits} />
+          <CRAStatus assignments={metadata?.cra_assignments} />
+          <AlertsList alerts={siteData?.alerts} />
+        </motion.div>
+
+        {/* Launch Button */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="flex justify-center"
+        >
+          <button
+            onClick={onLaunchAnalysis}
+            className="group inline-flex items-center gap-3 px-8 py-4 bg-neutral-900 hover:bg-neutral-800 text-white rounded-full text-[15px] font-medium transition-all shadow-lg hover:shadow-xl"
+          >
+            Launch Causal Analysis
+            <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+          </button>
+        </motion.div>
       </div>
     </motion.div>
   )
