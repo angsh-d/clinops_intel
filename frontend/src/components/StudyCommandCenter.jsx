@@ -247,7 +247,7 @@ export function StudyCommandCenter() {
               <InsightCard
                 key={insight.id}
                 insight={insight}
-                defaultExpanded={i === 0}
+                defaultExpanded={false}
                 onInvestigate={() => handleInvestigate(insight.query)}
               />
             ))}
@@ -281,7 +281,7 @@ export function StudyCommandCenter() {
         </div>
 
         {/* CENTER MAP — full remaining width */}
-        <div className="flex-1 min-w-0 p-4">
+        <div className="flex-1 min-w-0 p-4 flex flex-col">
           <MapPanel
             sites={mapSites}
             hoveredSite={hoveredSite}

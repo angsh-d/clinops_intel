@@ -64,7 +64,7 @@ export const WorldMap = memo(function WorldMap({ sites, onSiteClick, onSiteHover
   })
 
   return (
-    <div className={`relative ${height || 'h-[400px]'} bg-apple-bg rounded-xl overflow-hidden border border-apple-border`}>
+    <div className={`relative ${height || 'h-[400px]'} min-h-[400px] flex-1 bg-apple-bg rounded-xl overflow-hidden border border-apple-border`}>
       <ComposableMap
         projection="geoMercator"
         projectionConfig={{
