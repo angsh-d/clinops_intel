@@ -60,7 +60,21 @@ All calculated metrics include formula breakdowns and source information:
 - **Financial Figures**: Include over_plan_amount, variance_formula, delay_cost_formula
 - **Data Sources**: All metrics show source table (e.g., "site_financial_metrics table")
 
+## Fraud Detection / Data Integrity
+The Data Integrity Agent (phantom_compliance) detects sophisticated fraud signals:
+- **Variance suppression**: Near-zero stddev in entry lag, completeness, query aging
+- **Weekday entry patterns**: Batch catchup (e.g., all entries on Mondays)
+- **Entry date clustering**: >30% entries on <5% of calendar days = backfill
+- **CRA oversight gaps**: Periods without monitoring coverage
+- **CRA rubber-stamping**: CRAs who never find issues across multiple sites
+- **Correction provenance**: Unprompted corrections (pre-emptive cleanup)
+- **Narrative duplication**: Copy-paste screen failure reasons
+- **Cross-domain inconsistency**: Perfect metrics in one domain but gaps in another
+
 ## Recent Changes
+- 2026-02-03: Added 7 fraud detection tools (weekday_entry_pattern, cra_oversight_gap, cra_portfolio_analysis, correction_provenance, entry_date_clustering, screening_narrative_duplication, cross_domain_consistency)
+- 2026-02-03: Enhanced Data Integrity Agent to detect CRA oversight gaps and rubber-stamp patterns
+- 2026-02-03: All agent details collapsed by default for cleaner UX
 - 2026-02-03: Redesigned Causal Hypothesis page UX with ExecutiveBrief component for clean, consumable insights
 - 2026-02-03: Added progressive disclosure - summary first, full analysis on demand
 - 2026-02-03: Added DQ score formula breakdown to site detail metrics

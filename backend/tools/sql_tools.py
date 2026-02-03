@@ -684,6 +684,472 @@ class MonitoringFindingsVarianceTool(BaseTool):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# FRAUD DETECTION TOOLS (Data Integrity Signals)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class WeekdayEntryPatternTool(BaseTool):
+    name = "weekday_entry_pattern"
+    description = (
+        "Per-site weekday distribution of data entry. Detects unnatural patterns like "
+        "all entries on Mondays (batch catchup) or no weekend entries despite patient visits. "
+        "High concentration on single day (>40%) = suspicious. Args: site_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+
+        # Get day-of-week distribution for entry_date
+        q = db_session.query(
+            ECRFEntry.site_id,
+            func.extract('dow', ECRFEntry.entry_date).label("day_of_week"),
+            func.count(ECRFEntry.id).label("entry_count"),
+        ).group_by(ECRFEntry.site_id, func.extract('dow', ECRFEntry.entry_date))
+
+        if site_id:
+            q = q.filter(ECRFEntry.site_id == site_id)
+
+        rows = q.all()
+
+        # Aggregate per site
+        site_data: dict = {}
+        day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        for r in rows:
+            sid = r.site_id
+            dow = int(r.day_of_week) if r.day_of_week is not None else 0
+            if sid not in site_data:
+                site_data[sid] = {"site_id": sid, "total_entries": 0, "weekday_counts": {d: 0 for d in day_names}}
+            site_data[sid]["weekday_counts"][day_names[dow]] = r.entry_count
+            site_data[sid]["total_entries"] += r.entry_count
+
+        # Calculate concentration metrics
+        data = []
+        for sid, info in site_data.items():
+            total = info["total_entries"]
+            if total == 0:
+                continue
+            counts = list(info["weekday_counts"].values())
+            max_day_count = max(counts)
+            max_day = [d for d, c in info["weekday_counts"].items() if c == max_day_count][0]
+            pct_max_day = round(max_day_count / total * 100, 1)
+            weekend_count = info["weekday_counts"]["Saturday"] + info["weekday_counts"]["Sunday"]
+            pct_weekend = round(weekend_count / total * 100, 1)
+
+            data.append({
+                "site_id": sid,
+                "total_entries": total,
+                "dominant_day": max_day,
+                "pct_dominant_day": pct_max_day,
+                "pct_weekend": pct_weekend,
+                "weekday_distribution": info["weekday_counts"],
+                "concentration_flag": pct_max_day > 40,
+            })
+
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class CRAOversightGapTool(BaseTool):
+    name = "cra_oversight_gap"
+    description = (
+        "Detects periods without CRA coverage and gaps between monitoring visits. "
+        "Sites with >60 days without monitoring or unassigned CRA periods = red flag. "
+        "Args: site_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+
+        # CRA assignment gaps
+        cra_q = db_session.query(
+            CRAAssignment.site_id,
+            CRAAssignment.cra_id,
+            CRAAssignment.start_date,
+            CRAAssignment.end_date,
+        ).order_by(CRAAssignment.site_id, CRAAssignment.start_date)
+        if site_id:
+            cra_q = cra_q.filter(CRAAssignment.site_id == site_id)
+        cra_rows = cra_q.all()
+
+        # Monitoring visit gaps
+        mon_q = db_session.query(
+            MonitoringVisit.site_id,
+            MonitoringVisit.actual_date,
+        ).filter(MonitoringVisit.status == "Completed").order_by(
+            MonitoringVisit.site_id, MonitoringVisit.actual_date
+        )
+        if site_id:
+            mon_q = mon_q.filter(MonitoringVisit.site_id == site_id)
+        mon_rows = mon_q.all()
+
+        # Compute CRA gaps per site
+        site_cra_gaps: dict = {}
+        current_site = None
+        prev_end = None
+        for r in cra_rows:
+            if r.site_id != current_site:
+                current_site = r.site_id
+                prev_end = None
+                site_cra_gaps[current_site] = {"cra_gap_days": 0, "cra_transitions": 0, "gap_periods": []}
+
+            if prev_end and r.start_date:
+                gap = (r.start_date - prev_end).days
+                if gap > 0:
+                    site_cra_gaps[current_site]["cra_gap_days"] += gap
+                    site_cra_gaps[current_site]["gap_periods"].append({
+                        "from": str(prev_end), "to": str(r.start_date), "days": gap
+                    })
+            site_cra_gaps[current_site]["cra_transitions"] += 1
+            prev_end = r.end_date if r.end_date else r.start_date
+
+        # Compute monitoring gaps per site
+        site_mon_gaps: dict = {}
+        current_site = None
+        prev_date = None
+        for r in mon_rows:
+            if r.site_id != current_site:
+                current_site = r.site_id
+                prev_date = None
+                site_mon_gaps[current_site] = {"max_monitoring_gap_days": 0, "mean_monitoring_gap_days": 0, "gaps": []}
+
+            if prev_date and r.actual_date:
+                gap = (r.actual_date - prev_date).days
+                site_mon_gaps[current_site]["gaps"].append(gap)
+                if gap > site_mon_gaps[current_site]["max_monitoring_gap_days"]:
+                    site_mon_gaps[current_site]["max_monitoring_gap_days"] = gap
+            prev_date = r.actual_date
+
+        for sid, info in site_mon_gaps.items():
+            if info["gaps"]:
+                info["mean_monitoring_gap_days"] = round(sum(info["gaps"]) / len(info["gaps"]), 1)
+            del info["gaps"]  # Don't return raw list
+
+        # Merge
+        all_sites = set(site_cra_gaps.keys()) | set(site_mon_gaps.keys())
+        data = []
+        for sid in all_sites:
+            cra_info = site_cra_gaps.get(sid, {"cra_gap_days": 0, "cra_transitions": 0, "gap_periods": []})
+            mon_info = site_mon_gaps.get(sid, {"max_monitoring_gap_days": 0, "mean_monitoring_gap_days": 0})
+            data.append({
+                "site_id": sid,
+                "cra_gap_days": cra_info["cra_gap_days"],
+                "cra_transitions": cra_info["cra_transitions"],
+                "max_monitoring_gap_days": mon_info["max_monitoring_gap_days"],
+                "mean_monitoring_gap_days": mon_info["mean_monitoring_gap_days"],
+                "oversight_risk": cra_info["cra_gap_days"] > 30 or mon_info["max_monitoring_gap_days"] > 60,
+            })
+
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class CRAPortfolioAnalysisTool(BaseTool):
+    name = "cra_portfolio_analysis"
+    description = (
+        "Cross-site CRA analysis: per-CRA mean findings/visit, % zero-finding visits, "
+        "sites monitored, queries generated. CRAs who never find issues across multiple sites = rubber-stamping. "
+        "Args: cra_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        cra_id = kwargs.get("cra_id")
+
+        q = db_session.query(
+            MonitoringVisit.cra_id,
+            func.count(func.distinct(MonitoringVisit.site_id)).label("sites_monitored"),
+            func.count(MonitoringVisit.id).label("total_visits"),
+            func.avg(MonitoringVisit.findings_count).label("mean_findings"),
+            func.sum(MonitoringVisit.findings_count).label("total_findings"),
+            func.sum(MonitoringVisit.queries_generated).label("total_queries_generated"),
+            func.sum(case((MonitoringVisit.findings_count == 0, 1), else_=0)).label("zero_finding_visits"),
+        ).filter(MonitoringVisit.cra_id.isnot(None)).group_by(MonitoringVisit.cra_id)
+
+        if cra_id:
+            q = q.filter(MonitoringVisit.cra_id == cra_id)
+
+        rows = q.all()
+        data = _serialize_rows(rows)
+
+        for row in data:
+            total = row.get("total_visits", 0)
+            zero = row.get("zero_finding_visits", 0)
+            row["pct_zero_findings"] = round(zero / total * 100, 1) if total > 0 else 0
+            row["rubber_stamp_risk"] = (
+                row["pct_zero_findings"] > 80 and
+                row.get("sites_monitored", 0) >= 2 and
+                row.get("total_visits", 0) >= 5
+            )
+
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class CorrectionProvenanceTool(BaseTool):
+    name = "correction_provenance"
+    description = (
+        "Analyzes data correction sources: % triggered by queries vs unprompted. "
+        "High rate of unprompted corrections before monitoring visits = pre-emptive cleanup (suspicious). "
+        "Args: site_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+
+        q = db_session.query(
+            DataCorrection.site_id,
+            func.count(DataCorrection.id).label("total_corrections"),
+            func.sum(case(
+                (DataCorrection.triggered_by_query_id.isnot(None), 1), else_=0
+            )).label("query_triggered"),
+            func.sum(case(
+                (DataCorrection.triggered_by_query_id.is_(None), 1), else_=0
+            )).label("unprompted"),
+        ).group_by(DataCorrection.site_id)
+
+        if site_id:
+            q = q.filter(DataCorrection.site_id == site_id)
+
+        rows = q.all()
+        data = _serialize_rows(rows)
+
+        for row in data:
+            total = row.get("total_corrections", 0)
+            unprompted = row.get("unprompted", 0)
+            row["pct_unprompted"] = round(unprompted / total * 100, 1) if total > 0 else 0
+            # High unprompted rate with low total could indicate cleanup before detection
+            row["preemptive_cleanup_risk"] = row["pct_unprompted"] > 70 and total >= 5
+
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class EntryDateClusteringTool(BaseTool):
+    name = "entry_date_clustering"
+    description = (
+        "Detects batch entry by analyzing clustering of entry_dates. "
+        "Sites where >30% of entries occur on <5% of calendar days = batch backfill pattern. "
+        "Args: site_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+
+        # Get entry counts per date per site
+        q = db_session.query(
+            ECRFEntry.site_id,
+            ECRFEntry.entry_date,
+            func.count(ECRFEntry.id).label("entries_on_date"),
+        ).group_by(ECRFEntry.site_id, ECRFEntry.entry_date).order_by(
+            ECRFEntry.site_id, ECRFEntry.entry_date
+        )
+
+        if site_id:
+            q = q.filter(ECRFEntry.site_id == site_id)
+
+        rows = q.all()
+
+        # Aggregate per site
+        site_data: dict = {}
+        for r in rows:
+            sid = r.site_id
+            if sid not in site_data:
+                site_data[sid] = {"dates": [], "counts": [], "total": 0}
+            site_data[sid]["dates"].append(r.entry_date)
+            site_data[sid]["counts"].append(r.entries_on_date)
+            site_data[sid]["total"] += r.entries_on_date
+
+        data = []
+        for sid, info in site_data.items():
+            total = info["total"]
+            num_dates = len(info["dates"])
+            if num_dates == 0 or total == 0:
+                continue
+
+            # Sort by count descending to find peak days
+            sorted_counts = sorted(info["counts"], reverse=True)
+
+            # Top 5% of dates
+            top_n = max(1, int(num_dates * 0.05))
+            top_entries = sum(sorted_counts[:top_n])
+            pct_in_top_5pct_days = round(top_entries / total * 100, 1)
+
+            # Find max single-day entries
+            max_single_day = sorted_counts[0] if sorted_counts else 0
+            pct_max_day = round(max_single_day / total * 100, 1) if total > 0 else 0
+
+            # Determine operational date span
+            if info["dates"]:
+                date_span = (max(info["dates"]) - min(info["dates"])).days + 1
+                active_day_ratio = round(num_dates / date_span * 100, 1) if date_span > 0 else 100
+            else:
+                date_span = 0
+                active_day_ratio = 0
+
+            data.append({
+                "site_id": sid,
+                "total_entries": total,
+                "unique_entry_dates": num_dates,
+                "calendar_span_days": date_span,
+                "active_day_ratio": active_day_ratio,
+                "pct_in_top_5pct_days": pct_in_top_5pct_days,
+                "max_entries_single_day": max_single_day,
+                "pct_max_single_day": pct_max_day,
+                "batch_entry_flag": pct_in_top_5pct_days > 30 or pct_max_day > 15,
+            })
+
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class ScreeningNarrativeDuplicationTool(BaseTool):
+    name = "screening_narrative_duplication"
+    description = (
+        "Detects copy-paste screen failure narratives by measuring text similarity/duplication. "
+        "Sites with >50% identical narratives = templated responses (may indicate fabrication). "
+        "Args: site_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+
+        q = db_session.query(
+            ScreeningLog.site_id,
+            ScreeningLog.failure_reason_narrative,
+        ).filter(
+            ScreeningLog.outcome == "Failed",
+            ScreeningLog.failure_reason_narrative.isnot(None),
+        )
+
+        if site_id:
+            q = q.filter(ScreeningLog.site_id == site_id)
+
+        rows = q.all()
+
+        # Group narratives by site
+        site_narratives: dict = {}
+        for r in rows:
+            sid = r.site_id
+            if sid not in site_narratives:
+                site_narratives[sid] = []
+            # Normalize: lowercase, strip whitespace
+            narrative = (r.failure_reason_narrative or "").strip().lower()
+            if narrative:
+                site_narratives[sid].append(narrative)
+
+        data = []
+        for sid, narratives in site_narratives.items():
+            if len(narratives) < 2:
+                continue
+
+            # Count unique vs total
+            unique_narratives = set(narratives)
+            total = len(narratives)
+            unique_count = len(unique_narratives)
+            duplication_rate = round((1 - unique_count / total) * 100, 1) if total > 0 else 0
+
+            # Find most common narrative
+            from collections import Counter
+            counts = Counter(narratives)
+            most_common, most_common_count = counts.most_common(1)[0]
+            pct_most_common = round(most_common_count / total * 100, 1)
+
+            data.append({
+                "site_id": sid,
+                "total_failure_narratives": total,
+                "unique_narratives": unique_count,
+                "duplication_rate": duplication_rate,
+                "most_common_narrative": most_common[:100] + "..." if len(most_common) > 100 else most_common,
+                "pct_most_common": pct_most_common,
+                "templating_flag": duplication_rate > 50 or pct_most_common > 40,
+            })
+
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class CrossDomainConsistencyTool(BaseTool):
+    name = "cross_domain_consistency"
+    description = (
+        "Validates consistency across data domains. Perfect metrics in one domain but gaps in another "
+        "= suspicious (e.g., 100% entry completeness but 0% SDV coverage). "
+        "Args: site_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+
+        # Entry completeness
+        entry_q = db_session.query(
+            ECRFEntry.site_id,
+            func.avg(ECRFEntry.completeness_pct).label("mean_completeness"),
+            func.count(ECRFEntry.id).label("entry_count"),
+        ).group_by(ECRFEntry.site_id)
+        if site_id:
+            entry_q = entry_q.filter(ECRFEntry.site_id == site_id)
+        entry_data = {r.site_id: {"mean_completeness": r.mean_completeness, "entry_count": r.entry_count}
+                      for r in entry_q.all()}
+
+        # Query rate
+        query_q = db_session.query(
+            Query.site_id,
+            func.count(Query.id).label("query_count"),
+        ).group_by(Query.site_id)
+        if site_id:
+            query_q = query_q.filter(Query.site_id == site_id)
+        query_data = {r.site_id: r.query_count for r in query_q.all()}
+
+        # Correction rate
+        corr_q = db_session.query(
+            DataCorrection.site_id,
+            func.count(DataCorrection.id).label("correction_count"),
+        ).group_by(DataCorrection.site_id)
+        if site_id:
+            corr_q = corr_q.filter(DataCorrection.site_id == site_id)
+        corr_data = {r.site_id: r.correction_count for r in corr_q.all()}
+
+        # Monitoring findings
+        mon_q = db_session.query(
+            MonitoringVisit.site_id,
+            func.sum(MonitoringVisit.findings_count).label("total_findings"),
+            func.count(MonitoringVisit.id).label("visit_count"),
+        ).group_by(MonitoringVisit.site_id)
+        if site_id:
+            mon_q = mon_q.filter(MonitoringVisit.site_id == site_id)
+        mon_data = {r.site_id: {"total_findings": r.total_findings or 0, "visit_count": r.visit_count}
+                    for r in mon_q.all()}
+
+        # Merge all domains
+        all_sites = set(entry_data.keys()) | set(query_data.keys()) | set(corr_data.keys()) | set(mon_data.keys())
+        data = []
+        for sid in all_sites:
+            ed = entry_data.get(sid, {"mean_completeness": 0, "entry_count": 0})
+            qd = query_data.get(sid, 0)
+            cd = corr_data.get(sid, 0)
+            md = mon_data.get(sid, {"total_findings": 0, "visit_count": 0})
+
+            entries = ed["entry_count"]
+            completeness = round(ed["mean_completeness"] or 0, 1)
+            queries_per_100_entries = round(qd / entries * 100, 2) if entries > 0 else 0
+            corrections_per_100_entries = round(cd / entries * 100, 2) if entries > 0 else 0
+            findings_per_visit = round(md["total_findings"] / md["visit_count"], 2) if md["visit_count"] > 0 else 0
+
+            # Inconsistency detection
+            # High completeness + low queries + low corrections + low findings = suspicious
+            is_too_perfect = (
+                completeness > 98 and
+                queries_per_100_entries < 2 and
+                corrections_per_100_entries < 1 and
+                findings_per_visit < 0.5 and
+                entries >= 100
+            )
+
+            data.append({
+                "site_id": sid,
+                "entry_count": entries,
+                "mean_completeness": completeness,
+                "queries_per_100_entries": queries_per_100_entries,
+                "corrections_per_100_entries": corrections_per_100_entries,
+                "findings_per_visit": findings_per_visit,
+                "cross_domain_inconsistency": is_too_perfect,
+            })
+
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # SITE RESCUE TOOLS (Site Decision)
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1264,6 +1730,14 @@ def build_tool_registry() -> "ToolRegistry":
     registry.register(TimestampClusteringTool())
     registry.register(QueryLifecycleAnomalyTool())
     registry.register(MonitoringFindingsVarianceTool())
+    # Fraud Detection tools (Advanced Data Integrity)
+    registry.register(WeekdayEntryPatternTool())
+    registry.register(CRAOversightGapTool())
+    registry.register(CRAPortfolioAnalysisTool())
+    registry.register(CorrectionProvenanceTool())
+    registry.register(EntryDateClusteringTool())
+    registry.register(ScreeningNarrativeDuplicationTool())
+    registry.register(CrossDomainConsistencyTool())
     # Site Rescue tools (Site Decision)
     registry.register(EnrollmentTrajectoryTool())
     registry.register(ScreenFailureRootCauseTool())
