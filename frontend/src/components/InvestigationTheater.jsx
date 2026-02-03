@@ -55,7 +55,7 @@ export function InvestigationTheater() {
   const [revealStep, setRevealStep] = useState(0)
   const [revealing, setRevealing] = useState(false)
   const [timelineCollapsed, setTimelineCollapsed] = useState(false)
-  const [phase, setPhase] = useState('overview')
+  const [phase, setPhase] = useState(() => investigation?.site ? 'overview' : 'analyzing')
   const sectionRefs = useRef([])
   const wsRef = useRef(null)
 
