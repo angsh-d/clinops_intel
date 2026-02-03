@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, ChevronDown, ChevronRight, ChevronLeft, ExternalLink, Copy, Check, Loader2, Search, ArrowRight, AlertCircle, BarChart3, Lightbulb, ListChecks, FileText, Shield, TrendingUp } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { startInvestigation, connectInvestigationStream } from '../lib/api'
+import { Site360Panel } from './Site360Panel'
 
 const PHASE_LABELS = {
   routing: 'Analyzing Query',
@@ -54,11 +55,16 @@ export function InvestigationTheater() {
   const [revealStep, setRevealStep] = useState(0)
   const [revealing, setRevealing] = useState(false)
   const [timelineCollapsed, setTimelineCollapsed] = useState(false)
+  const [phase, setPhase] = useState('overview')
   const sectionRefs = useRef([])
   const wsRef = useRef(null)
 
+  const handleLaunchAnalysis = () => {
+    setPhase('analyzing')
+  }
+
   useEffect(() => {
-    if (!investigation) return
+    if (!investigation || phase !== 'analyzing') return
 
     let cancelled = false
 
@@ -108,7 +114,7 @@ export function InvestigationTheater() {
         wsRef.current = null
       }
     }
-  }, [investigation?.question, investigation?.site?.id])
+  }, [investigation?.question, investigation?.site?.id, phase])
 
   const synthesis = investigationResult?.synthesis || {}
   const agentOutputs = investigationResult?.agent_outputs || {}
@@ -185,14 +191,52 @@ export function InvestigationTheater() {
       exit={{ opacity: 0 }}
       className="fixed inset-0 bg-apple-bg/95 backdrop-blur-xl z-50 overflow-y-auto"
     >
+      {/* Site 360 Overview Phase */}
+      {phase === 'overview' && investigation.site && (
+        <div className="h-full">
+          <div className="sticky top-0 bg-apple-bg/90 backdrop-blur-xl border-b border-apple-border z-10 px-6 py-4">
+            <div className="max-w-5xl mx-auto flex items-center justify-between">
+              <button
+                onClick={() => { setInvestigation(null); setView('study'); window.scrollTo(0, 0); }}
+                className="flex items-center gap-1.5 text-body text-apple-secondary hover:text-apple-text transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Back to Study</span>
+              </button>
+              <div className="text-center">
+                <h1 className="text-lg font-semibold text-apple-text">Investigation Studio</h1>
+                <p className="text-xs text-apple-secondary">360° Site Analysis</p>
+              </div>
+              <div className="w-24" />
+            </div>
+          </div>
+          <Site360Panel
+            siteId={investigation.site.id}
+            siteName={investigation.site.name}
+            question={investigation.question}
+            onLaunchAnalysis={handleLaunchAnalysis}
+          />
+        </div>
+      )}
+
+      {/* Analysis Phase - show directly if no site context */}
+      {(phase === 'analyzing' || !investigation.site) && (
       <div className="max-w-3xl mx-auto px-6 py-12">
         <div className="flex items-center mb-6">
           <button
-            onClick={() => { setInvestigation(null); setView('study'); window.scrollTo(0, 0); }}
+            onClick={() => { 
+              if (phase === 'analyzing' && investigation.site) {
+                setPhase('overview')
+              } else {
+                setInvestigation(null); 
+                setView('study'); 
+                window.scrollTo(0, 0);
+              }
+            }}
             className="flex items-center gap-1.5 text-body text-apple-secondary hover:text-apple-text transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
-            <span>Back to Study</span>
+            <span>{phase === 'analyzing' && investigation.site ? 'Back to Site Overview' : 'Back to Study'}</span>
           </button>
         </div>
 
@@ -439,6 +483,7 @@ export function InvestigationTheater() {
           </div>
         )}
       </div>
+      )}
     </motion.div>
   )
 }

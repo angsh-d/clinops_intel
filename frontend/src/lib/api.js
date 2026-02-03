@@ -72,7 +72,7 @@ export async function getSiteMetadata() {
   return cachedFetch('/dashboard/site-metadata')
 }
 
-export async function getKRITimeseries(siteId) {
+export async function getKriTimeseries(siteId) {
   return cachedFetch(`/dashboard/kri-timeseries/${siteId}`)
 }
 
