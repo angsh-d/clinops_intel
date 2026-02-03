@@ -26,101 +26,131 @@ function ExecutiveBrief({ synthesis, hypotheses, nbas, onShowFullAnalysis, resol
     const percentMatch = text.match(/\+?\d+(?:\.\d+)?%/)
     const daysMatch = text.match(/(\d+)\s*days?\s*overdue/i)
     
-    if (dollarMatch) return { value: dollarMatch[0], label: 'over plan' }
-    if (percentMatch) return { value: percentMatch[0], label: 'variance' }
-    if (daysMatch) return { value: `${daysMatch[1]}d`, label: 'overdue' }
+    if (dollarMatch) return { value: dollarMatch[0], label: 'Over Plan' }
+    if (percentMatch) return { value: percentMatch[0], label: 'Variance' }
+    if (daysMatch) return { value: `${daysMatch[1]} days`, label: 'Overdue' }
     return null
   }
   
+  const extractHeadline = () => {
+    const text = synthesis?.executive_summary || ''
+    const firstSentence = text.split(/\.\s+/)[0]
+    return firstSentence ? firstSentence + '.' : text
+  }
+  
   const keyMetric = extractKeyMetric()
+  const headline = extractHeadline()
   
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
-      className="space-y-8"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
+      className="max-w-3xl mx-auto"
     >
-      {/* Hero Insight - Apple-style clean card */}
-      <div className="bg-white rounded-3xl border border-neutral-200/60 shadow-sm overflow-hidden">
-        <div className="p-10">
-          <div className="flex items-start justify-between gap-10">
-            <div className="flex-1 space-y-4">
-              <p className="text-[12px] font-medium text-neutral-400 uppercase tracking-widest">Key Insight</p>
-              <p className="text-[22px] font-semibold text-neutral-900 leading-[1.4] tracking-tight">
-                {resolveText(synthesis?.executive_summary || 'Analysis complete.')}
-              </p>
-            </div>
-            {keyMetric && (
-              <div className="shrink-0 text-right pl-8 border-l border-neutral-100">
-                <p className="text-[42px] font-bold text-neutral-900 tracking-tighter leading-none">{keyMetric.value}</p>
-                <p className="text-[11px] font-medium text-neutral-400 uppercase tracking-widest mt-2">{keyMetric.label}</p>
-              </div>
-            )}
-          </div>
-        </div>
-        
-        {/* Root Cause Section */}
-        {topHypothesis && (
-          <div className="border-t border-neutral-100 bg-neutral-50/50 px-10 py-6">
-            <p className="text-[11px] font-semibold text-neutral-500 uppercase tracking-widest mb-3">Root Cause</p>
-            <p className="text-[15px] text-neutral-700 leading-relaxed">{resolveText(topHypothesis.finding)}</p>
-            {topHypothesis.causal_chain && (
-              <div className="flex flex-wrap items-center gap-2 mt-4">
-                {topHypothesis.causal_chain.split(/\s*(?:→|->)\s*/).filter(Boolean).map((node, i, arr) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="px-3 py-1.5 bg-white border border-neutral-200 text-neutral-700 text-[11px] font-medium rounded-full shadow-sm">
-                      {node.trim()}
-                    </span>
-                    {i < arr.length - 1 && <ChevronRight className="w-3.5 h-3.5 text-neutral-300" />}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+      {/* Hero Section - Apple keynote style */}
+      <div className="text-center mb-16">
+        {keyMetric && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="mb-8"
+          >
+            <span className="text-[72px] font-semibold tracking-tight text-neutral-900 leading-none">
+              {keyMetric.value}
+            </span>
+            <p className="text-[15px] text-neutral-500 font-normal mt-2">{keyMetric.label}</p>
+          </motion.div>
         )}
+        
+        <motion.p 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="text-[21px] font-normal text-neutral-600 leading-relaxed max-w-2xl mx-auto"
+        >
+          {resolveText(headline)}
+        </motion.p>
       </div>
       
-      {/* Priority Action - Clean minimal card */}
-      {topAction && (
-        <div className="bg-white rounded-2xl border border-neutral-200/60 shadow-sm p-6">
-          <div className="flex items-start gap-5">
-            <div className="shrink-0 w-10 h-10 rounded-full bg-neutral-900 text-white flex items-center justify-center text-sm font-semibold">
-              1
-            </div>
-            <div className="flex-1 pt-0.5">
-              <div className="flex items-center gap-3 mb-2">
-                <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-widest">Priority Action</p>
-                {topAction.urgency && (
-                  <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${
-                    topAction.urgency === 'immediate' ? 'bg-neutral-900 text-white' :
-                    topAction.urgency === 'this_week' ? 'bg-neutral-200 text-neutral-700' :
-                    'bg-neutral-100 text-neutral-500'
-                  }`}>
-                    {topAction.urgency.replace('_', ' ')}
+      {/* Root Cause - Minimal inline presentation */}
+      {topHypothesis && (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="mb-12"
+        >
+          <p className="text-[13px] font-medium text-neutral-400 mb-4 text-center">Why this happened</p>
+          <p className="text-[17px] text-neutral-800 leading-relaxed text-center max-w-xl mx-auto">
+            {resolveText(topHypothesis.finding)}
+          </p>
+          
+          {topHypothesis.causal_chain && (
+            <div className="flex items-center justify-center gap-3 mt-6">
+              {topHypothesis.causal_chain.split(/\s*(?:→|->)\s*/).filter(Boolean).map((node, i, arr) => (
+                <div key={i} className="flex items-center gap-3">
+                  <span className="text-[13px] text-neutral-600 font-medium">
+                    {node.trim()}
                   </span>
-                )}
-              </div>
-              <p className="text-[15px] text-neutral-900 font-medium leading-relaxed">{resolveText(topAction.action)}</p>
-              {topAction.owner && (
-                <p className="text-[12px] text-neutral-400 mt-2">{topAction.owner}</p>
-              )}
+                  {i < arr.length - 1 && (
+                    <svg className="w-4 h-4 text-neutral-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                    </svg>
+                  )}
+                </div>
+              ))}
             </div>
-          </div>
-        </div>
+          )}
+        </motion.div>
       )}
       
-      {/* See Full Analysis Button - Apple-style subtle link */}
-      <div className="flex items-center justify-center pt-2">
+      {/* Priority Action - Clean card with Apple button styling */}
+      {topAction && (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+          className="bg-neutral-50 rounded-2xl p-8 mb-10"
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-[13px] font-medium text-neutral-400">Recommended Action</span>
+            {topAction.urgency === 'immediate' && (
+              <span className="text-[11px] font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded">
+                Immediate
+              </span>
+            )}
+          </div>
+          <p className="text-[17px] text-neutral-900 leading-relaxed mb-4">
+            {resolveText(topAction.action)}
+          </p>
+          {topAction.owner && (
+            <p className="text-[13px] text-neutral-500">Assign to {topAction.owner}</p>
+          )}
+        </motion.div>
+      )}
+      
+      {/* See Full Analysis - Apple text link style */}
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, delay: 0.5 }}
+        className="text-center"
+      >
         <button
           onClick={onShowFullAnalysis}
-          className="group inline-flex items-center gap-2 px-5 py-2.5 text-[13px] font-medium text-neutral-600 hover:text-neutral-900 transition-all duration-200"
+          className="inline-flex items-center gap-1.5 text-[15px] text-blue-600 hover:text-blue-700 transition-colors"
         >
-          See full analysis
-          <span className="text-neutral-400">({hypotheses?.length || 0} findings, {nbas?.length || 0} actions)</span>
-          <ChevronDown className="w-4 h-4 text-neutral-400 group-hover:text-neutral-600 group-hover:translate-y-0.5 transition-all" />
+          View complete analysis
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
         </button>
-      </div>
+        <p className="text-[13px] text-neutral-400 mt-1">
+          {hypotheses?.length || 0} findings and {nbas?.length || 0} recommended actions
+        </p>
+      </motion.div>
     </motion.div>
   )
 }
