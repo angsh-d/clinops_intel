@@ -132,12 +132,13 @@ class CRAAssignmentSchema(BaseModel):
 
 
 class MonitoringVisitSchema(BaseModel):
-    visit_date: str | None
+    visit_date: str | None  # actual_date for completed, None for missed
+    planned_date: str | None  # planned date for all visits
     visit_type: str | None
     findings_count: int
     critical_findings: int
     days_overdue: int
-    status: str | None
+    status: str | None  # "Completed" or "Missed"
 
     model_config = {"from_attributes": True}
 

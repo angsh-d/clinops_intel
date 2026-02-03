@@ -256,17 +256,21 @@ function SiteJourneyMap({ visits, craAssignments }) {
     })
   }
   
-  // Add monitoring visit events
+  // Add monitoring visit events (including missed visits)
   if (visits && Array.isArray(visits)) {
     visits.forEach(visit => {
-      if (visit.visit_date) {
+      const isMissed = visit.status === 'Missed'
+      const eventDate = visit.visit_date || visit.planned_date
+      if (eventDate) {
         events.push({
-          type: 'visit',
-          date: visit.visit_date,
-          label: visit.visit_type || 'Visit',
+          type: isMissed ? 'missed_visit' : 'visit',
+          date: eventDate,
+          label: isMissed ? `Missed ${visit.visit_type || 'Visit'}` : (visit.visit_type || 'Visit'),
           visitType: visit.visit_type,
           findings: visit.findings_count || 0,
-          critical: visit.critical_findings || 0
+          critical: visit.critical_findings || 0,
+          daysOverdue: visit.days_overdue || 0,
+          isMissed
         })
       }
     })
@@ -300,6 +304,10 @@ function SiteJourneyMap({ visits, craAssignments }) {
             <div className="w-2 h-2 rounded-full bg-neutral-400" />
             <span className="text-[10px] text-neutral-400">Visit</span>
           </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full border-2 border-red-500 border-dashed" />
+            <span className="text-[10px] text-neutral-400">Missed</span>
+          </div>
         </div>
       </div>
       
@@ -312,6 +320,7 @@ function SiteJourneyMap({ visits, craAssignments }) {
         <div className="flex justify-between items-start relative">
           {allEvents.map((event, i) => {
             const isCRA = event.type === 'cra_start' || event.type === 'cra_end'
+            const isMissedVisit = event.type === 'missed_visit'
             const isOnSite = event.visitType?.toLowerCase().includes('on-site') || event.visitType?.toLowerCase().includes('onsite')
             const hasCritical = event.critical > 0
             const hasFindings = event.findings > 0
@@ -319,11 +328,16 @@ function SiteJourneyMap({ visits, craAssignments }) {
             // Determine marker style
             let markerStyle = 'bg-neutral-300 border-neutral-200'
             let statusDot = null
+            let useDashed = false
             
             if (isCRA) {
               markerStyle = event.isCurrent 
                 ? 'bg-neutral-900 border-neutral-900' 
                 : 'bg-neutral-500 border-neutral-500'
+            } else if (isMissedVisit) {
+              // Missed visits: red dashed border, empty center
+              markerStyle = 'bg-white border-red-500'
+              useDashed = true
             } else {
               markerStyle = isOnSite 
                 ? 'bg-neutral-800 border-neutral-800' 
@@ -347,7 +361,10 @@ function SiteJourneyMap({ visits, craAssignments }) {
               >
                 {/* Marker */}
                 <div className="relative mb-3">
-                  <div className={`w-[14px] h-[14px] rounded-full border-2 ${markerStyle} transition-transform group-hover:scale-110`}>
+                  <div 
+                    className={`w-[14px] h-[14px] rounded-full border-2 ${markerStyle} transition-transform group-hover:scale-110`}
+                    style={useDashed ? { borderStyle: 'dashed' } : {}}
+                  >
                     {isCRA && (
                       <UserCheck className="w-2 h-2 text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                     )}
@@ -357,8 +374,8 @@ function SiteJourneyMap({ visits, craAssignments }) {
                 
                 {/* Content Card */}
                 <div className="text-center max-w-[90px]">
-                  <p className="text-[11px] font-medium text-neutral-900 leading-tight truncate">
-                    {isCRA ? event.label : event.label.replace(/On-?[Ss]ite|Remote/i, '').trim() || event.label}
+                  <p className={`text-[11px] font-medium leading-tight truncate ${isMissedVisit ? 'text-red-600' : 'text-neutral-900'}`}>
+                    {isCRA ? event.label : (isMissedVisit ? 'Missed' : (event.label.replace(/On-?[Ss]ite|Remote/i, '').trim() || event.label))}
                   </p>
                   <p className="text-[10px] text-neutral-400 mt-0.5">
                     {formatDate(event.date)}
@@ -372,7 +389,12 @@ function SiteJourneyMap({ visits, craAssignments }) {
                       {event.details}
                     </span>
                   )}
-                  {!isCRA && (hasCritical || hasFindings) && (
+                  {isMissedVisit && (
+                    <span className="inline-block mt-1 text-[9px] px-1.5 py-0.5 rounded-full bg-red-50 text-red-600">
+                      {event.daysOverdue}d overdue
+                    </span>
+                  )}
+                  {!isCRA && !isMissedVisit && (hasCritical || hasFindings) && (
                     <span className={`inline-block mt-1 text-[9px] px-1.5 py-0.5 rounded-full ${
                       hasCritical 
                         ? 'bg-red-50 text-red-600' 
@@ -381,7 +403,7 @@ function SiteJourneyMap({ visits, craAssignments }) {
                       {hasCritical ? `${event.critical} critical` : `${event.findings} findings`}
                     </span>
                   )}
-                  {!isCRA && !hasCritical && !hasFindings && (
+                  {!isCRA && !isMissedVisit && !hasCritical && !hasFindings && (
                     <span className="inline-block mt-1 text-[9px] px-1.5 py-0.5 rounded-full bg-green-50 text-green-600">
                       Clean
                     </span>
@@ -520,9 +542,13 @@ export function Site360Panel({ siteId, siteName, question, onLaunchAnalysis }) {
     const queryRate = parseFloat(siteData.data_quality_metrics?.find(m => m.label === 'Query Rate')?.value) || 0
     
     const visits = metadata?.monitoring_visits || []
-    const recentCritical = visits.slice(0, 3).filter(v => v.critical_findings > 0).length
+    const completedVisits = visits.filter(v => v.status !== 'Missed')
+    const missedVisits = visits.filter(v => v.status === 'Missed')
+    const recentCritical = completedVisits.slice(0, 3).filter(v => v.critical_findings > 0).length
+    const maxOverdue = Math.max(0, ...visits.map(v => v.days_overdue || 0))
+    const hasMissedVisit = missedVisits.length > 0
     const monitoringScore = visits.length > 0 
-      ? Math.max(0, 100 - (recentCritical * 20) - (visits[0]?.days_overdue || 0) * 2)
+      ? Math.max(0, 100 - (recentCritical * 20) - (maxOverdue * 2))
       : 70
     
     const integrityScore = queryRate > 5 ? 50 : queryRate > 3 ? 70 : 90
@@ -549,13 +575,13 @@ export function Site360Panel({ siteId, siteName, question, onLaunchAnalysis }) {
       },
       monitoring: {
         score: monitoringScore,
-        formula: 'Score = 100 − (Critical findings × 20) − (Overdue days × 2)',
-        source: `100 − (${recentCritical} × 20) − (${visits[0]?.days_overdue || 0} × 2) = ${monitoringScore}`,
+        formula: 'Score = 100 − (Critical findings × 20) − (Max overdue days × 2)',
+        source: `100 − (${recentCritical} × 20) − (${maxOverdue} × 2) = ${monitoringScore}`,
         metrics: [
-          { label: 'Recent Visits', value: `${visits.length}`, note: 'Last 90 days' },
-          { label: 'Critical Findings', value: `${visits.reduce((a, v) => a + (v.critical_findings || 0), 0)}` },
-          { label: 'Avg Findings/Visit', value: visits.length > 0 ? (visits.reduce((a, v) => a + (v.findings_count || 0), 0) / visits.length).toFixed(1) : '0' },
-          { label: 'Overdue Days', value: `${visits[0]?.days_overdue || 0}d` }
+          { label: 'Completed Visits', value: `${completedVisits.length}`, note: 'Total completed' },
+          { label: 'Missed Visits', value: `${missedVisits.length}`, note: hasMissedVisit ? 'CRITICAL' : '' },
+          { label: 'Critical Findings', value: `${completedVisits.reduce((a, v) => a + (v.critical_findings || 0), 0)}` },
+          { label: 'Max Overdue', value: `${maxOverdue}d`, note: maxOverdue > 30 ? 'Severely overdue' : '' }
         ]
       },
       integrity: {

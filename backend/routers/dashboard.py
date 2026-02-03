@@ -209,7 +209,8 @@ def site_metadata_dashboard(db: Session = Depends(get_db)):
 
     sites = db.query(Site).all()
     cra_rows = db.query(CRAAssignment).all()
-    visit_rows = db.query(MonitoringVisit).order_by(MonitoringVisit.actual_date.desc()).all()
+    # Order by planned_date DESC to properly include missed visits (which have NULL actual_date)
+    visit_rows = db.query(MonitoringVisit).order_by(MonitoringVisit.planned_date.desc()).all()
 
     cra_map: dict[str, list[CRAAssignmentSchema]] = {}
     for c in cra_rows:
@@ -224,6 +225,7 @@ def site_metadata_dashboard(db: Session = Depends(get_db)):
     for v in visit_rows:
         visit_map.setdefault(v.site_id, []).append(MonitoringVisitSchema(
             visit_date=str(v.actual_date) if v.actual_date else None,
+            planned_date=str(v.planned_date) if v.planned_date else None,
             visit_type=v.visit_type,
             findings_count=v.findings_count or 0,
             critical_findings=v.critical_findings or 0,
@@ -243,7 +245,7 @@ def site_metadata_dashboard(db: Session = Depends(get_db)):
             target_enrollment=s.target_enrollment or 0,
             anomaly_type=s.anomaly_type,
             cra_assignments=cra_map.get(s.site_id, []),
-            monitoring_visits=visit_map.get(s.site_id, [])[:5],
+            monitoring_visits=visit_map.get(s.site_id, [])[:8],  # Include more visit history
         ))
 
     response = SiteMetadataResponse(sites=result)
