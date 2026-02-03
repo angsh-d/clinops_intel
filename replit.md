@@ -5,7 +5,7 @@ LLM-first agentic intelligence platform for clinical trial operations. Provides 
 
 ## Architecture
 - **Backend**: FastAPI with Python 3.12
-- **Database**: PostgreSQL (Replit-managed via DATABASE_URL)
+- **Database**: PostgreSQL (via EXTERNAL_DATABASE_URL)
 - **LLM Integration**: Google Gemini and Azure OpenAI support
 - **Vector Store**: ChromaDB for embeddings
 
@@ -44,7 +44,7 @@ python -m uvicorn backend.main:app --host 0.0.0.0 --port 5000 --reload
 ```
 
 ## Environment Variables
-- `DATABASE_URL` - PostgreSQL connection string (auto-configured by Replit)
+- `EXTERNAL_DATABASE_URL` - PostgreSQL connection string for the external Neon database
 - `AI_INTEGRATIONS_GEMINI_API_KEY` - Replit AI Integrations Gemini key (auto-configured)
 - `AI_INTEGRATIONS_GEMINI_BASE_URL` - Replit AI Integrations base URL (auto-configured)
 

@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
-DATABASE_URL = os.environ["CLINOPS_DB_URL"]
+DATABASE_URL = os.environ.get("EXTERNAL_DATABASE_URL", os.environ.get("CLINOPS_DB_URL", ""))
 engine = create_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine)
 

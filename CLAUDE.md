@@ -88,7 +88,7 @@ React 18 + Vite + Tailwind CSS + Zustand (state management). Key views:
 ## Environment Variables
 
 Settings loaded from `.env` via Pydantic Settings (`backend/config.py`):
-- `DATABASE_URL` — PostgreSQL connection string
+- `EXTERNAL_DATABASE_URL` — PostgreSQL connection string for external Neon database
 - `AI_INTEGRATIONS_GEMINI_API_KEY`, `AI_INTEGRATIONS_GEMINI_BASE_URL` — Gemini via Replit
 - `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION`
 - Primary model: `gemini-3-pro-preview`, Embedding: `text-embedding-004`
