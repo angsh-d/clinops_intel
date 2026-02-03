@@ -891,42 +891,14 @@ function AgentTimeline({ phases, loading }) {
     return result
   }, [phases])
 
-  // Auto-expand: seed explicit state for latest iterations with reasoning data.
-  // useEffect avoids setState-during-render.
-  useEffect(() => {
-    const updates = {}
-    for (const [agent, { iterations, iterKeys }] of Object.entries(agentIterations)) {
-      const maxIter = iterKeys[iterKeys.length - 1]
-      if (maxIter === undefined) continue
-      const key = `${agent}-${maxIter}`
-      const iterPhases = iterations[maxIter]
-      const hasReasoning = iterPhases.some(p => donePhases.has(p.phase))
-      if (hasReasoning) {
-        updates[key] = true
-      }
-    }
-    if (Object.keys(updates).length > 0) {
-      setExpandedIterations(prev => {
-        // Only seed keys that don't already have an explicit value
-        const merged = { ...prev }
-        let changed = false
-        for (const [k, v] of Object.entries(updates)) {
-          if (merged[k] === undefined) {
-            merged[k] = v
-            changed = true
-          }
-        }
-        return changed ? merged : prev
-      })
-    }
-  }, [agentIterations])
+  // Details collapsed by default - no auto-expand
 
   if (phases.length === 0 && !loading) return null
 
   function toggleIteration(agent, iteration) {
     const key = `${agent}-${iteration}`
     setExpandedIterations(prev => {
-      const current = prev[key] !== undefined ? prev[key] : true // match auto-expand default
+      const current = prev[key] ?? false
       return { ...prev, [key]: !current }
     })
   }
