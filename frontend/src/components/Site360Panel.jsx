@@ -242,7 +242,7 @@ function SiteJourneyMap({ visits, craAssignments }) {
           date: cra.start_date,
           label: cra.cra_id,
           isCurrent: cra.is_current,
-          details: cra.is_current ? 'Current CRA' : 'Previous CRA'
+          details: cra.is_current ? 'Current' : 'Previous'
         })
       }
       if (cra.end_date && !cra.is_current) {
@@ -250,7 +250,7 @@ function SiteJourneyMap({ visits, craAssignments }) {
           type: 'cra_end',
           date: cra.end_date,
           label: cra.cra_id,
-          details: 'CRA transition'
+          details: 'Transition'
         })
       }
     })
@@ -272,102 +272,121 @@ function SiteJourneyMap({ visits, craAssignments }) {
     })
   }
   
-  // Sort by date descending (most recent first)
-  const allEvents = events.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 8)
+  // Sort by date ascending (oldest first for left-to-right timeline)
+  const allEvents = events.sort((a, b) => new Date(a.date) - new Date(b.date)).slice(-6)
 
   if (allEvents.length === 0) return null
 
+  // Format date for display
+  const formatDate = (dateStr) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  }
+
   return (
-    <div className="lg:col-span-2">
-      <div className="flex items-center gap-2 mb-5">
-        <Calendar className="w-4 h-4 text-neutral-400" />
-        <h3 className="text-[13px] font-semibold text-neutral-900 uppercase tracking-wide">Site Journey</h3>
-        <div className="flex items-center gap-4 ml-auto">
+    <div className="lg:col-span-3">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-neutral-400" />
+          <h3 className="text-[13px] font-semibold text-neutral-900 uppercase tracking-wide">Site Journey</h3>
+        </div>
+        <div className="flex items-center gap-5">
           <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full bg-blue-500" />
+            <div className="w-2 h-2 rounded-full bg-neutral-900" />
             <span className="text-[10px] text-neutral-400">CRA</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-2 rounded-sm bg-neutral-800" />
-            <span className="text-[10px] text-neutral-400">On-Site</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-2 rounded-sm bg-neutral-300" />
-            <span className="text-[10px] text-neutral-400">Remote</span>
+            <div className="w-2 h-2 rounded-full bg-neutral-400" />
+            <span className="text-[10px] text-neutral-400">Visit</span>
           </div>
         </div>
       </div>
       
-      <div className="relative">
+      {/* Horizontal Timeline */}
+      <div className="relative px-4">
         {/* Timeline line */}
-        <div className="absolute left-[7px] top-3 bottom-3 w-px bg-neutral-200" />
+        <div className="absolute left-4 right-4 top-[18px] h-px bg-neutral-200" />
         
-        <div className="space-y-0">
+        {/* Events */}
+        <div className="flex justify-between items-start relative">
           {allEvents.map((event, i) => {
             const isCRA = event.type === 'cra_start' || event.type === 'cra_end'
             const isOnSite = event.visitType?.toLowerCase().includes('on-site') || event.visitType?.toLowerCase().includes('onsite')
             const hasCritical = event.critical > 0
             const hasFindings = event.findings > 0
             
+            // Determine marker style
+            let markerStyle = 'bg-neutral-300 border-neutral-200'
+            let statusDot = null
+            
+            if (isCRA) {
+              markerStyle = event.isCurrent 
+                ? 'bg-neutral-900 border-neutral-900' 
+                : 'bg-neutral-500 border-neutral-500'
+            } else {
+              markerStyle = isOnSite 
+                ? 'bg-neutral-800 border-neutral-800' 
+                : 'bg-white border-neutral-300'
+              
+              if (hasCritical) {
+                statusDot = <div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500 border border-white" />
+              } else if (hasFindings) {
+                statusDot = <div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 border border-white" />
+              }
+            }
+            
             return (
               <motion.div
                 key={i}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="flex items-start gap-4 py-2 relative"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.08 }}
+                className="flex flex-col items-center group cursor-default"
+                style={{ flex: 1 }}
               >
-                {/* Timeline marker */}
-                <div className="relative z-10 flex-shrink-0">
-                  {isCRA ? (
-                    <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
-                      event.type === 'cra_start' && event.isCurrent 
-                        ? 'bg-blue-500' 
-                        : event.type === 'cra_start' 
-                          ? 'bg-blue-300' 
-                          : 'bg-blue-200'
-                    }`}>
-                      <UserCheck className="w-2.5 h-2.5 text-white" />
-                    </div>
-                  ) : (
-                    <div className={`w-4 h-4 rounded flex items-center justify-center ${
-                      isOnSite ? 'bg-neutral-800' : 'bg-neutral-300'
-                    }`}>
-                      {hasCritical && <div className="w-1.5 h-1.5 rounded-full bg-red-500" />}
-                      {!hasCritical && hasFindings && <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
-                      {!hasCritical && !hasFindings && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
-                    </div>
-                  )}
-                </div>
-                
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[13px] font-medium ${isCRA ? 'text-blue-700' : 'text-neutral-900'}`}>
-                      {event.label}
-                    </span>
-                    {isCRA && event.type === 'cra_start' && event.isCurrent && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase tracking-wide">Active</span>
-                    )}
-                    {isCRA && event.type === 'cra_end' && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 uppercase tracking-wide">Transition</span>
-                    )}
-                    {!isCRA && hasCritical && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-100 text-red-700">{event.critical} critical</span>
-                    )}
-                    {!isCRA && !hasCritical && hasFindings && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{event.findings} findings</span>
+                {/* Marker */}
+                <div className="relative mb-3">
+                  <div className={`w-[14px] h-[14px] rounded-full border-2 ${markerStyle} transition-transform group-hover:scale-110`}>
+                    {isCRA && (
+                      <UserCheck className="w-2 h-2 text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                     )}
                   </div>
-                  {event.details && (
-                    <p className="text-[11px] text-neutral-400 mt-0.5">{event.details}</p>
-                  )}
+                  {statusDot}
                 </div>
                 
-                {/* Date */}
-                <span className="text-[11px] text-neutral-400 tabular-nums flex-shrink-0">
-                  {event.date}
-                </span>
+                {/* Content Card */}
+                <div className="text-center max-w-[90px]">
+                  <p className="text-[11px] font-medium text-neutral-900 leading-tight truncate">
+                    {isCRA ? event.label : event.label.replace(/On-?[Ss]ite|Remote/i, '').trim() || event.label}
+                  </p>
+                  <p className="text-[10px] text-neutral-400 mt-0.5">
+                    {formatDate(event.date)}
+                  </p>
+                  {isCRA && event.details && (
+                    <span className={`inline-block mt-1 text-[9px] px-1.5 py-0.5 rounded-full ${
+                      event.isCurrent 
+                        ? 'bg-neutral-100 text-neutral-700' 
+                        : 'bg-neutral-50 text-neutral-500'
+                    }`}>
+                      {event.details}
+                    </span>
+                  )}
+                  {!isCRA && (hasCritical || hasFindings) && (
+                    <span className={`inline-block mt-1 text-[9px] px-1.5 py-0.5 rounded-full ${
+                      hasCritical 
+                        ? 'bg-red-50 text-red-600' 
+                        : 'bg-amber-50 text-amber-600'
+                    }`}>
+                      {hasCritical ? `${event.critical} critical` : `${event.findings} findings`}
+                    </span>
+                  )}
+                  {!isCRA && !hasCritical && !hasFindings && (
+                    <span className="inline-block mt-1 text-[9px] px-1.5 py-0.5 rounded-full bg-green-50 text-green-600">
+                      Clean
+                    </span>
+                  )}
+                </div>
               </motion.div>
             )
           })}
