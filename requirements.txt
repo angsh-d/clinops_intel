@@ -44,3 +44,17 @@ sqlalchemy
 uvicorn
 websockets
 google-genai
+chromadb
+fastapi
+google-genai
+httpx
+numpy
+openai
+psycopg2-binary
+pydantic-settings
+pytest
+pytest-asyncio
+python-dotenv
+sqlalchemy
+uvicorn
+websockets
