@@ -16,8 +16,8 @@ _ENV_FILE = _PROJECT_ROOT / ".env"
 class Settings(BaseSettings):
     """Application settings loaded from .env file."""
 
-    # Database - use DATABASE_URL from environment if available
-    database_url: str = ""
+    # Database - use EXTERNAL_DATABASE_URL from environment if available
+    external_database_url: str = ""
 
     # Gemini - direct API key (set GEMINI_API_KEY in .env)
     gemini_api_key: str = ""
@@ -107,8 +107,8 @@ class Settings(BaseSettings):
 
     @property
     def db_url(self) -> str:
-        """Get database URL, preferring DATABASE_URL env var."""
-        return self.database_url
+        """Get database URL, preferring EXTERNAL_DATABASE_URL env var."""
+        return self.external_database_url
 
 
 @lru_cache()

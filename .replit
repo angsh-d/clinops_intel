@@ -62,3 +62,8 @@ exposeLocalhost = true
 [deployment]
 deploymentTarget = "autoscale"
 run = ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "5000"]
+
+[userenv]
+
+[userenv.shared]
+EXTERNAL_DATABASE_URL = "postgresql://neondb_owner:npg_PT73BetOFkoh@ep-odd-dust-ah9o5y2u-pooler.c-3.us-east-1.aws.neon.tech/clinops_db?sslmode=require&channel_binding=require"
