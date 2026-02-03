@@ -68,8 +68,8 @@ export const WorldMap = memo(function WorldMap({ sites, onSiteClick, onSiteHover
       <ComposableMap
         projection="geoMercator"
         projectionConfig={{
-          scale: 100,
-          center: [30, 10]
+          scale: 130,
+          center: [20, 30]
         }}
         style={{ width: '100%', height: '100%' }}
       >

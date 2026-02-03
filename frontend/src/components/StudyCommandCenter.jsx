@@ -257,8 +257,8 @@ export function StudyCommandCenter() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* LEFT RAIL */}
-        <div className="w-[280px] flex-shrink-0 border-r border-apple-border overflow-y-auto">
-          <div className="p-4 space-y-6">
+        <div className="w-[280px] flex-shrink-0 border-r border-apple-border overflow-y-auto max-h-[calc(100vh-200px)]">
+          <div className="p-4 space-y-4">
             <RiskPosture counts={riskCounts} active={riskFilter} onFilter={handleRiskFilter} />
             <ActiveSignalPanel
               highlightedNames={highlightedSiteNames}
