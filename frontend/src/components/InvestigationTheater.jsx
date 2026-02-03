@@ -110,8 +110,6 @@ export function InvestigationTheater() {
     }
   }, [investigation?.question, investigation?.site?.id])
 
-  if (!investigation) return null
-
   const synthesis = investigationResult?.synthesis || {}
   const agentOutputs = investigationResult?.agent_outputs || {}
   const hypotheses = synthesis.cross_domain_findings || []
@@ -145,6 +143,8 @@ export function InvestigationTheater() {
       return () => clearTimeout(timer)
     }
   }, [isComplete, steps.length])
+
+  if (!investigation) return null
 
   const STEP_PROCESSING_MESSAGES = {
     signal: 'Identifying key findings...',
