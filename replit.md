@@ -54,7 +54,15 @@ The application uses Replit AI Integrations for Gemini access, which provides:
 - Charges billed to Replit credits
 - Supported models: gemini-3-pro-preview (primary), gemini-2.5-flash
 
+## Data Transparency & Provenance
+All calculated metrics include formula breakdowns and source information:
+- **DQ Score**: Formula shown in site detail (e.g., "100 - (5 × 5) = 75")
+- **Financial Figures**: Include over_plan_amount, variance_formula, delay_cost_formula
+- **Data Sources**: All metrics show source table (e.g., "site_financial_metrics table")
+
 ## Recent Changes
+- 2026-02-03: Added DQ score formula breakdown to site detail metrics
+- 2026-02-03: Added source provenance to all financial tool outputs (over_plan_amount, variance_formula, delay_cost_formula, data_source)
 - 2026-01-31: Imported to Replit, configured for Replit environment
 - 2026-01-31: Set up Replit-managed PostgreSQL database
 - 2026-01-31: Configured Gemini via Replit AI Integrations

@@ -1070,6 +1070,8 @@ class BudgetVarianceAnalysisTool(BaseTool):
             actual = d.get("actual") or 0
             d["variance"] = round(actual - planned, 2)
             d["variance_pct"] = round(((actual - planned) / planned) * 100, 2) if planned else 0
+            d["variance_formula"] = f"${round(actual, 2)} actual - ${round(planned, 2)} planned = ${round(actual - planned, 2)}"
+            d["data_source"] = "budget_line_items table"
 
         return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
 
@@ -1091,14 +1093,20 @@ class CostPerPatientAnalysisTool(BaseTool):
         site_names = {s.site_id: s.name for s in db_session.query(Site.site_id, Site.name).all()}
         data = []
         for m in rows:
+            planned = m.planned_cost_to_date or 0
+            actual = m.cost_to_date or 0
+            over_plan = actual - planned
             data.append({
                 "site_id": m.site_id,
                 "site_name": site_names.get(m.site_id),
                 "cost_to_date": m.cost_to_date,
+                "planned_cost_to_date": planned,
+                "over_plan_amount": round(over_plan, 2),
+                "over_plan_formula": f"${round(actual, 2)} - ${round(planned, 2)} = ${round(over_plan, 2)}",
                 "cost_per_screened": m.cost_per_patient_screened,
                 "cost_per_randomized": m.cost_per_patient_randomized,
-                "planned_cost_to_date": m.planned_cost_to_date,
                 "variance_pct": m.variance_pct,
+                "data_source": "site_financial_metrics table",
             })
         return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
 
@@ -1205,16 +1213,25 @@ class FinancialImpactOfDelaysTool(BaseTool):
             estimated_delay_cost = enrollment_gap * monthly_site_cost * 0.1 if enrollment_gap > 0 else 0
 
             if m.variance_pct and m.variance_pct > 5:
+                # Calculate over plan amount for transparency
+                planned = m.planned_cost_to_date or 0
+                actual = m.cost_to_date or 0
+                over_plan = actual - planned
+                
                 data.append({
                     "site_id": m.site_id,
                     "site_name": site_names.get(m.site_id),
                     "cost_to_date": m.cost_to_date,
+                    "planned_cost_to_date": planned,
+                    "over_plan_amount": round(over_plan, 2),
                     "variance_pct": m.variance_pct,
                     "enrolled": enrolled,
                     "target": target,
                     "enrollment_gap": enrollment_gap,
                     "estimated_delay_cost": round(estimated_delay_cost, 2),
+                    "delay_cost_formula": f"({enrollment_gap} gap × ${round(monthly_site_cost, 2)}/mo × 0.1) = ${round(estimated_delay_cost, 2)}",
                     "cost_per_randomized": m.cost_per_patient_randomized,
+                    "data_source": "site_financial_metrics table",
                 })
 
         data.sort(key=lambda x: x.get("estimated_delay_cost", 0), reverse=True)

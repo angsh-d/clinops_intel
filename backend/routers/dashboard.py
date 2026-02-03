@@ -824,7 +824,16 @@ def site_detail(
     # Build data quality metrics
     study_avg_lag_val = round(float(study_avg_lag), 1) if study_avg_lag else 0
     lag_trend = "down" if entry_lag and entry_lag < study_avg_lag_val else "up" if entry_lag and entry_lag > study_avg_lag_val + settings.site_lag_trend_delta else "stable"
+    # DQ score formula breakdown for transparency
+    dq_formula = f"{settings.dq_score_base} - ({open_queries} × {settings.dq_score_penalty_per_query}) = {dq_score}"
+    
     data_quality_metrics = [
+        SiteMetricDetail(
+            label="DQ Score",
+            value=str(dq_score),
+            trend="stable" if dq_score >= 50 else "down",
+            note=f"{dq_formula} | Source: queries table, config settings"
+        ),
         SiteMetricDetail(
             label="Entry Lag",
             value=f"{round(entry_lag, 1)}d" if entry_lag else "N/A",
@@ -834,12 +843,13 @@ def site_detail(
         SiteMetricDetail(
             label="Open Queries",
             value=str(open_queries),
-            trend="stable" if open_queries < settings.site_open_queries_high else "up"
+            trend="stable" if open_queries < settings.site_open_queries_high else "up",
+            note="Source: queries table"
         ),
         SiteMetricDetail(
             label="Query Rate",
             value=str(query_rate),
-            note=f"avg: {avg_query_rate}"
+            note=f"avg: {avg_query_rate} | Source: queries/subjects"
         ),
     ]
 
