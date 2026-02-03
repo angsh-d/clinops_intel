@@ -61,6 +61,8 @@ All calculated metrics include formula breakdowns and source information:
 - **Data Sources**: All metrics show source table (e.g., "site_financial_metrics table")
 
 ## Recent Changes
+- 2026-02-03: Redesigned Causal Hypothesis page UX with ExecutiveBrief component for clean, consumable insights
+- 2026-02-03: Added progressive disclosure - summary first, full analysis on demand
 - 2026-02-03: Added DQ score formula breakdown to site detail metrics
 - 2026-02-03: Added source provenance to all financial tool outputs (over_plan_amount, variance_formula, delay_cost_formula, data_source)
 - 2026-01-31: Imported to Replit, configured for Replit environment

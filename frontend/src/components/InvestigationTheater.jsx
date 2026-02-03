@@ -16,6 +16,110 @@ const PHASE_LABELS = {
   complete: 'Complete',
 }
 
+function ExecutiveBrief({ synthesis, hypotheses, nbas, onShowFullAnalysis, resolveText }) {
+  const topHypothesis = hypotheses?.[0]
+  const topAction = nbas?.find(n => n.priority === 1) || nbas?.[0]
+  
+  const extractKeyMetric = () => {
+    const text = synthesis?.executive_summary || ''
+    const dollarMatch = text.match(/\$[\d,]+(?:\.\d{2})?/)
+    const percentMatch = text.match(/\+?\d+(?:\.\d+)?%/)
+    const daysMatch = text.match(/(\d+)\s*days?\s*overdue/i)
+    
+    if (dollarMatch) return { value: dollarMatch[0], label: 'over plan' }
+    if (percentMatch) return { value: percentMatch[0], label: 'variance' }
+    if (daysMatch) return { value: `${daysMatch[1]}d`, label: 'overdue' }
+    return null
+  }
+  
+  const keyMetric = extractKeyMetric()
+  
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+      className="space-y-6"
+    >
+      <div className="bg-gradient-to-br from-neutral-900 to-neutral-800 rounded-2xl p-8 text-white relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
+        
+        <div className="flex items-start justify-between gap-6 mb-6">
+          <div className="flex-1">
+            <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-3">The Insight</p>
+            <p className="text-[18px] font-medium text-white/95 leading-relaxed">
+              {resolveText(synthesis?.executive_summary || 'Analysis complete.')}
+            </p>
+          </div>
+          {keyMetric && (
+            <div className="shrink-0 text-right">
+              <p className="text-[32px] font-bold text-white tracking-tight">{keyMetric.value}</p>
+              <p className="text-[11px] text-neutral-400 uppercase tracking-wider">{keyMetric.label}</p>
+            </div>
+          )}
+        </div>
+        
+        {topHypothesis && (
+          <div className="bg-white/10 rounded-xl p-4 backdrop-blur-sm">
+            <p className="text-[11px] font-semibold text-amber-300 uppercase tracking-wider mb-2">Root Cause</p>
+            <p className="text-[14px] text-white/90 leading-relaxed">{resolveText(topHypothesis.finding)}</p>
+            {topHypothesis.causal_chain && (
+              <div className="flex flex-wrap items-center gap-2 mt-3">
+                {topHypothesis.causal_chain.split(/\s*(?:→|->)\s*/).filter(Boolean).map((node, i, arr) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="px-2.5 py-1 bg-white/15 text-white/90 text-[11px] font-medium rounded-full">
+                      {node.trim()}
+                    </span>
+                    {i < arr.length - 1 && <ChevronRight className="w-3 h-3 text-white/40" />}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      
+      {topAction && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-5">
+          <div className="flex items-start gap-4">
+            <div className="shrink-0 w-8 h-8 rounded-full bg-green-600 text-white flex items-center justify-center text-sm font-bold">
+              1
+            </div>
+            <div className="flex-1">
+              <p className="text-[11px] font-semibold text-green-700 uppercase tracking-wider mb-1">Priority Action</p>
+              <p className="text-[14px] text-neutral-900 font-medium leading-relaxed">{resolveText(topAction.action)}</p>
+              <div className="flex items-center gap-3 mt-2">
+                {topAction.urgency && (
+                  <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${
+                    topAction.urgency === 'immediate' ? 'bg-red-100 text-red-700' :
+                    topAction.urgency === 'this_week' ? 'bg-amber-100 text-amber-700' :
+                    'bg-blue-100 text-blue-700'
+                  }`}>
+                    {topAction.urgency.replace('_', ' ')}
+                  </span>
+                )}
+                {topAction.owner && (
+                  <span className="text-[11px] text-neutral-500">{topAction.owner}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      <div className="flex items-center justify-center gap-4 pt-2">
+        <button
+          onClick={onShowFullAnalysis}
+          className="flex items-center gap-2 text-[13px] font-medium text-neutral-500 hover:text-neutral-900 transition-colors group"
+        >
+          <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+          See full analysis ({hypotheses?.length || 0} findings, {nbas?.length || 0} actions)
+        </button>
+      </div>
+    </motion.div>
+  )
+}
+
 const AGENT_NAMES = {
   data_quality: 'Data Quality',
   enrollment_funnel: 'Enrollment Funnel',
@@ -52,15 +156,23 @@ export function InvestigationTheater() {
   const resolveText = useResolveText()
   const [loading, setLoading] = useState(true)
   const [showTrace, setShowTrace] = useState(false)
-  const [revealStep, setRevealStep] = useState(0)
-  const [revealing, setRevealing] = useState(false)
-  const [timelineCollapsed, setTimelineCollapsed] = useState(false)
+  const [timelineCollapsed, setTimelineCollapsed] = useState(true)
   const [phase, setPhase] = useState(() => investigation?.site ? 'overview' : 'analyzing')
-  const sectionRefs = useRef([])
+  const [displayMode, setDisplayMode] = useState('brief')
   const wsRef = useRef(null)
 
   const handleLaunchAnalysis = () => {
     setPhase('analyzing')
+  }
+  
+  const handleShowFullAnalysis = () => {
+    setDisplayMode('full')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+  
+  const handleBackToSummary = () => {
+    setDisplayMode('brief')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   useEffect(() => {
@@ -127,62 +239,7 @@ export function InvestigationTheater() {
   const integrityAssessment = synthesis.integrity_assessment || null
   const hasVerdict = !!(siteDecision?.verdict || integrityAssessment?.verdict)
 
-  const steps = useMemo(() => {
-    if (!isComplete) return []
-    const s = []
-    if (synthesis.signal_detection) s.push({ id: 'signal', label: 'What We Found' })
-    if (hasVerdict) s.push({ id: 'verdict', label: siteDecision ? 'The Verdict' : 'Integrity Assessment' })
-    if (singleDomainFindings.length > 0) s.push({ id: 'correlated', label: 'What the Data Shows' })
-    if (hypotheses.length > 0) s.push({ id: 'hypotheses', label: 'Why This Is Happening' })
-    if (nbas.length > 0) s.push({ id: 'actions', label: 'What To Do Next' })
-    if (synthesis.executive_summary) s.push({ id: 'summary', label: 'The Bottom Line' })
-    return s
-  }, [isComplete, synthesis.signal_detection, synthesis.executive_summary, singleDomainFindings.length, hypotheses.length, nbas.length, hasVerdict])
-
-  // Auto-reveal first step on completion
-  useEffect(() => {
-    if (isComplete && revealStep === 0 && steps.length > 0) {
-      const timer = setTimeout(() => {
-        setRevealStep(1)
-        setTimelineCollapsed(true)
-      }, 600)
-      return () => clearTimeout(timer)
-    }
-  }, [isComplete, steps.length])
-
   if (!investigation) return null
-
-  const STEP_PROCESSING_MESSAGES = {
-    signal: 'Identifying key findings...',
-    verdict: 'Formulating verdict...',
-    correlated: 'Reviewing supporting data...',
-    hypotheses: 'Building root cause analysis...',
-    actions: 'Preparing recommendations...',
-    summary: 'Writing the bottom line...',
-  }
-
-  function handleContinue() {
-    if (revealing) return
-    const next = revealStep + 1
-    const nextStep = steps[revealStep]
-    const delay = nextStep?.id === 'summary' ? 2500 : nextStep?.id === 'hypotheses' ? 3000 : 2000
-    setRevealing(true)
-    setTimeout(() => {
-      setRevealStep(next)
-      setRevealing(false)
-      setTimeout(() => {
-        sectionRefs.current[next - 1]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 100)
-    }, delay)
-  }
-
-  function stepVisible(stepId) {
-    const idx = steps.findIndex(s => s.id === stepId)
-    return idx >= 0 && revealStep > idx
-  }
-
-  const allRevealed = revealStep >= steps.length
-  const nextStepLabel = !allRevealed && steps[revealStep] ? steps[revealStep].label : null
 
   return (
     <motion.div
@@ -281,7 +338,7 @@ export function InvestigationTheater() {
         ) : (
           <div>
             <AgentTimeline phases={investigationPhases} loading={loading} />
-            {isComplete && revealStep > 0 && (
+            {isComplete && (
               <button
                 onClick={() => setTimelineCollapsed(true)}
                 className="text-[12px] text-neutral-500 hover:text-neutral-900 transition-colors mt-3"
@@ -292,181 +349,162 @@ export function InvestigationTheater() {
           </div>
         )}
 
-        {/* Progressive Reveal Sections */}
-        <AnimatePresence>
-          {/* 1. What We Found */}
-          {stepVisible('signal') && (
+        {/* Executive Brief Mode - Clean consumable summary */}
+        {isComplete && displayMode === 'brief' && (
+          <div className="mt-10">
+            <ExecutiveBrief
+              synthesis={synthesis}
+              hypotheses={[...hypotheses].sort((a, b) => (b.confidence || 0) - (a.confidence || 0))}
+              nbas={nbas}
+              onShowFullAnalysis={handleShowFullAnalysis}
+              resolveText={resolveText}
+            />
+          </div>
+        )}
+
+        {/* Full Analysis Mode - All sections visible */}
+        <AnimatePresence mode="wait">
+          {displayMode === 'full' && (
             <motion.div
-              ref={el => sectionRefs.current[steps.findIndex(s => s.id === 'signal')] = el}
-              initial={{ opacity: 0, y: 12 }}
+              key="full-analysis"
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="mt-10"
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
             >
-              <div className="bg-neutral-50 rounded-2xl p-6 relative overflow-hidden">
-                <div className="flex items-center gap-2.5 mb-4">
-                  <Search className="w-4 h-4 text-neutral-400" />
-                  <h3 className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">What We Found</h3>
-                </div>
-                <p className="text-[15px] text-neutral-900 leading-relaxed">{resolveText(synthesis.signal_detection)}</p>
-              </div>
-            </motion.div>
-          )}
-
-          {/* 1b. Verdict (site_decision or integrity_assessment) */}
-          {stepVisible('verdict') && hasVerdict && (
-            <motion.div
-              ref={el => sectionRefs.current[steps.findIndex(s => s.id === 'verdict')] = el}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="mt-8"
-            >
-              {siteDecision?.verdict && <SiteDecisionCard decision={siteDecision} />}
-              {integrityAssessment?.verdict && <IntegrityAssessmentCard assessment={integrityAssessment} />}
-            </motion.div>
-          )}
-
-          {/* 2. What the Data Shows */}
-          {stepVisible('correlated') && (
-            <motion.div
-              ref={el => sectionRefs.current[steps.findIndex(s => s.id === 'correlated')] = el}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="mt-10"
-            >
-              <div className="flex items-center gap-2.5 mb-5">
-                <BarChart3 className="w-4 h-4 text-neutral-400" />
-                <h3 className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">What the Data Shows</h3>
-              </div>
-              <div className="space-y-3">
-                {singleDomainFindings.map((f, i) => (
-                  <FindingCard key={i} finding={f} agentOutput={agentOutputs[f.agent]} resolveText={resolveText} />
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {/* 3. Why This Is Happening */}
-          {stepVisible('hypotheses') && (
-            <motion.div
-              ref={el => sectionRefs.current[steps.findIndex(s => s.id === 'hypotheses')] = el}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="mt-10"
-            >
-              <div className="flex items-center gap-2.5 mb-5">
-                <Lightbulb className="w-4 h-4 text-neutral-400" />
-                <h3 className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Why This Is Happening</h3>
-              </div>
-              <div className="space-y-3">
-                {[...hypotheses]
-                  .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-                  .map((h, i) => (
-                    <HypothesisCard key={i} hypothesis={h} rank={i + 1} />
-                  ))}
-              </div>
-            </motion.div>
-          )}
-
-          {/* 4. What To Do Next */}
-          {stepVisible('actions') && (
-            <motion.div
-              ref={el => sectionRefs.current[steps.findIndex(s => s.id === 'actions')] = el}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="mt-10"
-            >
-              <NBAPanel actions={nbas} />
-            </motion.div>
-          )}
-
-          {/* 5. The Bottom Line */}
-          {stepVisible('summary') && (
-            <motion.div
-              ref={el => sectionRefs.current[steps.findIndex(s => s.id === 'summary')] = el}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="mt-10"
-            >
-              <div className="bg-neutral-900 text-white rounded-2xl p-6 relative overflow-hidden">
-                <div className="flex items-center gap-2.5 mb-4">
-                  <FileText className="w-4 h-4 text-neutral-400" />
-                  <h3 className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">The Bottom Line</h3>
-                </div>
-                <p className="text-[15px] text-white/90 leading-relaxed">{resolveText(synthesis.executive_summary)}</p>
-              </div>
-
-              <button
-                onClick={() => setShowTrace(!showTrace)}
-                className="flex items-center gap-2 mt-6 text-[12px] text-neutral-500 hover:text-neutral-900 transition-colors"
-              >
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showTrace ? 'rotate-180' : ''}`} />
-                {showTrace ? 'Hide detailed reasoning' : 'View detailed reasoning'}
-              </button>
-
-              <AnimatePresence>
-                {showTrace && <ReasoningTrace agentOutputs={agentOutputs} />}
-              </AnimatePresence>
-
-              <div className="flex items-center gap-4 mt-6 pt-4 border-t border-neutral-100">
-                <span className="text-[12px] text-neutral-500">
-                  {synthesis.confidence_assessment || `${Object.keys(agentOutputs).length} agents analyzed`} · Live data
+              {/* Mode Toggle */}
+              <div className="mt-8 flex items-center justify-between">
+                <button
+                  onClick={handleBackToSummary}
+                  className="flex items-center gap-2 text-[13px] font-medium text-neutral-500 hover:text-neutral-900 transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Back to summary
+                </button>
+                <span className="text-[12px] text-neutral-400">
+                  {hypotheses.length} findings · {nbas.length} actions
                 </span>
               </div>
 
-              <ActionButtons synthesis={synthesis} />
+              {/* 1. What We Found */}
+              {synthesis.signal_detection && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+                  className="mt-8"
+                >
+                  <div className="bg-neutral-50 rounded-2xl p-6 relative overflow-hidden">
+                    <div className="flex items-center gap-2.5 mb-4">
+                      <Search className="w-4 h-4 text-neutral-400" />
+                      <h3 className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">What We Found</h3>
+                    </div>
+                    <p className="text-[15px] text-neutral-900 leading-relaxed">{resolveText(synthesis.signal_detection)}</p>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* 1b. Verdict (site_decision or integrity_assessment) */}
+              {hasVerdict && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
+                  className="mt-8"
+                >
+                  {siteDecision?.verdict && <SiteDecisionCard decision={siteDecision} />}
+                  {integrityAssessment?.verdict && <IntegrityAssessmentCard assessment={integrityAssessment} />}
+                </motion.div>
+              )}
+
+              {/* 2. What the Data Shows */}
+              {singleDomainFindings.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+                  className="mt-10"
+                >
+                  <div className="flex items-center gap-2.5 mb-5">
+                    <BarChart3 className="w-4 h-4 text-neutral-400" />
+                    <h3 className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">What the Data Shows</h3>
+                  </div>
+                  <div className="space-y-3">
+                    {singleDomainFindings.map((f, i) => (
+                      <FindingCard key={`finding-${i}`} finding={f} agentOutput={agentOutputs[f.agent]} resolveText={resolveText} />
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* 3. Why This Is Happening */}
+              {hypotheses.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+                  className="mt-10"
+                >
+                  <div className="flex items-center gap-2.5 mb-5">
+                    <Lightbulb className="w-4 h-4 text-neutral-400" />
+                    <h3 className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Why This Is Happening</h3>
+                  </div>
+                  <div className="space-y-3">
+                    {[...hypotheses]
+                      .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+                      .map((h, i) => (
+                        <HypothesisCard key={`hyp-${i}`} hypothesis={h} rank={i + 1} />
+                      ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* 4. What To Do Next */}
+              {nbas.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+                  className="mt-10"
+                >
+                  <NBAPanel actions={nbas} />
+                </motion.div>
+              )}
+
+              {/* 5. Agent Reasoning Trace */}
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+                className="mt-10"
+              >
+                <button
+                  onClick={() => setShowTrace(!showTrace)}
+                  className="flex items-center gap-2 text-[12px] text-neutral-500 hover:text-neutral-900 transition-colors"
+                >
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showTrace ? 'rotate-180' : ''}`} />
+                  {showTrace ? 'Hide agent reasoning' : 'View agent reasoning'}
+                </button>
+
+                <AnimatePresence>
+                  {showTrace && <ReasoningTrace agentOutputs={agentOutputs} />}
+                </AnimatePresence>
+
+                <div className="flex items-center gap-4 mt-6 pt-4 border-t border-neutral-100">
+                  <span className="text-[12px] text-neutral-500">
+                    {synthesis.confidence_assessment || `${Object.keys(agentOutputs).length} agents analyzed`} · Live data
+                  </span>
+                </div>
+
+                <ActionButtons synthesis={synthesis} />
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Step Indicator + Continue Button */}
-        {isComplete && steps.length > 0 && revealStep > 0 && !allRevealed && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="mt-8 flex flex-col items-center gap-4"
-          >
-            {/* Progress dots */}
-            <div className="flex items-center gap-2">
-              {steps.map((_, i) => (
-                <div
-                  key={i}
-                  className={`transition-all duration-300 rounded-full ${
-                    i < revealStep
-                      ? 'w-2 h-2 bg-apple-text'
-                      : i === revealStep
-                        ? 'w-2 h-2 bg-apple-accent'
-                        : 'w-1.5 h-1.5 bg-apple-border'
-                  }`}
-                />
-              ))}
-            </div>
-            {revealing ? (
-              <div className="flex items-center gap-2.5 py-2.5 px-5">
-                <Loader2 className="w-4 h-4 text-apple-accent animate-spin" />
-                <span className="text-sm text-apple-secondary">
-                  {STEP_PROCESSING_MESSAGES[steps[revealStep]?.id] || 'Processing...'}
-                </span>
-              </div>
-            ) : (
-              <button
-                onClick={handleContinue}
-                className="button-primary flex items-center gap-2 text-sm px-5 py-2.5 rounded-xl"
-              >
-                {nextStepLabel}
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            )}
-          </motion.div>
-        )}
-
+        {/* Loading state when waiting for results */}
         {loading && !investigationError && investigationPhases.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-64">
+          <div className="flex flex-col items-center justify-center h-64 mt-10">
             <Loader2 className="w-8 h-8 text-apple-secondary animate-spin mb-4" />
             <p className="text-body text-apple-secondary">Launching investigation...</p>
           </div>
