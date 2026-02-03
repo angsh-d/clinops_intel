@@ -230,11 +230,12 @@ function DimensionRow({ dimension, data, isExpanded, onToggle }) {
 }
 
 function SiteJourneyMap({ visits, craAssignments }) {
-  const allEvents = useMemo(() => {
-    const events = []
-    
-    // Add CRA assignment events
-    (craAssignments || []).forEach(cra => {
+  // Build events list
+  const events = []
+  
+  // Add CRA assignment events
+  if (craAssignments && Array.isArray(craAssignments)) {
+    craAssignments.forEach(cra => {
       if (cra.start_date) {
         events.push({
           type: 'cra_start',
@@ -253,9 +254,11 @@ function SiteJourneyMap({ visits, craAssignments }) {
         })
       }
     })
-    
-    // Add monitoring visit events
-    (visits || []).forEach(visit => {
+  }
+  
+  // Add monitoring visit events
+  if (visits && Array.isArray(visits)) {
+    visits.forEach(visit => {
       if (visit.visit_date) {
         events.push({
           type: 'visit',
@@ -267,15 +270,15 @@ function SiteJourneyMap({ visits, craAssignments }) {
         })
       }
     })
-    
-    // Sort by date descending (most recent first)
-    return events.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 8)
-  }, [visits, craAssignments])
+  }
+  
+  // Sort by date descending (most recent first)
+  const allEvents = events.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 8)
 
   if (allEvents.length === 0) return null
 
   return (
-    <div className="col-span-full">
+    <div className="lg:col-span-2">
       <div className="flex items-center gap-2 mb-5">
         <Calendar className="w-4 h-4 text-neutral-400" />
         <h3 className="text-[13px] font-semibold text-neutral-900 uppercase tracking-wide">Site Journey</h3>
