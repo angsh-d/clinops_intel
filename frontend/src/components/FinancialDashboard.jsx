@@ -100,12 +100,12 @@ export function FinancialDashboard() {
                       <span className="text-[11px] font-mono text-apple-text">{formatCurrencyShort(seg.value)}</span>
                       <div
                         className={`w-full rounded-t ${
-                          seg.type === 'increase' ? 'bg-apple-warning/60' :
-                          seg.type === 'decrease' ? 'bg-apple-success/60' :
-                          seg.type === 'actual' ? 'bg-apple-accent/60' :
-                          'bg-apple-text/20'
+                          seg.type === 'increase' ? 'bg-amber-400' :
+                          seg.type === 'decrease' ? 'bg-emerald-500' :
+                          seg.type === 'actual' ? 'bg-blue-500' :
+                          'bg-slate-400'
                         }`}
-                        style={{ height: `${heightPct}%` }}
+                        style={{ height: `${Math.max(heightPct, 5)}%` }}
                       />
                       <span className="text-[10px] text-apple-secondary text-center">{seg.label}</span>
                     </div>
