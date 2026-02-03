@@ -192,8 +192,17 @@ function DimensionRow({ dimension, data, isExpanded, onToggle }) {
             className="overflow-hidden"
           >
             <div className="px-1 pb-4">
+              {/* Formula explanation */}
+              {data.formula && (
+                <div className="bg-neutral-100 rounded-lg p-3 mb-3 font-mono">
+                  <div className="text-[10px] text-neutral-500 uppercase tracking-wide mb-1">Formula</div>
+                  <p className="text-[12px] text-neutral-700">{data.formula}</p>
+                </div>
+              )}
               {data.source && (
-                <p className="text-[11px] text-neutral-500 mb-3 italic">{data.source}</p>
+                <p className="text-[11px] text-neutral-500 mb-3">
+                  <span className="font-medium">Calculation:</span> {data.source}
+                </p>
               )}
               <div className="grid grid-cols-2 gap-2">
                 {data.metrics.map((metric, i) => (
@@ -220,81 +229,147 @@ function DimensionRow({ dimension, data, isExpanded, onToggle }) {
   )
 }
 
-function MonitoringTimeline({ visits }) {
-  if (!visits || visits.length === 0) return null
+function SiteJourneyMap({ visits, craAssignments }) {
+  const allEvents = useMemo(() => {
+    const events = []
+    
+    // Add CRA assignment events
+    (craAssignments || []).forEach(cra => {
+      if (cra.start_date) {
+        events.push({
+          type: 'cra_start',
+          date: cra.start_date,
+          label: cra.cra_id,
+          isCurrent: cra.is_current,
+          details: cra.is_current ? 'Current CRA' : 'Previous CRA'
+        })
+      }
+      if (cra.end_date && !cra.is_current) {
+        events.push({
+          type: 'cra_end',
+          date: cra.end_date,
+          label: cra.cra_id,
+          details: 'CRA transition'
+        })
+      }
+    })
+    
+    // Add monitoring visit events
+    (visits || []).forEach(visit => {
+      if (visit.visit_date) {
+        events.push({
+          type: 'visit',
+          date: visit.visit_date,
+          label: visit.visit_type || 'Visit',
+          visitType: visit.visit_type,
+          findings: visit.findings_count || 0,
+          critical: visit.critical_findings || 0
+        })
+      }
+    })
+    
+    // Sort by date descending (most recent first)
+    return events.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 8)
+  }, [visits, craAssignments])
+
+  if (allEvents.length === 0) return null
 
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-4">
+    <div className="col-span-full">
+      <div className="flex items-center gap-2 mb-5">
         <Calendar className="w-4 h-4 text-neutral-400" />
-        <h3 className="text-[13px] font-semibold text-neutral-900 uppercase tracking-wide">Recent Monitoring</h3>
-      </div>
-      
-      <div className="space-y-2">
-        {visits.slice(0, 3).map((visit, i) => {
-          const hasCritical = visit.critical_findings > 0
-          const hasFindings = visit.findings_count > 0
-          const dotColor = hasCritical ? 'bg-red-500' : hasFindings ? 'bg-amber-500' : 'bg-green-500'
-          
-          return (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.08 }}
-              className="flex items-center gap-3 py-2"
-            >
-              <div className={`w-2 h-2 rounded-full ${dotColor}`} />
-              <div className="flex-1">
-                <span className="text-[13px] text-neutral-900">
-                  {visit.visit_type || 'Monitoring Visit'}
-                </span>
-              </div>
-              <span className="text-[12px] text-neutral-400 tabular-nums">
-                {visit.visit_date || 'Scheduled'}
-              </span>
-            </motion.div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function CRAStatus({ assignments }) {
-  const currentCRA = assignments?.find(a => a.is_current)
-  const pastCount = assignments?.filter(a => !a.is_current).length || 0
-  
-  if (!currentCRA && pastCount === 0) return null
-
-  return (
-    <div>
-      <div className="flex items-center gap-2 mb-4">
-        <UserCheck className="w-4 h-4 text-neutral-400" />
-        <h3 className="text-[13px] font-semibold text-neutral-900 uppercase tracking-wide">CRA Coverage</h3>
-      </div>
-      
-      {currentCRA ? (
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full bg-green-500" />
-          <div className="flex-1">
-            <div className="text-[13px] text-neutral-900">{currentCRA.cra_id}</div>
-            <div className="text-[11px] text-neutral-400">Since {currentCRA.start_date}</div>
+        <h3 className="text-[13px] font-semibold text-neutral-900 uppercase tracking-wide">Site Journey</h3>
+        <div className="flex items-center gap-4 ml-auto">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-blue-500" />
+            <span className="text-[10px] text-neutral-400">CRA</span>
           </div>
-          <CheckCircle2 className="w-4 h-4 text-green-500" />
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-2 rounded-sm bg-neutral-800" />
+            <span className="text-[10px] text-neutral-400">On-Site</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-2 rounded-sm bg-neutral-300" />
+            <span className="text-[10px] text-neutral-400">Remote</span>
+          </div>
         </div>
-      ) : (
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full bg-amber-500" />
-          <span className="text-[13px] text-neutral-900">No active CRA assigned</span>
-        </div>
-      )}
+      </div>
       
-      {pastCount > 0 && (
-        <div className="text-[11px] text-neutral-400 mt-2">
-          {pastCount} previous assignment{pastCount !== 1 ? 's' : ''}
+      <div className="relative">
+        {/* Timeline line */}
+        <div className="absolute left-[7px] top-3 bottom-3 w-px bg-neutral-200" />
+        
+        <div className="space-y-0">
+          {allEvents.map((event, i) => {
+            const isCRA = event.type === 'cra_start' || event.type === 'cra_end'
+            const isOnSite = event.visitType?.toLowerCase().includes('on-site') || event.visitType?.toLowerCase().includes('onsite')
+            const hasCritical = event.critical > 0
+            const hasFindings = event.findings > 0
+            
+            return (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.05 }}
+                className="flex items-start gap-4 py-2 relative"
+              >
+                {/* Timeline marker */}
+                <div className="relative z-10 flex-shrink-0">
+                  {isCRA ? (
+                    <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
+                      event.type === 'cra_start' && event.isCurrent 
+                        ? 'bg-blue-500' 
+                        : event.type === 'cra_start' 
+                          ? 'bg-blue-300' 
+                          : 'bg-blue-200'
+                    }`}>
+                      <UserCheck className="w-2.5 h-2.5 text-white" />
+                    </div>
+                  ) : (
+                    <div className={`w-4 h-4 rounded flex items-center justify-center ${
+                      isOnSite ? 'bg-neutral-800' : 'bg-neutral-300'
+                    }`}>
+                      {hasCritical && <div className="w-1.5 h-1.5 rounded-full bg-red-500" />}
+                      {!hasCritical && hasFindings && <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
+                      {!hasCritical && !hasFindings && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[13px] font-medium ${isCRA ? 'text-blue-700' : 'text-neutral-900'}`}>
+                      {event.label}
+                    </span>
+                    {isCRA && event.type === 'cra_start' && event.isCurrent && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase tracking-wide">Active</span>
+                    )}
+                    {isCRA && event.type === 'cra_end' && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 uppercase tracking-wide">Transition</span>
+                    )}
+                    {!isCRA && hasCritical && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-100 text-red-700">{event.critical} critical</span>
+                    )}
+                    {!isCRA && !hasCritical && hasFindings && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{event.findings} findings</span>
+                    )}
+                  </div>
+                  {event.details && (
+                    <p className="text-[11px] text-neutral-400 mt-0.5">{event.details}</p>
+                  )}
+                </div>
+                
+                {/* Date */}
+                <span className="text-[11px] text-neutral-400 tabular-nums flex-shrink-0">
+                  {event.date}
+                </span>
+              </motion.div>
+            )
+          })}
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -440,17 +515,20 @@ export function Site360Panel({ siteId, siteName, question, onLaunchAnalysis }) {
     return {
       enrollment: {
         score: enrollmentPct,
-        source: 'Enrollment percentage from randomization data',
+        formula: 'Score = Randomized ÷ Target × 100',
+        source: `${siteData.randomized || 0} patients randomized of ${siteData.target_enrollment || 0} target`,
         metrics: siteData.enrollment_metrics
       },
       dataQuality: {
         score: dqScore,
-        source: 'Data quality score from eCRF metrics',
+        formula: 'Score from eCRF data quality metrics',
+        source: `Open queries: ${openQueries}, Query rate: ${queryRate.toFixed(1)} per subject`,
         metrics: siteData.data_quality_metrics
       },
       monitoring: {
         score: monitoringScore,
-        source: `Based on critical findings (${recentCritical}) and overdue days (${visits[0]?.days_overdue || 0})`,
+        formula: 'Score = 100 − (Critical findings × 20) − (Overdue days × 2)',
+        source: `100 − (${recentCritical} × 20) − (${visits[0]?.days_overdue || 0} × 2) = ${monitoringScore}`,
         metrics: [
           { label: 'Recent Visits', value: `${visits.length}`, note: 'Last 90 days' },
           { label: 'Critical Findings', value: `${visits.reduce((a, v) => a + (v.critical_findings || 0), 0)}` },
@@ -460,7 +538,8 @@ export function Site360Panel({ siteId, siteName, question, onLaunchAnalysis }) {
       },
       integrity: {
         score: integrityScore,
-        source: `Query rate of ${queryRate.toFixed(1)} per subject → ${integrityScore >= 80 ? 'Low' : integrityScore >= 60 ? 'Medium' : 'High'} risk`,
+        formula: 'Query rate > 5 → 50 (High risk) | > 3 → 70 (Medium) | ≤ 3 → 90 (Low)',
+        source: `Query rate ${queryRate.toFixed(1)} per subject → Score ${integrityScore}`,
         metrics: [
           { label: 'Query Rate', value: queryRate.toFixed(1), note: 'per subject' },
           { label: 'Risk Level', value: integrityScore >= 80 ? 'Low' : integrityScore >= 60 ? 'Medium' : 'High' }
@@ -468,10 +547,15 @@ export function Site360Panel({ siteId, siteName, question, onLaunchAnalysis }) {
       },
       operations: {
         score: operationsScore,
-        source: hasActiveCRA ? `Active CRA with ${Math.max(0, craChanges - 1)} transition${craChanges - 1 !== 1 ? 's' : ''}` : 'No active CRA assigned',
+        formula: hasActiveCRA 
+          ? 'Score = 100 − (CRA transitions × 10), min 60' 
+          : 'No active CRA = 40',
+        source: hasActiveCRA 
+          ? `100 − (${Math.max(0, craChanges - 1)} × 10) = ${operationsScore}` 
+          : 'No active CRA assigned',
         metrics: [
           { label: 'Active CRA', value: hasActiveCRA ? 'Yes' : 'No' },
-          { label: 'CRA Changes', value: `${Math.max(0, craChanges - 1)}`, note: 'Since activation' }
+          { label: 'CRA Transitions', value: `${Math.max(0, craChanges - 1)}`, note: 'Since site activation' }
         ]
       }
     }
@@ -565,15 +649,17 @@ export function Site360Panel({ siteId, siteName, question, onLaunchAnalysis }) {
           </motion.div>
         </div>
 
-        {/* Secondary Grid */}
+        {/* Site Journey Timeline */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
           className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12 pt-8 border-t border-neutral-100"
         >
-          <MonitoringTimeline visits={metadata?.monitoring_visits} />
-          <CRAStatus assignments={metadata?.cra_assignments} />
+          <SiteJourneyMap 
+            visits={metadata?.monitoring_visits} 
+            craAssignments={metadata?.cra_assignments} 
+          />
           <AlertsList alerts={siteData?.alerts} />
         </motion.div>
 
