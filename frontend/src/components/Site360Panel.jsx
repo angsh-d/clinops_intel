@@ -277,7 +277,14 @@ function SiteJourneyMap({ visits, craAssignments }) {
   }
   
   // Sort by date ascending (oldest first for left-to-right timeline)
-  const allEvents = events.sort((a, b) => new Date(a.date) - new Date(b.date)).slice(-6)
+  // But ensure missed visits are always shown (they're critical to understanding monitoring issues)
+  const sortedEvents = events.sort((a, b) => new Date(a.date) - new Date(b.date))
+  const missedEvents = sortedEvents.filter(e => e.type === 'missed_visit')
+  const otherEvents = sortedEvents.filter(e => e.type !== 'missed_visit')
+  // Take most recent non-missed events, leaving room for missed ones
+  const recentOthers = otherEvents.slice(-(6 - missedEvents.length))
+  // Combine and re-sort chronologically
+  const allEvents = [...missedEvents, ...recentOthers].sort((a, b) => new Date(a.date) - new Date(b.date))
 
   if (allEvents.length === 0) return null
 
