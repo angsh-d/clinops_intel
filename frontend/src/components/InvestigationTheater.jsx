@@ -21,6 +21,8 @@ const AGENT_NAMES = {
   clinical_trials_gov: 'Competitive Intelligence',
   phantom_compliance: 'Data Integrity',
   site_rescue: 'Site Decision',
+  vendor_performance: 'Vendor Performance',
+  financial_intelligence: 'Financial Intelligence',
   conductor: 'Orchestrator',
 }
 
@@ -306,25 +308,7 @@ export function InvestigationTheater() {
               </div>
               <div className="space-y-2.5">
                 {singleDomainFindings.map((f, i) => (
-                  <div key={i} className="card p-4 hover:shadow-sm transition-shadow">
-                    <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                      <span className="text-[10px] font-semibold tracking-wider text-apple-accent/80 uppercase">
-                        {AGENT_NAMES[f.agent] || f.agent}
-                      </span>
-                      {f.site_ids?.length > 0 && (
-                        <>
-                          <span className="w-0.5 h-0.5 rounded-full bg-apple-secondary/40" />
-                          <span className="text-xs text-apple-secondary">
-                            {f.site_ids.map(id => resolveText(id)).join(', ')}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                    <p className="text-body text-apple-text leading-relaxed">{resolveText(f.finding)}</p>
-                    {f.recommendation && (
-                      <p className="text-caption text-apple-secondary mt-1.5 italic">{resolveText(f.recommendation)}</p>
-                    )}
-                  </div>
+                  <FindingCard key={i} finding={f} agentOutput={agentOutputs[f.agent]} resolveText={resolveText} />
                 ))}
               </div>
             </motion.div>
@@ -466,26 +450,388 @@ export function InvestigationTheater() {
 }
 
 
-function AgentTimeline({ phases, loading }) {
-  // Group phases by agent
-  const agentPhases = {}
-  for (const p of phases) {
-    const agent = p.agent_id || 'conductor'
-    if (!agentPhases[agent]) agentPhases[agent] = []
-    agentPhases[agent].push(p)
+/** Confidence badge for inline hypothesis display. */
+function ConfidenceBadge({ value }) {
+  const pct = Math.round((value || 0) * 100)
+  const cls = pct >= 80
+    ? 'bg-green-50 text-green-700 border-green-200'
+    : pct >= 60
+      ? 'bg-amber-50 text-amber-700 border-amber-200'
+      : 'bg-red-50 text-red-700 border-red-200'
+  return (
+    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${cls}`}>
+      {pct}%
+    </span>
+  )
+}
+
+/** Single-domain finding card with collapsible provenance from agent output. */
+function FindingCard({ finding, agentOutput, resolveText }) {
+  const [showEvidence, setShowEvidence] = useState(false)
+
+  // Extract provenance: the agent's raw findings + reasoning trace action results
+  // Filter to only show findings relevant to the sites in this finding card
+  const allAgentFindings = agentOutput?.findings || []
+  const targetSiteIds = new Set(finding.site_ids || [])
+  const agentFindings = targetSiteIds.size > 0
+    ? allAgentFindings.filter(af => {
+        const afSite = af.site_id || ''
+        // Include if finding matches a target site, or has no site (study-level finding)
+        return targetSiteIds.has(afSite) || !afSite
+      })
+    : allAgentFindings
+
+  const trace = agentOutput?.reasoning_trace || []
+  const actionResults = trace
+    .filter(t => t.phase === 'act' || t.phase === 'act_done')
+    .flatMap(t => t.results || t.data?.action_results || [])
+    .filter(r => r.tool_name && r.success)
+
+  const hasEvidence = agentFindings.length > 0 || actionResults.length > 0
+
+  return (
+    <div className="card p-4 hover:shadow-sm transition-shadow">
+      <div className="flex items-center gap-2 flex-wrap mb-1.5">
+        <span className="text-[10px] font-semibold tracking-wider text-apple-accent/80 uppercase">
+          {AGENT_NAMES[finding.agent] || finding.agent}
+        </span>
+        {finding.site_ids?.length > 0 && (
+          <>
+            <span className="w-0.5 h-0.5 rounded-full bg-apple-secondary/40" />
+            <span className="text-xs text-apple-secondary">
+              {finding.site_ids.map(id => resolveText(id)).join(', ')}
+            </span>
+          </>
+        )}
+      </div>
+      <p className="text-body text-apple-text leading-relaxed">{resolveText(finding.finding)}</p>
+      {finding.recommendation && (
+        <p className="text-caption text-apple-secondary mt-1.5 italic">{resolveText(finding.recommendation)}</p>
+      )}
+
+      {/* Provenance toggle */}
+      {hasEvidence && (
+        <>
+          <button
+            onClick={() => setShowEvidence(v => !v)}
+            className="mt-2.5 flex items-center gap-1.5 text-[11px] font-medium text-apple-accent hover:text-apple-accent/80 transition-colors"
+          >
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showEvidence ? 'rotate-180' : ''}`} />
+            <span>Supporting evidence ({agentFindings.length} findings, {actionResults.length} queries)</span>
+          </button>
+
+          <AnimatePresence>
+            {showEvidence && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-2.5 space-y-2">
+                  {/* Agent findings with data points */}
+                  {agentFindings.map((af, j) => {
+                    const afFinding = af.finding || af.summary || af.text
+                    if (!afFinding) return null
+                    return (
+                      <div key={j} className="pl-3 border-l-2 border-apple-accent/30">
+                        {af.site_id && (
+                          <span className="text-[10px] font-medium text-apple-accent">{resolveText(af.site_id)}</span>
+                        )}
+                        <p className="text-xs text-apple-text leading-relaxed">{resolveText(afFinding)}</p>
+                        {af.root_cause && (
+                          <p className="text-[11px] text-apple-secondary mt-0.5">
+                            <span className="font-medium">Root cause:</span> {resolveText(af.root_cause)}
+                          </p>
+                        )}
+                        {af.causal_chain && (
+                          <CausalChainFlow chain={af.causal_chain} />
+                        )}
+                        {af.evidence_quality && (
+                          <span className={`inline-block mt-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+                            af.evidence_quality === 'strong' ? 'bg-green-50 text-green-600 border-green-200' :
+                            af.evidence_quality === 'moderate' ? 'bg-amber-50 text-amber-600 border-amber-200' :
+                            'bg-gray-50 text-gray-500 border-gray-200'
+                          }`}>
+                            {af.evidence_quality} evidence
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+
+                  {/* SQL queries executed */}
+                  {actionResults.length > 0 && (
+                    <div className="pt-2 border-t border-apple-border/40">
+                      <p className="text-[10px] font-semibold text-apple-secondary uppercase tracking-wider mb-1.5">Data sources queried</p>
+                      <div className="space-y-1">
+                        {actionResults.map((r, k) => (
+                          <div key={k} className="flex items-center gap-2 text-xs">
+                            <span className="text-green-500">&#10003;</span>
+                            <span className="font-medium text-apple-text">{r.tool_name?.replace(/_/g, ' ')}</span>
+                            {r.row_count > 0 && (
+                              <span className="text-apple-secondary">&mdash; {r.row_count} rows</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </>
+      )}
+    </div>
+  )
+}
+
+
+/** Expandable reasoning detail for a single iteration of one agent. */
+function ReasoningDetail({ phases }) {
+  const resolveText = useResolveText()
+  const reasonDone = phases.find(p => p.phase === 'reason_done')
+  const planDone = phases.find(p => p.phase === 'plan_done')
+  const actDone = phases.find(p => p.phase === 'act_done')
+  const reflectDone = phases.find(p => p.phase === 'reflect_done')
+
+  const hypotheses = reasonDone?.data?.hypotheses || []
+  const planSteps = planDone?.data?.plan_steps || []
+  const actionResults = actDone?.data?.action_results || []
+  const reflection = reflectDone?.data
+
+  if (hypotheses.length === 0 && planSteps.length === 0 && actionResults.length === 0 && !reflection) {
+    return null
   }
+
+  return (
+    <motion.div
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="overflow-hidden"
+    >
+      <div className="mt-2.5 space-y-2.5">
+        {/* Hypotheses */}
+        {hypotheses.length > 0 && (
+          <div className="pl-3 border-l-2 border-purple-200">
+            <p className="text-[11px] font-semibold text-purple-600 uppercase tracking-wider mb-1.5">
+              Hypotheses ({hypotheses.length})
+            </p>
+            <div className="space-y-1.5">
+              {hypotheses.map((h, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <span className="text-[10px] font-bold text-purple-500 mt-0.5 shrink-0">{h.id}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-xs text-apple-text leading-snug">{resolveText(h.description)}</p>
+                      <ConfidenceBadge value={h.confidence} />
+                    </div>
+                    {h.causal_chain && <CausalChainFlow chain={h.causal_chain} />}
+                    {h.site_ids?.length > 0 && (
+                      <p className="text-[10px] text-apple-secondary mt-0.5">
+                        Sites: {h.site_ids.map(id => resolveText(id)).join(', ')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Plan */}
+        {planSteps.length > 0 && (
+          <div className="pl-3 border-l-2 border-blue-200">
+            <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wider mb-1.5">
+              Plan
+            </p>
+            <div className="space-y-1">
+              {planSteps.map((s, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs">
+                  <span className="text-[10px] font-mono text-blue-500 mt-0.5 shrink-0">{i + 1}.</span>
+                  <span className="text-apple-text">
+                    <span className="font-medium">{s.tool_name}</span>
+                    {s.purpose && <span className="text-apple-secondary"> — {s.purpose}</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Action results */}
+        {actionResults.length > 0 && (
+          <div className="pl-3 border-l-2 border-green-200">
+            <p className="text-[11px] font-semibold text-green-600 uppercase tracking-wider mb-1.5">
+              Investigation
+            </p>
+            <div className="space-y-1">
+              {actionResults.map((r, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className={r.success ? 'text-green-500' : 'text-red-400'}>
+                    {r.success ? '✓' : '✗'}
+                  </span>
+                  <span className="font-medium text-apple-text">{r.tool_name}</span>
+                  {r.row_count > 0 && (
+                    <span className="text-apple-secondary">— {r.row_count} rows</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Reflection */}
+        {reflection && (
+          <div className={`pl-3 border-l-2 ${reflection.goal_satisfied ? 'border-green-400' : 'border-amber-300'}`}>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-medium ${reflection.goal_satisfied ? 'text-green-600' : 'text-amber-600'}`}>
+                {reflection.goal_satisfied ? '✓ Goal satisfied' : '✗ Not satisfied'}
+              </span>
+              {reflection.findings_count > 0 && (
+                <span className="text-[10px] text-apple-secondary">— {reflection.findings_count} findings</span>
+              )}
+            </div>
+            {!reflection.goal_satisfied && reflection.iteration_focus && (
+              <p className="text-[11px] text-apple-secondary mt-0.5">
+                Next focus: {reflection.iteration_focus}
+              </p>
+            )}
+            {!reflection.goal_satisfied && reflection.remaining_gaps?.length > 0 && (
+              <p className="text-[11px] text-apple-secondary mt-0.5">
+                Gaps: {reflection.remaining_gaps.join(', ')}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  )
+}
+
+
+function AgentTimeline({ phases, loading }) {
+  const [expandedIterations, setExpandedIterations] = useState({})
 
   const prpaOrder = ['perceive', 'reason', 'plan', 'act', 'reflect']
   const prpaLabels = { perceive: 'Gather', reason: 'Analyze', plan: 'Plan', act: 'Investigate', reflect: 'Evaluate' }
+  // _done phases are detail payloads, not display phases
+  const donePhases = new Set(['perceive_done', 'reason_done', 'plan_done', 'act_done', 'reflect_done'])
+
+  // Group phases by agent
+  const agentPhases = useMemo(() => {
+    const grouped = {}
+    for (const p of phases) {
+      const agent = p.agent_id || 'conductor'
+      if (!grouped[agent]) grouped[agent] = []
+      grouped[agent].push(p)
+    }
+    return grouped
+  }, [phases])
+
+  // Build iteration structure per PRPA agent
+  const agentIterations = useMemo(() => {
+    const result = {}
+    for (const [agent, agentPhs] of Object.entries(agentPhases)) {
+      const isPRPA = agentPhs.some(p => prpaOrder.includes(p.phase))
+      if (!isPRPA) continue
+      const iterations = {}
+      for (const p of agentPhs) {
+        const iter = p.data?.iteration || 1
+        if (!iterations[iter]) iterations[iter] = []
+        iterations[iter].push(p)
+      }
+      const iterKeys = Object.keys(iterations).map(Number).sort((a, b) => a - b)
+      result[agent] = { iterations, iterKeys }
+    }
+    return result
+  }, [phases])
+
+  // Auto-expand: seed explicit state for latest iterations with reasoning data.
+  // useEffect avoids setState-during-render.
+  useEffect(() => {
+    const updates = {}
+    for (const [agent, { iterations, iterKeys }] of Object.entries(agentIterations)) {
+      const maxIter = iterKeys[iterKeys.length - 1]
+      if (maxIter === undefined) continue
+      const key = `${agent}-${maxIter}`
+      const iterPhases = iterations[maxIter]
+      const hasReasoning = iterPhases.some(p => donePhases.has(p.phase))
+      if (hasReasoning) {
+        updates[key] = true
+      }
+    }
+    if (Object.keys(updates).length > 0) {
+      setExpandedIterations(prev => {
+        // Only seed keys that don't already have an explicit value
+        const merged = { ...prev }
+        let changed = false
+        for (const [k, v] of Object.entries(updates)) {
+          if (merged[k] === undefined) {
+            merged[k] = v
+            changed = true
+          }
+        }
+        return changed ? merged : prev
+      })
+    }
+  }, [agentIterations])
 
   if (phases.length === 0 && !loading) return null
+
+  function toggleIteration(agent, iteration) {
+    const key = `${agent}-${iteration}`
+    setExpandedIterations(prev => {
+      const current = prev[key] !== undefined ? prev[key] : true // match auto-expand default
+      return { ...prev, [key]: !current }
+    })
+  }
 
   return (
     <div className="space-y-2.5">
       {Object.entries(agentPhases).map(([agent, agentPhs]) => {
         const isPRPA = agentPhs.some(p => prpaOrder.includes(p.phase))
-        const latestPhase = agentPhs[agentPhs.length - 1]?.phase
-        const completedPhases = new Set(agentPhs.map(p => p.phase))
+        const latestPhase = agentPhs.filter(p => !donePhases.has(p.phase)).at(-1)?.phase
+
+        if (!isPRPA) {
+          // Conductor / non-PRPA agents — keep simple display
+          return (
+            <motion.div
+              key={agent}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="card p-4"
+            >
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-caption font-medium text-apple-text">
+                  {AGENT_NAMES[agent] || agent}
+                </span>
+                {loading && latestPhase && (
+                  <span className="flex items-center gap-1.5 text-xs text-apple-accent">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    {PHASE_LABELS[latestPhase] || latestPhase}
+                  </span>
+                )}
+              </div>
+              <div className="space-y-1">
+                {agentPhs.filter(p => !donePhases.has(p.phase)).map((p, i) => (
+                  <p key={i} className="text-caption text-apple-secondary">
+                    {PHASE_LABELS[p.phase] || p.phase}
+                    {p.data?.query && ` — "${p.data.query}"`}
+                    {p.data?.agents && ` — ${p.data.agents.join(', ')}`}
+                  </p>
+                ))}
+              </div>
+            </motion.div>
+          )
+        }
+
+        const { iterations, iterKeys } = agentIterations[agent] || { iterations: {}, iterKeys: [] }
+        const maxIter = iterKeys[iterKeys.length - 1] || 1
 
         return (
           <motion.div
@@ -506,42 +852,71 @@ function AgentTimeline({ phases, loading }) {
               )}
             </div>
 
-            {isPRPA ? (
-              <div className="flex items-center gap-1">
-                {prpaOrder.map((step, i) => {
-                  const done = completedPhases.has(step)
-                  const active = latestPhase === step && loading
-                  return (
-                    <div key={step} className="flex items-center gap-1">
-                      <div
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${
-                          done
-                            ? 'bg-apple-text text-white'
-                            : active
-                              ? 'bg-apple-accent/15 text-apple-accent animate-pulse'
-                              : 'bg-apple-border/40 text-apple-secondary/60'
-                        }`}
-                      >
-                        {prpaLabels[step]}
-                      </div>
-                      {i < prpaOrder.length - 1 && (
-                        <div className={`w-3 h-px ${done ? 'bg-apple-text/40' : 'bg-apple-border'}`} />
-                      )}
+            <div className="space-y-3">
+              {iterKeys.map(iter => {
+                const iterPhases = iterations[iter]
+                const displayPhases = iterPhases.filter(p => !donePhases.has(p.phase))
+                const completedPhases = new Set(displayPhases.map(p => p.phase))
+                const iterLatest = displayPhases.at(-1)?.phase
+                const isLatestIter = iter === maxIter
+                const iterHasReasoning = iterPhases.some(p => donePhases.has(p.phase))
+                const key = `${agent}-${iter}`
+                const isExpanded = expandedIterations[key] ?? false
+
+                return (
+                  <div key={iter}>
+                    {/* Iteration label (only if multi-iteration) */}
+                    {iterKeys.length > 1 && (
+                      <p className="text-[10px] font-semibold text-apple-secondary/60 uppercase tracking-wider mb-1.5">
+                        Round {iter}
+                      </p>
+                    )}
+
+                    {/* PRPA pills */}
+                    <div className="flex items-center gap-1">
+                      {prpaOrder.map((step, i) => {
+                        const done = completedPhases.has(step)
+                        const active = iterLatest === step && loading && isLatestIter
+                        return (
+                          <div key={step} className="flex items-center gap-1">
+                            <div
+                              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${
+                                done
+                                  ? 'bg-apple-text text-white'
+                                  : active
+                                    ? 'bg-apple-accent/15 text-apple-accent animate-pulse'
+                                    : 'bg-apple-border/40 text-apple-secondary/60'
+                              }`}
+                            >
+                              {prpaLabels[step]}
+                            </div>
+                            {i < prpaOrder.length - 1 && (
+                              <div className={`w-3 h-px ${done ? 'bg-apple-text/40' : 'bg-apple-border'}`} />
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {agentPhs.map((p, i) => (
-                  <p key={i} className="text-caption text-apple-secondary">
-                    {PHASE_LABELS[p.phase] || p.phase}
-                    {p.data?.query && ` — "${p.data.query}"`}
-                    {p.data?.agents && ` — ${p.data.agents.join(', ')}`}
-                  </p>
-                ))}
-              </div>
-            )}
+
+                    {/* Expandable reasoning detail */}
+                    {iterHasReasoning && (
+                      <>
+                        <button
+                          onClick={() => toggleIteration(agent, iter)}
+                          className="flex items-center gap-1 mt-1.5 text-[11px] text-apple-secondary hover:text-apple-text transition-colors"
+                        >
+                          <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                          {isExpanded ? 'Hide reasoning' : 'Show reasoning'}
+                        </button>
+                        <AnimatePresence>
+                          {isExpanded && <ReasoningDetail phases={iterPhases} />}
+                        </AnimatePresence>
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </motion.div>
         )
       })}

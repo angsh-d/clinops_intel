@@ -1,46 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Activity, ArrowRight, Users, Database, Brain, Shield, X, Search, Lightbulb, Wrench, CheckCircle, Eye, GitMerge, Globe, TrendingUp } from 'lucide-react'
+import { ArrowRight, Users, Database, Brain, Shield, X, Search, Lightbulb, Wrench, CheckCircle, Eye, GitMerge, Globe, TrendingUp, DollarSign, BarChart3 } from 'lucide-react'
 import { useStore } from '../lib/store'
-
-const studies = [
-  {
-    id: 'M14-359',
-    name: 'M14-359',
-    title: 'Veliparib + Carboplatin/Paclitaxel in Advanced NSCLC',
-    phase: 'Phase 3',
-    status: 'active',
-    enrolled: 427,
-    target: 595,
-    sites: 142,
-    countries: 20,
-    lastUpdated: '2h ago'
-  },
-  {
-    id: 'M15-421',
-    name: 'M15-421',
-    title: 'Investigational Agent in Metastatic Breast Cancer',
-    phase: 'Phase 2',
-    status: 'upcoming',
-    enrolled: 0,
-    target: 280,
-    sites: 45,
-    countries: 3,
-    lastUpdated: 'Starting Q2 2026'
-  },
-  {
-    id: 'M16-088',
-    name: 'M16-088',
-    title: 'Combination Therapy in Advanced Melanoma',
-    phase: 'Phase 1/2',
-    status: 'upcoming',
-    enrolled: 0,
-    target: 120,
-    sites: 25,
-    countries: 2,
-    lastUpdated: 'Starting Q3 2026'
-  }
-]
+import { getStudySummary } from '../lib/api'
 
 const PRPA_PHASES = [
   { icon: Eye, label: 'Perceive', description: 'Gather raw signals via SQL tools across operational tables' },
@@ -94,6 +56,23 @@ const AGENTS = [
     tools: ['competing_trial_search', 'site_summary', 'enrollment_velocity'],
     detects: ['Competing NSCLC trials at same facility', 'Geographic clustering of competitor recruitment', 'Temporal alignment of competitor start dates with enrollment drops', 'External market forces vs internal operational causes'],
   },
+  // Vendor & Financial agents
+  {
+    id: 'vendor_performance',
+    name: 'Vendor Performance Agent',
+    category: 'Operational',
+    description: 'Investigates CRO/vendor performance — site activation timelines, query resolution speed, monitoring completion, contractual KPI adherence. Identifies vendor-attributable root causes for operational issues.',
+    tools: ['vendor_kpi_analysis', 'vendor_site_comparison', 'vendor_milestone_tracker', 'vendor_issue_log', 'site_summary'],
+    detects: ['CRO KPI degradation trends', 'Vendor-attributable monitoring gaps', 'Milestone delays by vendor', 'Issue pattern clustering by vendor'],
+  },
+  {
+    id: 'financial_intelligence',
+    name: 'Financial Intelligence Agent',
+    category: 'Financial',
+    description: 'Investigates budget health, cost efficiency, vendor spending patterns, and financial impact of operational delays. Provides risk-adjusted forecasting and budget reallocation recommendations.',
+    tools: ['budget_variance_analysis', 'cost_per_patient_analysis', 'burn_rate_projection', 'change_order_impact', 'financial_impact_of_delays'],
+    detects: ['Budget overruns by category or vendor', 'Cost-per-patient efficiency outliers', 'Burn rate trajectory exceeding budget', 'Change order scope creep patterns'],
+  },
 ]
 
 const ORCHESTRATOR = {
@@ -110,6 +89,35 @@ export function Home() {
   const { setView, setStudyData } = useStore()
   const [dataModelOpen, setDataModelOpen] = useState(false)
   const [agentsOpen, setAgentsOpen] = useState(false)
+  const [studies, setStudies] = useState([])
+  const [loadingStudies, setLoadingStudies] = useState(true)
+
+  useEffect(() => {
+    async function fetchStudies() {
+      try {
+        const summary = await getStudySummary()
+        if (summary) {
+          setStudies([{
+            id: summary.study_id,
+            name: summary.study_name || summary.study_id,
+            title: summary.study_title || summary.study_name || summary.study_id,
+            phase: summary.phase,
+            status: 'active',
+            enrolled: summary.enrolled,
+            target: summary.target,
+            sites: summary.total_sites,
+            countries: summary.countries?.length || 0,
+            lastUpdated: summary.last_updated,
+          }])
+        }
+      } catch (error) {
+        console.error('Failed to fetch studies:', error)
+      } finally {
+        setLoadingStudies(false)
+      }
+    }
+    fetchStudies()
+  }, [])
 
   const handleStudySelect = (study) => {
     if (study.status !== 'active') return
@@ -120,11 +128,12 @@ export function Home() {
       studyTitle: study.title,
       enrolled: study.enrolled,
       target: study.target,
-      criticalSites: 3,
-      watchSites: 7,
+      phase: study.phase,
+      totalSites: study.sites,
+      countries: Array(study.countries).fill(''),
       lastUpdated: new Date().toISOString()
     })
-    setView('study')
+    setView('study360')
   }
 
   const openAgents = () => setAgentsOpen(true)
@@ -133,7 +142,7 @@ export function Home() {
     <div className="min-h-screen bg-apple-bg">
       <Header onDataModel={() => setDataModelOpen(true)} onAgents={openAgents} />
       <Hero onLearnMore={openAgents} />
-      <StudySelector studies={studies} onSelect={handleStudySelect} />
+      <StudySelector studies={studies} loading={loadingStudies} onSelect={handleStudySelect} />
       <Footer />
       <AnimatePresence>
         {dataModelOpen && <DataModelModal onClose={() => setDataModelOpen(false)} />}
@@ -148,12 +157,11 @@ export function Home() {
 function Header({ onDataModel, onAgents }) {
   return (
     <header className="sticky top-0 z-50 glass border-b border-apple-border">
-      <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div className="px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#5856D6] to-[#AF52DE] flex items-center justify-center">
-            <Activity className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-section text-apple-text font-medium">Conductor</span>
+          <img src="/saama_logo.svg" alt="Saama" className="h-7" />
+          <div className="w-px h-6 bg-apple-border" />
+          <span className="text-section text-apple-text font-medium">Digital Study Platform</span>
         </div>
         <nav className="flex items-center gap-6">
           <a href="#studies" className="text-body text-apple-secondary hover:text-apple-text transition-colors">
@@ -246,7 +254,7 @@ function AIAgentsModal({ onClose }) {
           <div>
             <h2 className="text-lg font-medium text-apple-text">Agentic Architecture</h2>
             <p className="text-caption text-apple-secondary mt-0.5">
-              Investigation Orchestrator + 5 specialized agents + PRPA cognitive loop
+              Investigation Orchestrator + 7 specialized agents + PRPA cognitive loop
             </p>
           </div>
           <button
@@ -284,13 +292,14 @@ function AIAgentsModal({ onClose }) {
           </div>
 
           {/* Agents grouped by category */}
-          {['Operational', 'Advanced', 'External'].map((category) => {
+          {['Operational', 'Advanced', 'External', 'Financial'].map((category) => {
             const categoryAgents = AGENTS.filter(a => a.category === category)
             if (categoryAgents.length === 0) return null
             const categoryLabels = {
               Operational: 'Operational Agents',
               Advanced: 'Advanced Analysis Agents',
               External: 'External Intelligence',
+              Financial: 'Vendor & Financial Intelligence',
             }
             return (
               <div key={category}>
@@ -305,6 +314,8 @@ function AIAgentsModal({ onClose }) {
                       phantom_compliance: Shield,
                       site_rescue: TrendingUp,
                       clinical_trials_gov: Globe,
+                      vendor_performance: BarChart3,
+                      financial_intelligence: DollarSign,
                     }
                     const Icon = AGENT_ICONS[agent.id] || Database
                     const isOrphan = categoryAgents.length % 2 === 1 && i === categoryAgents.length - 1
@@ -375,7 +386,7 @@ function AIAgentsModal({ onClose }) {
   )
 }
 
-function StudySelector({ studies, onSelect }) {
+function StudySelector({ studies, loading, onSelect }) {
   return (
     <section id="studies" className="py-20 px-6">
       <div className="max-w-6xl mx-auto">
@@ -393,19 +404,28 @@ function StudySelector({ studies, onSelect }) {
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {studies.map((study, i) => (
-            <motion.div
-              key={study.id}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-            >
-              <StudyCard study={study} onSelect={onSelect} />
-            </motion.div>
-          ))}
-        </div>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="flex items-center gap-3 text-apple-secondary">
+              <div className="w-5 h-5 border-2 border-apple-secondary/30 border-t-apple-secondary rounded-full animate-spin" />
+              <span className="text-body">Loading studies...</span>
+            </div>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {studies.map((study, i) => (
+              <motion.div
+                key={study.id}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+              >
+                <StudyCard study={study} onSelect={onSelect} />
+              </motion.div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   )
@@ -469,7 +489,7 @@ function StudyCard({ study, onSelect }) {
         <span>·</span>
         <span>{study.countries} countries</span>
         <span>·</span>
-        <span>{isActive ? `Updated ${study.lastUpdated}` : study.lastUpdated}</span>
+        <span>{isActive ? 'Live' : study.lastUpdated}</span>
       </div>
     </button>
   )
@@ -525,6 +545,30 @@ const DATA_MODEL = [
       { name: 'kri_snapshots', description: 'Monthly KRI values per site (10 metrics, Green/Amber/Red)', rows: '21,250', source: 'Derived (computed from operational data)' },
     ]
   },
+  {
+    domain: 'Vendor Management',
+    tables: [
+      { name: 'vendors', description: 'CRO and functional service providers (8 vendors)', rows: '8', source: 'Sponsor (vendor master list)' },
+      { name: 'vendor_scope', description: 'Vendor scope of work, countries, and deliverables', rows: '8', source: 'Sponsor (vendor contracts)' },
+      { name: 'vendor_site_assignments', description: 'Vendor-to-site role assignments', rows: '~1,000', source: 'CRO upload (site assignment matrix)' },
+      { name: 'vendor_kpis', description: 'Monthly KPI snapshots per vendor (RAG status)', rows: '~720', source: 'CRO upload (vendor KPI reports)' },
+      { name: 'vendor_milestones', description: 'Planned vs actual milestone tracking', rows: '~16', source: 'CRO upload (milestone tracker)' },
+      { name: 'vendor_issues', description: 'Vendor issue log with severity and resolution', rows: '~30', source: 'CRO upload (issue log)' },
+    ]
+  },
+  {
+    domain: 'Financial',
+    tables: [
+      { name: 'study_budget', description: 'Study-level budget (service fees, pass-through, contingency)', rows: '1', source: 'Sponsor (budget workbook)' },
+      { name: 'budget_categories', description: 'Budget category hierarchy (CRO, Lab, Imaging, etc.)', rows: '13', source: 'Sponsor (budget workbook)' },
+      { name: 'budget_line_items', description: 'Per-category/country/vendor planned vs actual vs forecast', rows: '~155', source: 'Sponsor (budget workbook)' },
+      { name: 'financial_snapshots', description: 'Monthly cumulative spend, burn rate, variance', rows: '~22', source: 'Derived (computed from invoices)' },
+      { name: 'invoices', description: 'Monthly vendor invoices with approval status', rows: '~200', source: 'CRO upload (invoice tracker)' },
+      { name: 'payment_milestones', description: 'Milestone-based payment triggers', rows: '7', source: 'Sponsor (payment schedule)' },
+      { name: 'change_orders', description: 'Scope change orders with budget and timeline impact', rows: '4', source: 'CRO upload (change order log)' },
+      { name: 'site_financial_metrics', description: 'Per-site cost efficiency (cost/patient screened/randomized)', rows: '142', source: 'Derived (computed from invoices + enrollment)' },
+    ]
+  },
 ]
 
 function DataModelModal({ onClose }) {
@@ -547,7 +591,7 @@ function DataModelModal({ onClose }) {
           <div>
             <h2 className="text-lg font-medium text-apple-text">CODM Data Model</h2>
             <p className="text-caption text-apple-secondary mt-0.5">
-              24 tables · ~93,500 rows · Joined via site_id and subject_id
+              38 tables · Joined via site_id, subject_id, and vendor_id
             </p>
           </div>
           <button
@@ -604,8 +648,8 @@ function Footer() {
     <footer className="py-8 px-6 border-t border-apple-border">
       <div className="max-w-6xl mx-auto flex items-center justify-between text-caption text-apple-secondary">
         <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4" />
-          <span>Conductor · Clinical Operations Intelligence</span>
+          <img src="/saama_logo.svg" alt="Saama" className="h-4" />
+          <span>Saama · Digital Study Platform</span>
         </div>
         <span>Powered by Agentic AI</span>
       </div>

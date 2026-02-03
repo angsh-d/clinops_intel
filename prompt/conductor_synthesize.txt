@@ -24,6 +24,9 @@ CRITICAL SYNTHESIS INSTRUCTIONS:
    - Data Quality + Data Integrity: genuine quality vs manufactured perfection (suppressed variance = integrity risk)
    - Enrollment Funnel + Site Decision: enrollment trajectory justifying rescue or closure
    - Enrollment Funnel + Competitive Intelligence: internal vs external causes of enrollment decline
+   - Vendor Performance + Data Quality: vendor-attributable root causes for data quality issues (CRA turnover, monitoring gaps)
+   - Vendor Performance + Financial Intelligence: cost impact of vendor underperformance (delay costs, change orders driven by vendor issues)
+   - Financial Intelligence + Enrollment Funnel: dollar cost of enrollment delays, cost-per-patient efficiency linked to enrollment pace
 
 2. FORMULATE TESTABLE CAUSAL HYPOTHESES that EXPLAIN THE SIGNAL. This is the most critical rule:
    - The "signal_detection" describes the OBSERVED ANOMALY (what happened).
@@ -83,6 +86,12 @@ DATA INTEGRITY AGENT FINDINGS (if available):
 
 SITE DECISION AGENT FINDINGS (if available):
 {site_rescue_findings}
+
+VENDOR PERFORMANCE AGENT FINDINGS (if available):
+{vendor_performance_findings}
+
+FINANCIAL INTELLIGENCE AGENT FINDINGS (if available):
+{financial_intelligence_findings}
 
 FORMAT RULES (strictly enforced):
 - "finding": ONE sentence max (≤20 words). State a TESTABLE CAUSAL CLAIM in plain language. Structure: "[Root cause] causes [observable effect] because [mechanism]". Use simple, concrete language a clinical operations manager would immediately understand. BAD: "Formalizing pre-screen exclusions causes inflated screen failures because the site processes objectively ineligible patients through full consent visits instead of chart review." GOOD: "Strict eligibility enforcement causes high screen failures because ineligible patients are formally screened instead of pre-filtered."

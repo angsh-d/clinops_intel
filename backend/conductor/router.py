@@ -197,6 +197,8 @@ class ConductorRouter:
         clinical_trials_gov_findings = ""
         phantom_compliance_findings = ""
         site_rescue_findings = ""
+        vendor_performance_findings = ""
+        financial_intelligence_findings = ""
 
         for aid, out in agent_outputs.items():
             data = json.dumps({
@@ -218,6 +220,10 @@ class ConductorRouter:
                 phantom_compliance_findings = data
             elif aid == "site_rescue":
                 site_rescue_findings = data
+            elif aid == "vendor_performance":
+                vendor_performance_findings = data
+            elif aid == "financial_intelligence":
+                financial_intelligence_findings = data
 
         prompt = self.prompts.render(
             "conductor_synthesize",
@@ -227,6 +233,8 @@ class ConductorRouter:
             clinical_trials_gov_findings=clinical_trials_gov_findings or "Not invoked.",
             phantom_compliance_findings=phantom_compliance_findings or "Not invoked.",
             site_rescue_findings=site_rescue_findings or "Not invoked.",
+            vendor_performance_findings=vendor_performance_findings or "Not invoked.",
+            financial_intelligence_findings=financial_intelligence_findings or "Not invoked.",
         )
         response = await self.llm.generate_structured(
             prompt,

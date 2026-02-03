@@ -274,6 +274,7 @@ def generate_static_config(
     # 1. study_config
     sc = StudyConfig(
         study_id=ctx.study_id,
+        study_title=ctx.official_title,
         nct_number=ctx.nct_number,
         phase=ctx.phase,
         target_enrollment=ctx.target_enrollment,

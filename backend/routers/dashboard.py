@@ -1,6 +1,7 @@
 """Dashboard router: pure SQL aggregations, no LLM."""
 
 import logging
+import re
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, case
 from sqlalchemy.orm import Session
@@ -20,16 +21,38 @@ from backend.schemas.dashboard import (
     AgentInsight, AgentInsightsResponse,
     AgentActivityStatus, AgentActivityResponse,
     SiteMetricDetail, SiteAlertDetail, SiteDetailResponse,
+    VendorScorecard, VendorScorecardsResponse, VendorMilestoneSchema,
+    VendorDetailResponse, VendorKPITrend, VendorSiteBreakdown,
+    VendorComparisonResponse, VendorComparisonKPI, VendorComparisonValue,
+    FinancialSummaryResponse, FinancialWaterfallResponse, WaterfallSegment,
+    FinancialByCountryResponse, CountrySpend,
+    FinancialByVendorResponse, VendorSpend,
+    CostPerPatientResponse, SiteCostEntry,
 )
 from data_generators.models import (
     ECRFEntry, Query, DataCorrection, ScreeningLog,
     RandomizationLog, Site, StudyConfig,
     CRAAssignment, MonitoringVisit, KRISnapshot, EnrollmentVelocity,
+    Vendor, VendorScope, VendorSiteAssignment, VendorKPI,
+    VendorMilestone, VendorIssue,
+    StudyBudget, BudgetCategory, BudgetLineItem, FinancialSnapshot,
+    Invoice, PaymentMilestone, ChangeOrder, SiteFinancialMetric,
 )
 from backend.models.governance import AgentFinding, AlertLog
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+# Agent ID → display name mapping (used across multiple endpoints)
+AGENT_DISPLAY_NAMES = {
+    "data_quality": "Data Quality Agent",
+    "enrollment_funnel": "Enrollment Funnel Agent",
+    "clinical_trials_gov": "Competitive Intelligence Agent",
+    "phantom_compliance": "Data Integrity Agent",
+    "site_rescue": "Site Decision Agent",
+    "vendor_performance": "Vendor Performance Agent",
+    "financial_intelligence": "Financial Intelligence Agent",
+}
 
 
 @router.get(
@@ -375,6 +398,7 @@ def study_summary(db: Session = Depends(get_db)):
     result = StudySummary(
         study_id=study_config.study_id,
         study_name=study_config.study_id,
+        study_title=study_config.study_title,
         phase=study_config.phase,
         enrolled=enrolled,
         target=study_config.target_enrollment or 0,
@@ -593,14 +617,7 @@ def agent_insights(db: Session = Depends(get_db)):
     findings = db.query(AgentFinding).order_by(AgentFinding.created_at.desc()).limit(10).all()
     
     for i, finding in enumerate(findings):
-        # Map agent type
-        agent_map = {
-            "data_quality": "Data Quality Agent",
-            "enrollment_funnel": "Enrollment Funnel Agent",
-            "supply_chain": "Supply Chain Agent",
-            "compliance": "Compliance Agent",
-        }
-        agent = agent_map.get(finding.agent_id, finding.agent_id or "Analysis Agent")
+        agent = AGENT_DISPLAY_NAMES.get(finding.agent_id, finding.agent_id or "Analysis Agent")
         
         # Calculate time ago
         if finding.created_at:
@@ -614,10 +631,12 @@ def agent_insights(db: Session = Depends(get_db)):
         else:
             timestamp = "Recently"
         
-        # Extract sites from findings
+        # Extract sites from findings — use site_id if set, else parse from summary
         sites = []
         if finding.site_id:
             sites = [finding.site_id]
+        elif finding.summary:
+            sites = list(dict.fromkeys(re.findall(r'SITE-\d+', finding.summary)))
         
         # Get recommendation from detail JSON
         rec = None
@@ -650,12 +669,7 @@ def agent_insights(db: Session = Depends(get_db)):
     if not insights:
         alerts = db.query(AlertLog).filter(AlertLog.status == "active").order_by(AlertLog.created_at.desc()).limit(5).all()
         for i, alert in enumerate(alerts):
-            agent_map = {
-                "data_quality": "Data Quality Agent",
-                "enrollment_funnel": "Enrollment Funnel Agent",
-                "supply_chain": "Supply Chain Agent",
-            }
-            agent = agent_map.get(alert.agent_id, alert.agent_id or "Analysis Agent")
+            agent = AGENT_DISPLAY_NAMES.get(alert.agent_id, alert.agent_id or "Analysis Agent")
             
             if alert.created_at:
                 delta = datetime.now() - alert.created_at
@@ -675,7 +689,7 @@ def agent_insights(db: Session = Depends(get_db)):
                 title=alert.title or "Alert",
                 summary=alert.description or "",
                 recommendation=None,
-                confidence=85.0,
+                confidence=None,
                 timestamp=timestamp,
                 sites=[alert.site_id] if alert.site_id else [],
                 impact=None,
@@ -701,21 +715,14 @@ def agent_activity(db: Session = Depends(get_db)):
     if cached is not None:
         return cached
 
-    agent_definitions = [
-        {"id": "data_quality", "name": "Data Quality Agent"},
-        {"id": "enrollment_funnel", "name": "Enrollment Funnel Agent"},
-        {"id": "compliance", "name": "Compliance Agent"},
-        {"id": "risk", "name": "Risk Agent"},
-    ]
-    
     agents = []
-    for agent_def in agent_definitions:
+    for agent_id, agent_name in AGENT_DISPLAY_NAMES.items():
         findings = db.query(AgentFinding).filter(
-            AgentFinding.agent_id == agent_def["id"]
+            AgentFinding.agent_id == agent_id
         ).order_by(AgentFinding.created_at.desc()).all()
-        
+
         findings_count = len(findings)
-        
+
         if findings_count > 0 and findings[0].created_at:
             last_finding = findings[0]
             delta = datetime.now() - last_finding.created_at
@@ -729,10 +736,10 @@ def agent_activity(db: Session = Depends(get_db)):
         else:
             last_run = "Ready"
             status = "idle"
-        
+
         agents.append(AgentActivityStatus(
-            id=agent_def["id"],
-            name=agent_def["name"],
+            id=agent_id,
+            name=agent_name,
             status=status,
             lastRun=last_run,
             findingsCount=findings_count,
@@ -891,5 +898,372 @@ def site_detail(
         enrollment_percent=enrollment_pct,
         data_quality_score=float(dq_score),
     )
+    dashboard_cache.set(ck, result)
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VENDOR DASHBOARD ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get(
+    "/vendor-scorecards",
+    response_model=VendorScorecardsResponse,
+    summary="Vendor scorecards",
+    description="Per-vendor: overall RAG, KPI summary, milestone status, issue count.",
+)
+def vendor_scorecards(db: Session = Depends(get_db)):
+    """Vendor scorecards — pure SQL aggregation."""
+    ck = cache_key("vendor_scorecards")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
+    vendors = db.query(Vendor).all()
+    scorecards = []
+
+    for v in vendors:
+        # Active site count
+        active_sites = db.query(func.count(VendorSiteAssignment.id)).filter(
+            VendorSiteAssignment.vendor_id == v.vendor_id,
+            VendorSiteAssignment.is_active.is_(True),
+        ).scalar() or 0
+
+        # Latest KPI statuses to determine overall RAG
+        latest_kpis = db.query(VendorKPI).filter(
+            VendorKPI.vendor_id == v.vendor_id,
+        ).order_by(VendorKPI.snapshot_date.desc()).limit(5).all()
+
+        red_count = sum(1 for k in latest_kpis if k.status == "Red")
+        amber_count = sum(1 for k in latest_kpis if k.status == "Amber")
+        if red_count >= 2:
+            overall_rag = "Red"
+        elif red_count >= 1 or amber_count >= 2:
+            overall_rag = "Amber"
+        else:
+            overall_rag = "Green"
+
+        # Open issue count
+        issue_count = db.query(func.count(VendorIssue.id)).filter(
+            VendorIssue.vendor_id == v.vendor_id,
+            VendorIssue.status.in_(["Open", "In Progress"]),
+        ).scalar() or 0
+
+        # Milestones
+        milestones_db = db.query(VendorMilestone).filter(
+            VendorMilestone.vendor_id == v.vendor_id,
+        ).order_by(VendorMilestone.planned_date).all()
+
+        milestones = [VendorMilestoneSchema(
+            milestone_name=m.milestone_name,
+            planned_date=str(m.planned_date) if m.planned_date else None,
+            actual_date=str(m.actual_date) if m.actual_date else None,
+            status=m.status,
+            delay_days=m.delay_days or 0,
+        ) for m in milestones_db]
+
+        scorecards.append(VendorScorecard(
+            vendor_id=v.vendor_id,
+            name=v.name,
+            vendor_type=v.vendor_type,
+            country_hq=v.country_hq,
+            contract_value=v.contract_value,
+            overall_rag=overall_rag,
+            active_sites=active_sites,
+            issue_count=issue_count,
+            milestones=milestones,
+        ))
+
+    result = VendorScorecardsResponse(vendors=scorecards)
+    dashboard_cache.set(ck, result)
+    return result
+
+
+@router.get(
+    "/vendor/{vendor_id}",
+    response_model=VendorDetailResponse,
+    summary="Vendor detail",
+    description="KPI trends, site breakdown, milestones for a specific vendor.",
+)
+def vendor_detail(vendor_id: str, db: Session = Depends(get_db)):
+    """Vendor detail — pure SQL."""
+    from fastapi import HTTPException
+
+    ck = cache_key("vendor_detail", vendor_id)
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
+    vendor = db.query(Vendor).filter(Vendor.vendor_id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
+    # Latest KPIs
+    latest_kpis = db.query(VendorKPI).filter(
+        VendorKPI.vendor_id == vendor_id,
+    ).order_by(VendorKPI.snapshot_date.desc()).limit(5).all()
+
+    kpi_trends = [VendorKPITrend(
+        kpi_name=k.kpi_name,
+        current_value=k.value,
+        target=k.target,
+        status=k.status,
+    ) for k in latest_kpis]
+
+    # Site breakdown
+    assignments = db.query(VendorSiteAssignment).filter(
+        VendorSiteAssignment.vendor_id == vendor_id,
+        VendorSiteAssignment.is_active.is_(True),
+    ).all()
+
+    site_map = {s.site_id: s for s in db.query(Site).all()}
+    site_breakdown = [VendorSiteBreakdown(
+        site_id=a.site_id,
+        site_name=site_map[a.site_id].name if a.site_id in site_map else None,
+        role=a.role,
+    ) for a in assignments[:20]]
+
+    result = VendorDetailResponse(
+        vendor_id=vendor.vendor_id,
+        name=vendor.name,
+        vendor_type=vendor.vendor_type,
+        country_hq=vendor.country_hq,
+        contract_value=vendor.contract_value,
+        kpi_trends=kpi_trends,
+        site_breakdown=site_breakdown,
+    )
+    dashboard_cache.set(ck, result)
+    return result
+
+
+@router.get(
+    "/vendor-comparison",
+    response_model=VendorComparisonResponse,
+    summary="Vendor KPI comparison",
+    description="Side-by-side standardized KPI comparison across vendors.",
+)
+def vendor_comparison(db: Session = Depends(get_db)):
+    """Vendor KPI comparison — pure SQL."""
+    ck = cache_key("vendor_comparison")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
+    vendors = db.query(Vendor).all()
+    vendor_names = [v.name for v in vendors]
+
+    # Get distinct KPI names from database
+    kpi_names = [row[0] for row in db.query(func.distinct(VendorKPI.kpi_name)).all() if row[0]]
+
+    kpis = []
+    for kpi_name in kpi_names:
+        values = []
+        for v in vendors:
+            latest = db.query(VendorKPI).filter(
+                VendorKPI.vendor_id == v.vendor_id,
+                VendorKPI.kpi_name == kpi_name,
+            ).order_by(VendorKPI.snapshot_date.desc()).first()
+
+            values.append(VendorComparisonValue(
+                vendor_name=v.name,
+                value=latest.value if latest else None,
+                status=latest.status if latest else None,
+            ))
+
+        kpis.append(VendorComparisonKPI(kpi_name=kpi_name, values=values))
+
+    result = VendorComparisonResponse(vendor_names=vendor_names, kpis=kpis)
+    dashboard_cache.set(ck, result)
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FINANCIAL DASHBOARD ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get(
+    "/financial-summary",
+    response_model=FinancialSummaryResponse,
+    summary="Financial summary",
+    description="Total budget, spend-to-date, burn rate, forecast, variance.",
+)
+def financial_summary(db: Session = Depends(get_db)):
+    """Financial summary — pure SQL aggregation."""
+    ck = cache_key("financial_summary")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
+    budget = db.query(StudyBudget).filter(StudyBudget.status == "Active").first()
+    total_budget = budget.total_budget_usd if budget else 0
+
+    latest_snap = db.query(FinancialSnapshot).order_by(
+        FinancialSnapshot.snapshot_month.desc()
+    ).first()
+
+    spent = latest_snap.actual_cumulative if latest_snap else 0
+    forecast = latest_snap.forecast_cumulative if latest_snap else total_budget
+    burn_rate = latest_snap.burn_rate if latest_snap else None
+    variance_pct = latest_snap.variance_pct if latest_snap else 0
+
+    result = FinancialSummaryResponse(
+        total_budget=total_budget,
+        spent_to_date=spent,
+        remaining=total_budget - spent,
+        forecast_total=forecast,
+        variance_pct=variance_pct,
+        burn_rate=burn_rate,
+        spend_trend="up" if variance_pct > 3 else "stable",
+    )
+    dashboard_cache.set(ck, result)
+    return result
+
+
+@router.get(
+    "/financial-waterfall",
+    response_model=FinancialWaterfallResponse,
+    summary="Budget waterfall",
+    description="Original + change orders = current vs actuals vs forecast.",
+)
+def financial_waterfall(db: Session = Depends(get_db)):
+    """Budget waterfall — pure SQL."""
+    ck = cache_key("financial_waterfall")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
+    budget = db.query(StudyBudget).filter(StudyBudget.status == "Active").first()
+    original = budget.total_budget_usd if budget else 0
+
+    # Sum approved change orders
+    co_total = db.query(func.sum(ChangeOrder.amount)).filter(
+        ChangeOrder.status == "Approved"
+    ).scalar() or 0
+
+    current_budget = original + co_total
+
+    latest_snap = db.query(FinancialSnapshot).order_by(
+        FinancialSnapshot.snapshot_month.desc()
+    ).first()
+    actual = latest_snap.actual_cumulative if latest_snap else 0
+    forecast = latest_snap.forecast_cumulative if latest_snap else current_budget
+
+    segments = [
+        WaterfallSegment(label="Original Budget", value=original, type="base"),
+        WaterfallSegment(label="Change Orders", value=co_total, type="increase"),
+        WaterfallSegment(label="Current Budget", value=current_budget, type="base"),
+        WaterfallSegment(label="Actual Spend", value=actual, type="actual"),
+        WaterfallSegment(label="Forecast", value=forecast, type="actual"),
+    ]
+
+    result = FinancialWaterfallResponse(segments=segments)
+    dashboard_cache.set(ck, result)
+    return result
+
+
+@router.get(
+    "/financial-by-country",
+    response_model=FinancialByCountryResponse,
+    summary="Financial by country",
+    description="Country-level cost allocation.",
+)
+def financial_by_country(db: Session = Depends(get_db)):
+    """Spend by country — pure SQL."""
+    ck = cache_key("financial_by_country")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
+    rows = db.query(
+        SiteFinancialMetric.site_id,
+        SiteFinancialMetric.cost_to_date,
+    ).all()
+
+    site_map = {s.site_id: s.country for s in db.query(Site.site_id, Site.country).all()}
+    country_totals: dict[str, float] = {}
+    for row in rows:
+        country = site_map.get(row.site_id, "Unknown")
+        country_totals[country] = country_totals.get(country, 0) + (row.cost_to_date or 0)
+
+    countries = sorted(
+        [CountrySpend(country=c, amount=round(a, 2)) for c, a in country_totals.items()],
+        key=lambda x: x.amount, reverse=True,
+    )
+    total = sum(c.amount for c in countries)
+
+    result = FinancialByCountryResponse(countries=countries, total=round(total, 2))
+    dashboard_cache.set(ck, result)
+    return result
+
+
+@router.get(
+    "/financial-by-vendor",
+    response_model=FinancialByVendorResponse,
+    summary="Financial by vendor",
+    description="Vendor spending breakdown.",
+)
+def financial_by_vendor(db: Session = Depends(get_db)):
+    """Spend by vendor — pure SQL."""
+    ck = cache_key("financial_by_vendor")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
+    rows = db.query(
+        Invoice.vendor_id,
+        func.sum(Invoice.amount).label("total"),
+    ).filter(
+        Invoice.status.in_(["Approved", "Paid"]),
+    ).group_by(Invoice.vendor_id).all()
+
+    vendor_names = {v.vendor_id: v.name for v in db.query(Vendor.vendor_id, Vendor.name).all()}
+
+    vendors = sorted(
+        [VendorSpend(
+            vendor_name=vendor_names.get(r.vendor_id, r.vendor_id),
+            vendor_id=r.vendor_id,
+            amount=round(float(r.total), 2),
+        ) for r in rows],
+        key=lambda x: x.amount, reverse=True,
+    )
+    total = sum(v.amount for v in vendors)
+
+    result = FinancialByVendorResponse(vendors=vendors, total=round(total, 2))
+    dashboard_cache.set(ck, result)
+    return result
+
+
+@router.get(
+    "/cost-per-patient",
+    response_model=CostPerPatientResponse,
+    summary="Cost per patient",
+    description="Site-level cost efficiency.",
+)
+def cost_per_patient(db: Session = Depends(get_db)):
+    """Site-level cost efficiency — pure SQL."""
+    ck = cache_key("cost_per_patient")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
+    metrics = db.query(SiteFinancialMetric).all()
+    site_map = {s.site_id: s for s in db.query(Site).all()}
+
+    sites = []
+    for m in metrics:
+        site = site_map.get(m.site_id)
+        sites.append(SiteCostEntry(
+            site_id=m.site_id,
+            site_name=site.name if site else None,
+            country=site.country if site else None,
+            cost_to_date=m.cost_to_date or 0,
+            cost_per_screened=m.cost_per_patient_screened,
+            cost_per_randomized=m.cost_per_patient_randomized,
+            variance_pct=m.variance_pct,
+        ))
+
+    sites.sort(key=lambda x: x.variance_pct or 0, reverse=True)
+
+    result = CostPerPatientResponse(sites=sites)
     dashboard_cache.set(ck, result)
     return result

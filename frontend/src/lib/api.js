@@ -80,12 +80,44 @@ export async function getEnrollmentVelocity(siteId) {
   return cachedFetch(`/dashboard/enrollment-velocity/${siteId}`)
 }
 
-export async function getAgentActivity() {
-  return cachedFetch('/dashboard/agent-activity')
-}
-
 export async function getSiteDetail(siteId) {
   return cachedFetch(`/dashboard/site/${siteId}`)
+}
+
+// ── Vendor endpoints ──────────────────────────────────────────────────────
+
+export async function getVendorScorecards() {
+  return cachedFetch('/dashboard/vendor-scorecards')
+}
+
+export async function getVendorDetail(vendorId) {
+  return cachedFetch(`/dashboard/vendor/${vendorId}`)
+}
+
+export async function getVendorComparison() {
+  return cachedFetch('/dashboard/vendor-comparison')
+}
+
+// ── Financial endpoints ───────────────────────────────────────────────────
+
+export async function getFinancialSummary() {
+  return cachedFetch('/dashboard/financial-summary')
+}
+
+export async function getFinancialWaterfall() {
+  return cachedFetch('/dashboard/financial-waterfall')
+}
+
+export async function getFinancialByCountry() {
+  return cachedFetch('/dashboard/financial-by-country')
+}
+
+export async function getFinancialByVendor() {
+  return cachedFetch('/dashboard/financial-by-vendor')
+}
+
+export async function getCostPerPatient() {
+  return cachedFetch('/dashboard/cost-per-patient')
 }
 
 export async function startInvestigation(query, siteId) {

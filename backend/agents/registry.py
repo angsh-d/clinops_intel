@@ -33,6 +33,8 @@ def build_agent_registry() -> AgentRegistry:
     from backend.agents.clinical_trials_gov import ClinicalTrialsGovAgent
     from backend.agents.phantom_compliance import PhantomComplianceAgent
     from backend.agents.site_rescue import SiteRescueAgent
+    from backend.agents.vendor_performance import VendorPerformanceAgent
+    from backend.agents.financial_intelligence import FinancialIntelligenceAgent
 
     registry = AgentRegistry()
     registry.register(DataQualityAgent)
@@ -40,4 +42,6 @@ def build_agent_registry() -> AgentRegistry:
     registry.register(ClinicalTrialsGovAgent)
     registry.register(PhantomComplianceAgent)
     registry.register(SiteRescueAgent)
+    registry.register(VendorPerformanceAgent)
+    registry.register(FinancialIntelligenceAgent)
     return registry

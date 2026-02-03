@@ -17,6 +17,7 @@ class StudyConfig(Base):
     __tablename__ = "study_config"
     id = Column(Integer, primary_key=True, autoincrement=True)
     study_id = Column(String(50), nullable=False)
+    study_title = Column(String(500))
     nct_number = Column(String(20))
     phase = Column(String(20))
     target_enrollment = Column(Integer)
@@ -344,3 +345,204 @@ class DepotShipment(Base):
     status = Column(String(20))  # Delivered / In-Transit / Delayed
     delay_reason = Column(String(200))
     __table_args__ = (Index("ix_shipment_site", "site_id"),)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VENDOR TABLES (6)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── 24. vendors ──────────────────────────────────────────────────────────────
+class Vendor(Base):
+    __tablename__ = "vendors"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vendor_id = Column(String(20), nullable=False, unique=True)
+    name = Column(String(200), nullable=False)
+    vendor_type = Column(String(50))  # Global CRO / Regional CRO / Central Lab / Imaging / ePRO / IRT / Safety / Recruitment
+    country_hq = Column(String(3))
+    contract_value = Column(Float)
+    status = Column(String(20), default="Active")  # Active / On Watch / Terminated
+
+
+# ── 25. vendor_scope ─────────────────────────────────────────────────────────
+class VendorScope(Base):
+    __tablename__ = "vendor_scope"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vendor_id = Column(String(20), nullable=False)
+    scope_type = Column(String(50))  # Monitoring / Data Management / Lab / Imaging / ePRO / IRT / Safety / Recruitment
+    countries = Column(JSONB)  # List of country codes
+    deliverables = Column(JSONB)  # List of deliverable descriptions
+    __table_args__ = (Index("ix_vendor_scope_vendor", "vendor_id"),)
+
+
+# ── 26. vendor_site_assignments ──────────────────────────────────────────────
+class VendorSiteAssignment(Base):
+    __tablename__ = "vendor_site_assignments"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vendor_id = Column(String(20), nullable=False)
+    site_id = Column(String(20), nullable=False)
+    role = Column(String(50))  # Primary Monitor / Data Manager / Lab Coordinator
+    is_active = Column(Boolean, default=True)
+    __table_args__ = (
+        Index("ix_vsa_vendor", "vendor_id"),
+        Index("ix_vsa_site", "site_id"),
+    )
+
+
+# ── 27. vendor_kpis ─────────────────────────────────────────────────────────
+class VendorKPI(Base):
+    __tablename__ = "vendor_kpis"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vendor_id = Column(String(20), nullable=False)
+    snapshot_date = Column(Date, nullable=False)
+    kpi_name = Column(String(100), nullable=False)
+    value = Column(Float)
+    target = Column(Float)
+    status = Column(String(10))  # Green / Amber / Red
+    __table_args__ = (Index("ix_vkpi_vendor_date", "vendor_id", "snapshot_date"),)
+
+
+# ── 28. vendor_milestones ────────────────────────────────────────────────────
+class VendorMilestone(Base):
+    __tablename__ = "vendor_milestones"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vendor_id = Column(String(20), nullable=False)
+    milestone_name = Column(String(200), nullable=False)
+    planned_date = Column(Date)
+    actual_date = Column(Date)
+    status = Column(String(20))  # Completed / On Track / At Risk / Delayed
+    delay_days = Column(Integer, default=0)
+    __table_args__ = (Index("ix_vms_vendor", "vendor_id"),)
+
+
+# ── 29. vendor_issues ────────────────────────────────────────────────────────
+class VendorIssue(Base):
+    __tablename__ = "vendor_issues"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vendor_id = Column(String(20), nullable=False)
+    category = Column(String(50))  # Quality / Timeliness / Staffing / Communication / Compliance
+    severity = Column(String(20))  # Critical / Major / Minor
+    description = Column(Text)
+    open_date = Column(Date)
+    resolution_date = Column(Date)
+    status = Column(String(20), default="Open")  # Open / In Progress / Resolved
+    resolution = Column(Text)
+    __table_args__ = (Index("ix_vi_vendor", "vendor_id"),)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FINANCIAL TABLES (8)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── 30. study_budget ─────────────────────────────────────────────────────────
+class StudyBudget(Base):
+    __tablename__ = "study_budget"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    budget_version = Column(String(20), nullable=False)  # v1.0, v1.1, current
+    total_budget_usd = Column(Float, nullable=False)
+    service_fees = Column(Float)
+    pass_through = Column(Float)
+    contingency = Column(Float)
+    effective_date = Column(Date)
+    status = Column(String(20), default="Active")  # Active / Superseded
+
+
+# ── 31. budget_categories ────────────────────────────────────────────────────
+class BudgetCategory(Base):
+    __tablename__ = "budget_categories"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    category_code = Column(String(20), nullable=False, unique=True)
+    name = Column(String(200), nullable=False)
+    parent_code = Column(String(20))
+    cost_type = Column(String(20))  # Service Fee / Pass-Through / Contingency
+
+
+# ── 32. budget_line_items ────────────────────────────────────────────────────
+class BudgetLineItem(Base):
+    __tablename__ = "budget_line_items"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    category_code = Column(String(20), nullable=False)
+    country = Column(String(3))
+    vendor_id = Column(String(20))
+    unit_type = Column(String(50))  # Per Site / Per Patient / Per Visit / Lump Sum
+    unit_cost = Column(Float)
+    planned_units = Column(Integer)
+    actual_units = Column(Integer, default=0)
+    planned_amount = Column(Float)
+    actual_amount = Column(Float, default=0)
+    forecast_amount = Column(Float, default=0)
+    __table_args__ = (
+        Index("ix_bli_category", "category_code"),
+        Index("ix_bli_vendor", "vendor_id"),
+    )
+
+
+# ── 33. financial_snapshots ──────────────────────────────────────────────────
+class FinancialSnapshot(Base):
+    __tablename__ = "financial_snapshots"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    snapshot_month = Column(Date, nullable=False)
+    planned_cumulative = Column(Float)
+    actual_cumulative = Column(Float)
+    forecast_cumulative = Column(Float)
+    monthly_planned = Column(Float)
+    monthly_actual = Column(Float)
+    burn_rate = Column(Float)
+    variance_pct = Column(Float)
+    __table_args__ = (Index("ix_fs_month", "snapshot_month"),)
+
+
+# ── 34. invoices ─────────────────────────────────────────────────────────────
+class Invoice(Base):
+    __tablename__ = "invoices"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vendor_id = Column(String(20), nullable=False)
+    invoice_number = Column(String(50))
+    amount = Column(Float, nullable=False)
+    category_code = Column(String(20))
+    invoice_date = Column(Date)
+    due_date = Column(Date)
+    status = Column(String(20))  # Submitted / Approved / Paid / Disputed
+    __table_args__ = (Index("ix_inv_vendor", "vendor_id"),)
+
+
+# ── 35. payment_milestones ───────────────────────────────────────────────────
+class PaymentMilestone(Base):
+    __tablename__ = "payment_milestones"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vendor_id = Column(String(20), nullable=False)
+    milestone_name = Column(String(200))
+    trigger_condition = Column(Text)
+    planned_amount = Column(Float)
+    actual_amount = Column(Float)
+    status = Column(String(20))  # Pending / Triggered / Paid
+    __table_args__ = (Index("ix_pm_vendor", "vendor_id"),)
+
+
+# ── 36. change_orders ────────────────────────────────────────────────────────
+class ChangeOrder(Base):
+    __tablename__ = "change_orders"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vendor_id = Column(String(20), nullable=False)
+    change_order_number = Column(String(20))
+    category = Column(String(50))  # Scope Increase / Timeline Extension / Rate Change
+    amount = Column(Float)
+    timeline_impact_days = Column(Integer, default=0)
+    description = Column(Text)
+    status = Column(String(20))  # Proposed / Approved / Rejected
+    submitted_date = Column(Date)
+    approved_date = Column(Date)
+    __table_args__ = (Index("ix_co_vendor", "vendor_id"),)
+
+
+# ── 37. site_financial_metrics ───────────────────────────────────────────────
+class SiteFinancialMetric(Base):
+    __tablename__ = "site_financial_metrics"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    site_id = Column(String(20), nullable=False)
+    snapshot_date = Column(Date)
+    cost_to_date = Column(Float, default=0)
+    cost_per_patient_screened = Column(Float)
+    cost_per_patient_randomized = Column(Float)
+    planned_cost_to_date = Column(Float, default=0)
+    variance_pct = Column(Float, default=0)
+    __table_args__ = (Index("ix_sfm_site", "site_id"),)

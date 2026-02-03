@@ -226,6 +226,7 @@ class AlertDetailEnhanced(BaseModel):
 class StudySummary(BaseModel):
     study_id: str
     study_name: str
+    study_title: str | None = None
     phase: str
     enrolled: int
     target: int
@@ -325,3 +326,109 @@ class SiteDetailResponse(BaseModel):
     alerts: list[SiteAlertDetail]
     enrollment_percent: float
     data_quality_score: float
+
+
+# ── Vendor Dashboard ────────────────────────────────────────────────────────
+
+class VendorMilestoneSchema(BaseModel):
+    milestone_name: str
+    planned_date: str | None
+    actual_date: str | None
+    status: str | None
+    delay_days: int
+
+class VendorScorecard(BaseModel):
+    vendor_id: str
+    name: str
+    vendor_type: str | None
+    country_hq: str | None
+    contract_value: float | None
+    overall_rag: str
+    active_sites: int
+    issue_count: int
+    milestones: list[VendorMilestoneSchema]
+
+class VendorScorecardsResponse(BaseModel):
+    vendors: list[VendorScorecard]
+
+class VendorKPITrend(BaseModel):
+    kpi_name: str
+    current_value: float | None
+    target: float | None
+    status: str | None
+
+class VendorSiteBreakdown(BaseModel):
+    site_id: str
+    site_name: str | None
+    role: str | None
+
+class VendorDetailResponse(BaseModel):
+    vendor_id: str
+    name: str
+    vendor_type: str | None
+    country_hq: str | None
+    contract_value: float | None
+    kpi_trends: list[VendorKPITrend]
+    site_breakdown: list[VendorSiteBreakdown]
+
+class VendorComparisonValue(BaseModel):
+    vendor_name: str
+    value: float | None
+    status: str | None
+
+class VendorComparisonKPI(BaseModel):
+    kpi_name: str
+    values: list[VendorComparisonValue]
+
+class VendorComparisonResponse(BaseModel):
+    vendor_names: list[str]
+    kpis: list[VendorComparisonKPI]
+
+
+# ── Financial Dashboard ─────────────────────────────────────────────────────
+
+class FinancialSummaryResponse(BaseModel):
+    total_budget: float
+    spent_to_date: float
+    remaining: float
+    forecast_total: float
+    variance_pct: float
+    burn_rate: float | None
+    spend_trend: str | None
+
+class WaterfallSegment(BaseModel):
+    label: str
+    value: float
+    type: str  # base / increase / decrease / actual
+
+class FinancialWaterfallResponse(BaseModel):
+    segments: list[WaterfallSegment]
+
+class CountrySpend(BaseModel):
+    country: str
+    amount: float
+
+class FinancialByCountryResponse(BaseModel):
+    countries: list[CountrySpend]
+    total: float
+
+class VendorSpend(BaseModel):
+    vendor_name: str
+    vendor_id: str
+    amount: float
+
+class FinancialByVendorResponse(BaseModel):
+    vendors: list[VendorSpend]
+    total: float
+
+class SiteCostEntry(BaseModel):
+    site_id: str
+    site_name: str | None
+    country: str | None
+    cost_to_date: float
+    cost_per_screened: float | None
+    cost_per_randomized: float | None
+    variance_pct: float | None
+
+class CostPerPatientResponse(BaseModel):
+    sites: list[SiteCostEntry]

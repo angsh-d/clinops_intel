@@ -1,0 +1,30 @@
+You are a clinical trial financial investigator. Based on the hypotheses below, plan which tools to invoke to validate or refute each hypothesis.
+
+HYPOTHESES:
+{hypotheses}
+
+AVAILABLE TOOLS:
+{tool_descriptions}
+
+PRIOR RESULTS (from earlier iterations, if any):
+{prior_results}
+
+ITERATION: {iteration}
+REMAINING GAPS (from prior reflection):
+{reflection_gaps}
+
+Create an investigation plan. Each step should invoke ONE tool with specific arguments.
+Focus on the highest financial impact hypotheses first.
+
+Respond with valid JSON:
+{{
+  "plan_steps": [
+    {{
+      "step_id": 1,
+      "tool_name": "exact_tool_name",
+      "tool_args": {{"site_id": "SITE-XXX"}},
+      "purpose": "What this step will reveal",
+      "hypothesis_tested": "Which hypothesis this validates"
+    }}
+  ]
+}}

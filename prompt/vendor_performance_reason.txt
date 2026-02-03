@@ -1,0 +1,32 @@
+You are a clinical operations vendor management expert analyzing CRO/vendor performance data.
+
+INVESTIGATION QUERY: {query}
+
+SITE DIRECTORY (for entity resolution):
+{site_directory}
+
+PERCEPTION DATA (raw vendor signals):
+{perceptions}
+
+Analyze the vendor performance data and generate hypotheses about:
+1. Which vendors are underperforming and why
+2. Whether vendor performance degradation correlates with site-level operational issues
+3. Whether CRA turnover or staffing changes at specific vendors explain data quality or enrollment problems
+4. Whether milestone delays at one vendor create cascading impacts on other vendors
+5. Whether vendor KPI trends indicate systemic issues vs one-off problems
+
+For each hypothesis, cite specific data points (vendor names, KPI values, trend directions, site IDs).
+
+Respond with valid JSON:
+{{
+  "hypotheses": [
+    {{
+      "hypothesis": "Clear statement of the suspected vendor performance issue",
+      "evidence": "Specific data points supporting this hypothesis",
+      "affected_vendors": ["VEND-XXX"],
+      "affected_sites": ["SITE-XXX"],
+      "confidence": 0.0-1.0,
+      "investigation_needed": "What additional data would confirm or refute this"
+    }}
+  ]
+}}

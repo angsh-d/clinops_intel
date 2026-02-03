@@ -5,15 +5,11 @@ import { useStore } from '../lib/store'
 import { getAttentionSites, getSitesOverview } from '../lib/api'
 
 const suggestions = [
-  { icon: AlertCircle, text: 'Investigate data quality issues at CBCC Global Research', category: 'Chain 1' },
-  { icon: TrendingDown, text: 'Why are patients withdrawing consent at Canterbury District Health Board?', category: 'Chain 2' },
-  { icon: AlertCircle, text: 'Analyze query backlog trends at California Cancer Associates', category: 'Chain 3' },
-  { icon: Users, text: 'Why does Aichi Cancer Center Hospital have high screen failures but excellent data?', category: 'Chain 4' },
-  { icon: AlertCircle, text: 'Investigate synchronized lag spikes across Japanese sites', category: 'Chain 5' },
-  { icon: TrendingDown, text: 'Why has enrollment declined at Highlands Oncology Group?', category: 'Chain 6' },
-  { icon: Shield, text: 'Is CRU Hungary\'s perfect data quality genuine or is the data too good to be true?', category: 'Chain 7' },
-  { icon: TrendingDown, text: 'Why has enrollment dropped at Leicester Royal Infirmary despite increased monitoring?', category: 'Chain 8' },
-  { icon: AlertCircle, text: 'Should we rescue or close Highlands Oncology Group?', category: 'Chain 9' },
+  { icon: AlertCircle, text: 'Why is data quality degrading at CBCC Global Research and what is the financial impact?', category: 'Invisible Collapse' },
+  { icon: TrendingDown, text: 'Why are patients withdrawing consent at Canterbury District Health Board and what should we do about it?', category: 'Kit Domino' },
+  { icon: Shield, text: 'Is CRU Hungary\'s perfect data quality genuine or is the data too good to be true?', category: 'Perfect Fraud' },
+  { icon: TrendingDown, text: 'Why has enrollment declined at Highlands Oncology Group and should we rescue or close the site?', category: 'Competitive Blind Spot' },
+  { icon: Users, text: 'Why has enrollment dropped at Leicester Royal Infirmary despite increased monitoring?', category: 'Monitoring Paradox' },
 ]
 
 export function CommandPalette() {
@@ -93,8 +89,8 @@ export function CommandPalette() {
     if ('text' in item) {
       setInvestigation({ question: item.text, status: 'routing' })
     } else {
-      setView('constellation')
-      setSelectedSite(item)
+      setView('study')
+      setSelectedSite({ id: item.id, name: item.name })
     }
     setCommandOpen(false)
   }

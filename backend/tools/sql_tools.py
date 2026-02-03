@@ -13,6 +13,10 @@ from data_generators.models import (
     MonitoringVisit, ScreeningLog, RandomizationLog, EnrollmentVelocity,
     ScreenFailureReasonCode, KitInventory, KRISnapshot,
     RandomizationEvent,
+    Vendor, VendorScope, VendorSiteAssignment, VendorKPI,
+    VendorMilestone, VendorIssue,
+    StudyBudget, BudgetLineItem, FinancialSnapshot,
+    Invoice, ChangeOrder, SiteFinancialMetric,
 )
 from backend.tools.base import BaseTool, ToolResult
 from backend.config import get_settings
@@ -878,6 +882,345 @@ class SupplyConstraintImpactTool(BaseTool):
         return ToolResult(tool_name=self.name, success=True, data=result, row_count=len(delay_data))
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# VENDOR PERFORMANCE TOOLS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class VendorKPIAnalysisTool(BaseTool):
+    name = "vendor_kpi_analysis"
+    description = (
+        "Analyzes vendor KPI trends, threshold breaches, and target comparisons. "
+        "Returns KPI snapshots with status (Green/Amber/Red) per vendor. "
+        "Args: vendor_id (optional, for specific vendor)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        vendor_id = kwargs.get("vendor_id")
+        q = db_session.query(
+            VendorKPI.vendor_id,
+            VendorKPI.kpi_name,
+            VendorKPI.snapshot_date,
+            VendorKPI.value,
+            VendorKPI.target,
+            VendorKPI.status,
+        ).order_by(VendorKPI.vendor_id, VendorKPI.kpi_name, VendorKPI.snapshot_date.desc())
+
+        if vendor_id:
+            q = q.filter(VendorKPI.vendor_id == vendor_id)
+
+        # Get latest 3 months per vendor-KPI combo
+        rows = q.limit(200).all()
+        data = _serialize_rows(rows)
+
+        # Add vendor names
+        vendor_names = {v.vendor_id: v.name for v in db_session.query(Vendor.vendor_id, Vendor.name).all()}
+        for d in data:
+            d["vendor_name"] = vendor_names.get(d.get("vendor_id"), "")
+
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class VendorSiteComparisonTool(BaseTool):
+    name = "vendor_site_comparison"
+    description = (
+        "Compares operational metrics at sites managed by different vendors. "
+        "Returns entry lag, query burden, enrollment metrics grouped by vendor. "
+        "Args: vendor_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        vendor_id = kwargs.get("vendor_id")
+
+        # Get vendor-site assignments
+        assign_q = db_session.query(VendorSiteAssignment).filter(
+            VendorSiteAssignment.is_active.is_(True),
+            VendorSiteAssignment.role == "Primary Monitor",
+        )
+        if vendor_id:
+            assign_q = assign_q.filter(VendorSiteAssignment.vendor_id == vendor_id)
+        assignments = assign_q.all()
+
+        vendor_sites: dict[str, list[str]] = {}
+        for a in assignments:
+            vendor_sites.setdefault(a.vendor_id, []).append(a.site_id)
+
+        vendor_names = {v.vendor_id: v.name for v in db_session.query(Vendor.vendor_id, Vendor.name).all()}
+        results = []
+        for vid, site_ids in vendor_sites.items():
+            avg_lag = db_session.query(func.avg(ECRFEntry.entry_lag_days)).filter(
+                ECRFEntry.site_id.in_(site_ids)
+            ).scalar()
+            open_queries = db_session.query(func.count(Query.id)).filter(
+                Query.site_id.in_(site_ids), Query.status == "Open"
+            ).scalar()
+            randomized = db_session.query(func.count(RandomizationLog.id)).filter(
+                RandomizationLog.site_id.in_(site_ids)
+            ).scalar()
+
+            results.append({
+                "vendor_id": vid,
+                "vendor_name": vendor_names.get(vid, ""),
+                "site_count": len(site_ids),
+                "avg_entry_lag": round(float(avg_lag), 1) if avg_lag else None,
+                "total_open_queries": open_queries or 0,
+                "total_randomized": randomized or 0,
+            })
+
+        return ToolResult(tool_name=self.name, success=True, data=results, row_count=len(results))
+
+
+class VendorMilestoneTrackerTool(BaseTool):
+    name = "vendor_milestone_tracker"
+    description = (
+        "Tracks planned vs actual milestone dates, delays, and at-risk milestones. "
+        "Args: vendor_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        vendor_id = kwargs.get("vendor_id")
+        q = db_session.query(VendorMilestone).order_by(VendorMilestone.planned_date)
+        if vendor_id:
+            q = q.filter(VendorMilestone.vendor_id == vendor_id)
+
+        rows = q.all()
+        vendor_names = {v.vendor_id: v.name for v in db_session.query(Vendor.vendor_id, Vendor.name).all()}
+        data = []
+        for m in rows:
+            data.append({
+                "vendor_id": m.vendor_id,
+                "vendor_name": vendor_names.get(m.vendor_id, ""),
+                "milestone_name": m.milestone_name,
+                "planned_date": m.planned_date.isoformat() if m.planned_date else None,
+                "actual_date": m.actual_date.isoformat() if m.actual_date else None,
+                "status": m.status,
+                "delay_days": m.delay_days or 0,
+            })
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class VendorIssueLogTool(BaseTool):
+    name = "vendor_issue_log"
+    description = (
+        "Retrieves vendor issue patterns, severity distribution, resolution rates. "
+        "Args: vendor_id (optional), status (optional: Open/Resolved)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        vendor_id = kwargs.get("vendor_id")
+        status = kwargs.get("status")
+        q = db_session.query(VendorIssue).order_by(VendorIssue.open_date.desc())
+        if vendor_id:
+            q = q.filter(VendorIssue.vendor_id == vendor_id)
+        if status:
+            q = q.filter(VendorIssue.status == status)
+
+        rows = q.limit(100).all()
+        vendor_names = {v.vendor_id: v.name for v in db_session.query(Vendor.vendor_id, Vendor.name).all()}
+        data = []
+        for issue in rows:
+            data.append({
+                "vendor_id": issue.vendor_id,
+                "vendor_name": vendor_names.get(issue.vendor_id, ""),
+                "category": issue.category,
+                "severity": issue.severity,
+                "description": issue.description,
+                "open_date": issue.open_date.isoformat() if issue.open_date else None,
+                "resolution_date": issue.resolution_date.isoformat() if issue.resolution_date else None,
+                "status": issue.status,
+            })
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FINANCIAL INTELLIGENCE TOOLS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class BudgetVarianceAnalysisTool(BaseTool):
+    name = "budget_variance_analysis"
+    description = (
+        "Analyzes planned vs actual vs forecast by category, country, and vendor. "
+        "Args: category_code (optional), country (optional), vendor_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        category = kwargs.get("category_code")
+        country = kwargs.get("country")
+        vendor_id = kwargs.get("vendor_id")
+
+        q = db_session.query(
+            BudgetLineItem.category_code,
+            BudgetLineItem.country,
+            BudgetLineItem.vendor_id,
+            func.sum(BudgetLineItem.planned_amount).label("planned"),
+            func.sum(BudgetLineItem.actual_amount).label("actual"),
+            func.sum(BudgetLineItem.forecast_amount).label("forecast"),
+        ).group_by(BudgetLineItem.category_code, BudgetLineItem.country, BudgetLineItem.vendor_id)
+
+        if category:
+            q = q.filter(BudgetLineItem.category_code == category)
+        if country:
+            q = q.filter(BudgetLineItem.country == country)
+        if vendor_id:
+            q = q.filter(BudgetLineItem.vendor_id == vendor_id)
+
+        rows = q.all()
+        data = _serialize_rows(rows)
+        for d in data:
+            planned = d.get("planned") or 0
+            actual = d.get("actual") or 0
+            d["variance"] = round(actual - planned, 2)
+            d["variance_pct"] = round(((actual - planned) / planned) * 100, 2) if planned else 0
+
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class CostPerPatientAnalysisTool(BaseTool):
+    name = "cost_per_patient_analysis"
+    description = (
+        "Analyzes site-level cost efficiency cross-referenced with enrollment. "
+        "Args: site_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+        q = db_session.query(SiteFinancialMetric)
+        if site_id:
+            q = q.filter(SiteFinancialMetric.site_id == site_id)
+
+        rows = q.all()
+        site_names = {s.site_id: s.name for s in db_session.query(Site.site_id, Site.name).all()}
+        data = []
+        for m in rows:
+            data.append({
+                "site_id": m.site_id,
+                "site_name": site_names.get(m.site_id),
+                "cost_to_date": m.cost_to_date,
+                "cost_per_screened": m.cost_per_patient_screened,
+                "cost_per_randomized": m.cost_per_patient_randomized,
+                "planned_cost_to_date": m.planned_cost_to_date,
+                "variance_pct": m.variance_pct,
+            })
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class BurnRateProjectionTool(BaseTool):
+    name = "burn_rate_projection"
+    description = (
+        "Projects total cost and months of funding remaining based on current burn rate. "
+        "Returns monthly financial snapshots with trend data."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        snapshots = db_session.query(FinancialSnapshot).order_by(
+            FinancialSnapshot.snapshot_month
+        ).all()
+
+        budget = db_session.query(StudyBudget).filter(StudyBudget.status == "Active").first()
+        total_budget = budget.total_budget_usd if budget else 0
+
+        data = []
+        for s in snapshots:
+            remaining = total_budget - (s.actual_cumulative or 0)
+            months_remaining = remaining / s.burn_rate if s.burn_rate and s.burn_rate > 0 else None
+            data.append({
+                "month": s.snapshot_month.isoformat() if s.snapshot_month else None,
+                "planned_cumulative": s.planned_cumulative,
+                "actual_cumulative": s.actual_cumulative,
+                "forecast_cumulative": s.forecast_cumulative,
+                "burn_rate": s.burn_rate,
+                "variance_pct": s.variance_pct,
+                "remaining_budget": round(remaining, 2),
+                "months_of_funding": round(months_remaining, 1) if months_remaining else None,
+            })
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class ChangeOrderImpactTool(BaseTool):
+    name = "change_order_impact"
+    description = (
+        "Analyzes cumulative scope creep from change orders. "
+        "Returns change orders with amounts, timeline impact, and approval status."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        vendor_id = kwargs.get("vendor_id")
+        q = db_session.query(ChangeOrder).order_by(ChangeOrder.submitted_date)
+        if vendor_id:
+            q = q.filter(ChangeOrder.vendor_id == vendor_id)
+
+        rows = q.all()
+        vendor_names = {v.vendor_id: v.name for v in db_session.query(Vendor.vendor_id, Vendor.name).all()}
+        data = []
+        cumulative = 0
+        for co in rows:
+            if co.status == "Approved":
+                cumulative += co.amount or 0
+            data.append({
+                "change_order_number": co.change_order_number,
+                "vendor_id": co.vendor_id,
+                "vendor_name": vendor_names.get(co.vendor_id, ""),
+                "category": co.category,
+                "amount": co.amount,
+                "timeline_impact_days": co.timeline_impact_days,
+                "description": co.description,
+                "status": co.status,
+                "submitted_date": co.submitted_date.isoformat() if co.submitted_date else None,
+                "cumulative_approved": round(cumulative, 2),
+            })
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class FinancialImpactOfDelaysTool(BaseTool):
+    name = "financial_impact_of_delays"
+    description = (
+        "Calculates dollar cost of enrollment, activation, and monitoring delays. "
+        "Cross-references operational delays with financial metrics. "
+        "Args: site_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+
+        # Get sites with financial metrics
+        q = db_session.query(SiteFinancialMetric)
+        if site_id:
+            q = q.filter(SiteFinancialMetric.site_id == site_id)
+        metrics = q.all()
+
+        # Get enrollment data for context
+        enrollment_counts = dict(
+            db_session.query(RandomizationLog.site_id, func.count(RandomizationLog.id))
+            .group_by(RandomizationLog.site_id).all()
+        )
+        site_targets = {s.site_id: s.target_enrollment for s in db_session.query(Site.site_id, Site.target_enrollment).all()}
+        site_names = {s.site_id: s.name for s in db_session.query(Site.site_id, Site.name).all()}
+
+        data = []
+        for m in metrics:
+            enrolled = enrollment_counts.get(m.site_id, 0)
+            target = site_targets.get(m.site_id, 0)
+            enrollment_gap = max(0, target - enrolled)
+            # Estimate delay cost: additional months of site maintenance
+            monthly_site_cost = (m.cost_to_date or 0) / max(18, 1)  # approx 18 months of study
+            estimated_delay_cost = enrollment_gap * monthly_site_cost * 0.1 if enrollment_gap > 0 else 0
+
+            if m.variance_pct and m.variance_pct > 5:
+                data.append({
+                    "site_id": m.site_id,
+                    "site_name": site_names.get(m.site_id),
+                    "cost_to_date": m.cost_to_date,
+                    "variance_pct": m.variance_pct,
+                    "enrolled": enrolled,
+                    "target": target,
+                    "enrollment_gap": enrollment_gap,
+                    "estimated_delay_cost": round(estimated_delay_cost, 2),
+                    "cost_per_randomized": m.cost_per_patient_randomized,
+                })
+
+        data.sort(key=lambda x: x.get("estimated_delay_cost", 0), reverse=True)
+        return ToolResult(tool_name=self.name, success=True, data=data[:30], row_count=len(data))
+
+
 def build_tool_registry() -> "ToolRegistry":
     """Create and populate the default tool registry with all tool types."""
     from backend.tools.base import ToolRegistry
@@ -911,6 +1254,17 @@ def build_tool_registry() -> "ToolRegistry":
     # Cross-domain tools
     registry.register(ContextSearchTool())
     registry.register(TrendProjectionTool())
+    # Vendor Performance tools
+    registry.register(VendorKPIAnalysisTool())
+    registry.register(VendorSiteComparisonTool())
+    registry.register(VendorMilestoneTrackerTool())
+    registry.register(VendorIssueLogTool())
+    # Financial Intelligence tools
+    registry.register(BudgetVarianceAnalysisTool())
+    registry.register(CostPerPatientAnalysisTool())
+    registry.register(BurnRateProjectionTool())
+    registry.register(ChangeOrderImpactTool())
+    registry.register(FinancialImpactOfDelaysTool())
     # Competitive intelligence tools (external API)
     from backend.tools.ctgov_tools import CompetingTrialSearchTool
     registry.register(CompetingTrialSearchTool())

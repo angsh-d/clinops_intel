@@ -45,7 +45,7 @@ function getCoordinatesForCountry(country, index = 0) {
 
 export const WorldMap = memo(function WorldMap({ sites, onSiteClick, onSiteHover, hoveredSite, height, highlightedSiteNames }) {
   const highlighted = highlightedSiteNames || new Set()
-  const [position, setPosition] = useState({ coordinates: [10, 40], zoom: 2.5 })
+  const [position, setPosition] = useState({ coordinates: [0, 0], zoom: 1 })
 
   const countryGroups = {}
   sites.forEach((site, idx) => {
@@ -68,8 +68,8 @@ export const WorldMap = memo(function WorldMap({ sites, onSiteClick, onSiteHover
       <ComposableMap
         projection="geoMercator"
         projectionConfig={{
-          scale: 120,
-          center: [0, 30]
+          scale: 100,
+          center: [30, 10]
         }}
         style={{ width: '100%', height: '100%' }}
       >

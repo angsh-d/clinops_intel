@@ -97,18 +97,57 @@ class BaseAgent(ABC):
             if safe_on_step:
                 await safe_on_step("perceive", self.agent_id, {"iteration": ctx.iteration})
             ctx.perceptions = await self.perceive(ctx)
+            if safe_on_step:
+                await safe_on_step("perceive_done", self.agent_id, {
+                    "iteration": ctx.iteration,
+                    "tables_queried": list(ctx.perceptions.keys()) if isinstance(ctx.perceptions, dict) else [],
+                })
             ctx.reasoning_trace.append({"phase": "perceive", "iteration": ctx.iteration, "summary": f"Gathered {len(str(ctx.perceptions))} chars of signals"})
 
             # ── REASON ──
             if safe_on_step:
                 await safe_on_step("reason", self.agent_id, {"iteration": ctx.iteration})
             ctx.hypotheses = await self.reason(ctx)
+            if safe_on_step:
+                _non_dict = [h for h in ctx.hypotheses if not isinstance(h, dict)]
+                if _non_dict:
+                    logger.warning("[%s] reason_done: %d non-dict hypotheses dropped", self.agent_id, len(_non_dict))
+                await safe_on_step("reason_done", self.agent_id, {
+                    "iteration": ctx.iteration,
+                    "hypotheses": [
+                        {
+                            "id": h.get("hypothesis_id", f"H{i+1}"),
+                            "description": h.get("description", ""),
+                            "site_ids": h.get("site_ids", []),
+                            "causal_chain": h.get("causal_chain", ""),
+                            "confidence": h.get("confidence", 0),
+                        }
+                        for i, h in enumerate(ctx.hypotheses)
+                        if isinstance(h, dict)
+                    ],
+                })
             ctx.reasoning_trace.append({"phase": "reason", "iteration": ctx.iteration, "hypotheses_count": len(ctx.hypotheses)})
 
             # ── PLAN ──
             if safe_on_step:
                 await safe_on_step("plan", self.agent_id, {"iteration": ctx.iteration})
             ctx.plan_steps = await self.plan(ctx)
+            if safe_on_step:
+                _non_dict = [s for s in ctx.plan_steps if not isinstance(s, dict)]
+                if _non_dict:
+                    logger.warning("[%s] plan_done: %d non-dict plan_steps dropped", self.agent_id, len(_non_dict))
+                await safe_on_step("plan_done", self.agent_id, {
+                    "iteration": ctx.iteration,
+                    "plan_steps": [
+                        {
+                            "tool_name": s.get("tool_name", ""),
+                            "purpose": s.get("purpose", ""),
+                            "hypothesis_ids": s.get("hypothesis_ids", []),
+                        }
+                        for s in ctx.plan_steps
+                        if isinstance(s, dict)
+                    ],
+                })
             ctx.reasoning_trace.append({"phase": "plan", "iteration": ctx.iteration, "steps_count": len(ctx.plan_steps)})
 
             # ── ACT ──
@@ -116,6 +155,23 @@ class BaseAgent(ABC):
                 await safe_on_step("act", self.agent_id, {"iteration": ctx.iteration})
             results = await self.act(ctx)
             ctx.action_results.extend(results)
+            if safe_on_step:
+                _non_dict = [r for r in results if not isinstance(r, dict)]
+                if _non_dict:
+                    logger.warning("[%s] act_done: %d non-dict action results dropped", self.agent_id, len(_non_dict))
+                await safe_on_step("act_done", self.agent_id, {
+                    "iteration": ctx.iteration,
+                    "action_results": [
+                        {
+                            "tool_name": r.get("tool_name", ""),
+                            "purpose": r.get("purpose", ""),
+                            "success": r.get("success", False),
+                            "row_count": r.get("row_count", 0),
+                        }
+                        for r in results
+                        if isinstance(r, dict)
+                    ],
+                })
             ctx.reasoning_trace.append({"phase": "act", "iteration": ctx.iteration, "results_count": len(results)})
 
             # ── REFLECT ──
@@ -123,6 +179,15 @@ class BaseAgent(ABC):
                 await safe_on_step("reflect", self.agent_id, {"iteration": ctx.iteration})
             ctx.reflection = await self.reflect(ctx)
             ctx.is_goal_satisfied = ctx.reflection.get("is_goal_satisfied", False)
+            if safe_on_step:
+                await safe_on_step("reflect_done", self.agent_id, {
+                    "iteration": ctx.iteration,
+                    "goal_satisfied": ctx.is_goal_satisfied,
+                    "should_iterate": ctx.reflection.get("should_iterate", False),
+                    "remaining_gaps": ctx.reflection.get("remaining_gaps", []),
+                    "iteration_focus": ctx.reflection.get("iteration_focus", ""),
+                    "findings_count": len(ctx.reflection.get("findings_summary", [])),
+                })
             ctx.reasoning_trace.append({"phase": "reflect", "iteration": ctx.iteration, "goal_satisfied": ctx.is_goal_satisfied})
 
         output = await self._build_output(ctx)

@@ -31,6 +31,8 @@ from data_generators.generators.monitoring import (
     update_monitoring_query_counts,
 )
 from data_generators.generators.irt_supply import generate_irt_supply
+from data_generators.generators.vendor_data import generate_vendor_data
+from data_generators.generators.financial_data import generate_financial_data
 
 
 def main():
@@ -40,7 +42,7 @@ def main():
     print("=" * 60)
 
     # 1. Load protocol context
-    print("\n[1/9] Loading protocol context from USDM JSONs...")
+    print("\n[1/11] Loading protocol context from USDM JSONs...")
     ctx = load_protocol_context()
     print(f"  Study: {ctx.study_id} | NCT: {ctx.nct_number}")
     print(f"  Target enrollment: {ctx.target_enrollment} | Sites: {ctx.planned_sites}")
@@ -48,7 +50,7 @@ def main():
     print(f"  Criteria: {len(ctx.inclusion_criteria)} inclusion + {len(ctx.exclusion_criteria)} exclusion")
 
     # 2. Create/reset all DB tables
-    print("\n[2/9] Creating database tables (drop + recreate)...")
+    print("\n[2/11] Creating database tables (drop + recreate)...")
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     print("  All tables created.")
@@ -58,49 +60,63 @@ def main():
 
     try:
         # 3. Static config
-        print("\n[3/9] Generating static config tables...")
+        print("\n[3/11] Generating static config tables...")
         counts = generate_static_config(session, ctx, rng)
         all_counts.update(counts)
         session.commit()
         _print_counts(counts)
 
         # 4. Enrollment funnel
-        print("\n[4/9] Generating enrollment funnel...")
+        print("\n[4/11] Generating enrollment funnel...")
         counts = generate_enrollment(session, ctx, rng)
         all_counts.update(counts)
         session.commit()
         _print_counts(counts)
 
         # 5. Monitoring visits + overdue actions (BEFORE EDC)
-        print("\n[5/9] Generating monitoring visits & overdue actions...")
+        print("\n[5/11] Generating monitoring visits & overdue actions...")
         counts = generate_monitoring_visits(session, ctx, rng)
         all_counts.update(counts)
         session.commit()
         _print_counts(counts)
 
         # 6. EDC telemetry (aware of monitoring dates)
-        print("\n[6/9] Generating EDC telemetry (monitoring-aware queries)...")
+        print("\n[6/11] Generating EDC telemetry (monitoring-aware queries)...")
         counts = generate_edc_telemetry(session, ctx, rng)
         all_counts.update(counts)
         session.commit()
         _print_counts(counts)
 
         # 7. Update monitoring query counts from actuals
-        print("\n[7/9] Updating monitoring_visits.queries_generated from actuals...")
+        print("\n[7/11] Updating monitoring_visits.queries_generated from actuals...")
         update_monitoring_query_counts(session)
         session.commit()
         print("  Done.")
 
         # 8. KRI snapshots (time-windowed, from actual data)
-        print("\n[8/9] Computing KRI snapshots (60-day trailing windows)...")
+        print("\n[8/11] Computing KRI snapshots (60-day trailing windows)...")
         counts = generate_kri_snapshots(session, ctx, rng)
         all_counts.update(counts)
         session.commit()
         _print_counts(counts)
 
         # 9. IRT/Supply
-        print("\n[9/9] Generating IRT/Supply data...")
+        print("\n[9/11] Generating IRT/Supply data...")
         counts = generate_irt_supply(session, ctx, rng)
+        all_counts.update(counts)
+        session.commit()
+        _print_counts(counts)
+
+        # 10. Vendor data
+        print("\n[10/11] Generating vendor data...")
+        counts = generate_vendor_data(session, ctx, rng)
+        all_counts.update(counts)
+        session.commit()
+        _print_counts(counts)
+
+        # 11. Financial data
+        print("\n[11/11] Generating financial data...")
+        counts = generate_financial_data(session, ctx, rng)
         all_counts.update(counts)
         session.commit()
         _print_counts(counts)

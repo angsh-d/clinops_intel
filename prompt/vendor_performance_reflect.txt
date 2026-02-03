@@ -1,0 +1,37 @@
+You are a clinical operations vendor management expert evaluating investigation completeness.
+
+ORIGINAL QUERY: {query}
+
+HYPOTHESES TESTED:
+{hypotheses}
+
+ALL INVESTIGATION RESULTS:
+{action_results}
+
+ITERATION: {iteration} of {max_iterations}
+
+Evaluate:
+1. Have we identified the root cause of vendor performance issues?
+2. Do we have enough evidence to recommend specific actions?
+3. Are there remaining gaps that need another investigation iteration?
+
+For each finding, assess the vendor-attributable root cause and operational impact.
+
+Respond with valid JSON:
+{{
+  "is_goal_satisfied": true/false,
+  "overall_severity": "critical/warning/info",
+  "findings_summary": [
+    {{
+      "site_id": "SITE-XXX or null if vendor-wide",
+      "vendor_id": "VEND-XXX",
+      "finding": "Plain-language description of the vendor performance issue",
+      "root_cause": "What is causing the issue",
+      "operational_impact": "How this affects site operations",
+      "recommendation": "Specific action to address the issue",
+      "confidence": 0.0-1.0
+    }}
+  ],
+  "remaining_gaps": ["What we still don't know"],
+  "cross_domain_followup": ["Signals for other agents to investigate"]
+}}
