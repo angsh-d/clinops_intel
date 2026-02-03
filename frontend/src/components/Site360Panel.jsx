@@ -191,22 +191,27 @@ function DimensionRow({ dimension, data, isExpanded, onToggle }) {
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="px-1 pb-4 grid grid-cols-2 gap-2">
-              {data.metrics.map((metric, i) => (
-                <div key={i} className="bg-neutral-50 rounded-lg p-3">
-                  <div className="text-[11px] text-neutral-500 uppercase tracking-wide mb-1">{metric.label}</div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[17px] font-semibold text-neutral-900 tabular-nums">
-                      {metric.value}
-                    </span>
-                    {metric.trend === 'up' && <TrendingUp className="w-3 h-3 text-red-500" />}
-                    {metric.trend === 'down' && <TrendingDown className="w-3 h-3 text-green-500" />}
+            <div className="px-1 pb-4">
+              {data.source && (
+                <p className="text-[11px] text-neutral-500 mb-3 italic">{data.source}</p>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                {data.metrics.map((metric, i) => (
+                  <div key={i} className="bg-neutral-50 rounded-lg p-3">
+                    <div className="text-[11px] text-neutral-500 uppercase tracking-wide mb-1">{metric.label}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[17px] font-semibold text-neutral-900 tabular-nums">
+                        {metric.value}
+                      </span>
+                      {metric.trend === 'up' && <TrendingUp className="w-3 h-3 text-red-500" />}
+                      {metric.trend === 'down' && <TrendingDown className="w-3 h-3 text-green-500" />}
+                    </div>
+                    {metric.note && (
+                      <div className="text-[10px] text-neutral-400 mt-0.5">{metric.note}</div>
+                    )}
                   </div>
-                  {metric.note && (
-                    <div className="text-[10px] text-neutral-400 mt-0.5">{metric.note}</div>
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </motion.div>
         )}
@@ -246,7 +251,7 @@ function MonitoringTimeline({ visits }) {
                 </span>
               </div>
               <span className="text-[12px] text-neutral-400 tabular-nums">
-                {visit.visit_date}
+                {visit.visit_date || 'Scheduled'}
               </span>
             </motion.div>
           )
@@ -435,14 +440,17 @@ export function Site360Panel({ siteId, siteName, question, onLaunchAnalysis }) {
     return {
       enrollment: {
         score: enrollmentPct,
+        source: 'Enrollment percentage from randomization data',
         metrics: siteData.enrollment_metrics
       },
       dataQuality: {
         score: dqScore,
+        source: 'Data quality score from eCRF metrics',
         metrics: siteData.data_quality_metrics
       },
       monitoring: {
         score: monitoringScore,
+        source: `Based on critical findings (${recentCritical}) and overdue days (${visits[0]?.days_overdue || 0})`,
         metrics: [
           { label: 'Recent Visits', value: `${visits.length}`, note: 'Last 90 days' },
           { label: 'Critical Findings', value: `${visits.reduce((a, v) => a + (v.critical_findings || 0), 0)}` },
@@ -452,13 +460,15 @@ export function Site360Panel({ siteId, siteName, question, onLaunchAnalysis }) {
       },
       integrity: {
         score: integrityScore,
+        source: `Query rate of ${queryRate.toFixed(1)} per subject → ${integrityScore >= 80 ? 'Low' : integrityScore >= 60 ? 'Medium' : 'High'} risk`,
         metrics: [
-          { label: 'Query Rate', value: queryRate.toString(), note: 'per subject' },
+          { label: 'Query Rate', value: queryRate.toFixed(1), note: 'per subject' },
           { label: 'Risk Level', value: integrityScore >= 80 ? 'Low' : integrityScore >= 60 ? 'Medium' : 'High' }
         ]
       },
       operations: {
         score: operationsScore,
+        source: hasActiveCRA ? `Active CRA with ${Math.max(0, craChanges - 1)} transition${craChanges - 1 !== 1 ? 's' : ''}` : 'No active CRA assigned',
         metrics: [
           { label: 'Active CRA', value: hasActiveCRA ? 'Yes' : 'No' },
           { label: 'CRA Changes', value: `${Math.max(0, craChanges - 1)}`, note: 'Since activation' }
