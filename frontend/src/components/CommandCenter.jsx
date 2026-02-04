@@ -5,7 +5,7 @@ import {
   Send, AlertTriangle, TrendingDown, Clock, ChevronRight, 
   Loader2, MapPin, Shield, DollarSign, Users, X, ArrowLeft,
   MessageSquare, Sparkles, BarChart3, Database, Truck, History,
-  Activity, FileText, ChevronDown
+  Activity, FileText, ChevronDown, ExternalLink
 } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { 
@@ -13,7 +13,6 @@ import {
   connectInvestigationStream, getQueryStatus, getDataQualityDashboard,
   getEnrollmentDashboard
 } from '../lib/api'
-import { Site360Panel } from './Site360Panel'
 
 const QUICK_ACTIONS = [
   { label: 'Which sites need attention this week?', icon: AlertTriangle },
@@ -57,7 +56,6 @@ export function CommandCenter() {
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   
-  const [selectedSiteId, setSelectedSiteId] = useState(null)
   const [conversationHistory, setConversationHistory] = useState([])
   const [showExplore, setShowExplore] = useState(false)
   
@@ -104,11 +102,26 @@ export function CommandCenter() {
         }))
         setAttentionItems(items)
 
+        const totalScreened = enrollData?.study_total_screened || 0
+        const totalRandomized = enrollData?.study_total_randomized || 0
+        const screenFailRate = totalScreened > 0 
+          ? Math.round(((totalScreened - totalRandomized) / totalScreened) * 100) 
+          : null
+
+        const siteDqScores = dqData?.sites?.map(s => {
+          const lagPenalty = Math.min((s.mean_entry_lag || 0) * 2, 20)
+          const queryPenalty = Math.min((s.open_queries || 0), 30)
+          return Math.max(100 - lagPenalty - queryPenalty, 0)
+        }) || []
+        const avgDqScore = siteDqScores.length > 0 
+          ? Math.round(siteDqScores.reduce((a, b) => a + b, 0) / siteDqScores.length)
+          : null
+
         setKpis({
-          dqScore: dqData?.study_average_dq_score || null,
+          dqScore: avgDqScore,
           criticalSites: attention?.sites?.filter(s => s.risk_level === 'critical').length || 0,
-          enrollmentRate: enrollData?.current_weekly_rate || null,
-          screenFailRate: enrollData?.screen_failure_rate || null,
+          screenFailRate,
+          pctOfTarget: enrollData?.study_pct_of_target || null,
         })
       } catch (err) {
         console.error('Failed to load data:', err)
@@ -167,7 +180,7 @@ export function CommandCenter() {
   }
 
   const handleSiteClick = (siteId) => {
-    setSelectedSiteId(siteId)
+    navigate(`/study/${studyId}/site/${siteId}`)
   }
 
   const resolveText = (text) => {
@@ -260,8 +273,8 @@ export function CommandCenter() {
                 />
                 <KPICard 
                   label="Screen Fail" 
-                  value={kpis.screenFailRate ? `${Math.round(kpis.screenFailRate)}%` : '—'}
-                  trend={kpis.screenFailRate <= 25 ? 'good' : kpis.screenFailRate <= 40 ? 'neutral' : 'warn'}
+                  value={kpis.screenFailRate !== null ? `${kpis.screenFailRate}%` : '—'}
+                  trend={kpis.screenFailRate === null ? 'neutral' : kpis.screenFailRate <= 25 ? 'good' : kpis.screenFailRate <= 40 ? 'neutral' : 'warn'}
                 />
               </motion.div>
             )}
@@ -466,36 +479,24 @@ export function CommandCenter() {
           </div>
         )}
       </main>
-
-      <AnimatePresence>
-        {selectedSiteId && (
-          <Site360Panel 
-            siteId={selectedSiteId} 
-            onClose={() => setSelectedSiteId(null)}
-            onInvestigate={(q) => {
-              setQuery(q)
-              setSelectedSiteId(null)
-              setTimeout(() => handleSubmit(), 50)
-            }}
-          />
-        )}
-      </AnimatePresence>
     </div>
   )
 }
 
 function KPICard({ label, value, subvalue, trend }) {
-  const trendColors = {
-    good: 'text-emerald-600',
-    neutral: 'text-amber-600',
-    warn: 'text-red-600',
+  const trendStyles = {
+    good: { text: 'text-emerald-600', bg: 'bg-emerald-50', dot: 'bg-emerald-500' },
+    neutral: { text: 'text-amber-600', bg: 'bg-amber-50', dot: 'bg-amber-500' },
+    warn: { text: 'text-red-600', bg: 'bg-red-50', dot: 'bg-red-500' },
   }
+  const style = trendStyles[trend] || { text: 'text-apple-text', bg: 'bg-apple-surface', dot: 'bg-apple-secondary' }
   
   return (
-    <div className="p-4 bg-apple-surface border border-apple-border rounded-xl">
+    <div className={`p-4 ${style.bg} border border-apple-border rounded-xl relative overflow-hidden`}>
+      <div className={`absolute top-3 right-3 w-2 h-2 rounded-full ${style.dot}`} />
       <p className="text-caption text-apple-secondary mb-1">{label}</p>
-      <div className="flex items-baseline gap-1">
-        <span className={`text-2xl font-semibold ${trendColors[trend] || 'text-apple-text'}`}>
+      <div className="flex items-baseline gap-1.5">
+        <span className={`text-2xl font-semibold ${style.text}`}>
           {value}
         </span>
         {subvalue && (

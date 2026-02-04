@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ChevronLeft, TrendingUp, TrendingDown, Minus, MessageSquare } from 'lucide-react'
+import { ArrowLeft, TrendingUp, TrendingDown, Minus, MessageSquare, MapPin, AlertTriangle, Shield, DollarSign, Send, Loader2 } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { getSiteDetail, getSiteBriefs } from '../lib/api'
-import { Site360Panel } from './Site360Panel'
-import { StudyNav } from './StudyNav'
 
 const TREND_MAP = {
   improving: { icon: TrendingUp, color: 'text-green-600', label: 'improving' },
@@ -56,10 +54,20 @@ export function SiteDossier() {
   if (loading) {
     return (
       <div className="min-h-screen bg-apple-bg">
-        <StudyNav active="sites" />
+        <header className="sticky top-0 z-50 glass border-b border-apple-border">
+          <div className="px-6 py-4 flex items-center gap-4">
+            <button 
+              onClick={() => navigate(`/study/${effectiveStudyId}`)}
+              className="flex items-center gap-2 text-apple-secondary hover:text-apple-text transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back</span>
+            </button>
+          </div>
+        </header>
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center gap-3 text-apple-secondary">
-            <div className="w-5 h-5 border-2 border-apple-secondary/30 border-t-apple-secondary rounded-full animate-spin" />
+            <Loader2 className="w-5 h-5 animate-spin" />
             <span className="text-body">Loading Site Dossier...</span>
           </div>
         </div>
@@ -84,43 +92,53 @@ export function SiteDossier() {
 
   return (
     <div className="min-h-screen bg-apple-bg">
-      <StudyNav active="sites" />
+      <header className="sticky top-0 z-50 glass border-b border-apple-border">
+        <div className="px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => navigate(`/study/${effectiveStudyId}`)}
+              className="flex items-center gap-2 text-apple-secondary hover:text-apple-text transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <img src="/saama_logo.svg" alt="Saama" className="h-6" />
+            </button>
+            <div className="w-px h-5 bg-apple-border" />
+            <span className="text-body font-medium text-apple-text">{siteName}</span>
+            <span className="text-caption text-apple-secondary">{detail.country || ''}{detail.city ? ` · ${detail.city}` : ''}</span>
+          </div>
+          <div className={`px-3 py-1.5 rounded-lg ${healthBg}`}>
+            <span className={`text-sm font-semibold ${healthColor}`}>
+              DQ Score: {healthScore != null ? healthScore : '--'}
+            </span>
+          </div>
+        </div>
+      </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
-        {/* Back + Header */}
-        <div className="flex items-center justify-between mb-8">
-          <button
-            onClick={() => navigate(`/study/${effectiveStudyId}/sites`)}
-            className="flex items-center gap-1.5 text-caption text-apple-secondary hover:text-apple-text transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Back to Sites
-          </button>
-        </div>
-
-        {/* Site Header */}
-        <div className="flex items-start justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-medium text-apple-text">{siteName}</h1>
-            <div className="flex items-center gap-3 mt-2 text-caption text-apple-secondary">
-              <span>{detail.country || ''}</span>
-              {detail.city && <><span className="text-apple-secondary/30">·</span><span>{detail.city}</span></>}
-              <span className="text-apple-secondary/30">·</span>
-              <span>Enrollment: {enrollmentPct.toFixed(0)}%</span>
-              <span className="text-apple-secondary/30">·</span>
-              <span className={`flex items-center gap-1 ${trend.color}`}>
-                <trend.icon className="w-3 h-3" /> {trend.label}
-              </span>
+        {/* Site Hero Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-6 bg-apple-surface border border-apple-border rounded-2xl mb-8"
+        >
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl font-medium text-apple-text">{siteName}</h1>
+              <div className="flex items-center gap-3 mt-2 text-caption text-apple-secondary">
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5" />
+                  {detail.country || 'Unknown'}{detail.city ? ` · ${detail.city}` : ''}
+                </span>
+                <span className="text-apple-secondary/30">|</span>
+                <span>Enrollment: {enrollmentPct.toFixed(0)}%</span>
+                <span className="text-apple-secondary/30">|</span>
+                <span className={`flex items-center gap-1 ${trend.color}`}>
+                  <trend.icon className="w-3 h-3" /> {trend.label}
+                </span>
+              </div>
             </div>
           </div>
-          {/* Health Score */}
-          <div className={`px-4 py-3 rounded-xl border ${healthBg}`}>
-            <p className="text-[10px] text-neutral-400 uppercase tracking-wide mb-0.5">Health</p>
-            <p className={`text-2xl font-semibold ${healthColor}`}>
-              {healthScore != null ? healthScore : '--'}
-            </p>
-          </div>
-        </div>
+        </motion.div>
 
         {/* Intelligence Brief */}
         {latestBrief && (
@@ -132,12 +150,28 @@ export function SiteDossier() {
             <h3 className="text-[12px] font-medium text-neutral-400 uppercase tracking-wide mb-3">Intelligence Brief</h3>
             <div className="p-5 bg-purple-50/30 border border-purple-200/40 rounded-2xl">
               <p className="text-[15px] text-neutral-800 leading-relaxed">
-                {latestBrief.risk_summary}
+                {typeof latestBrief.risk_summary === 'string' 
+                  ? latestBrief.risk_summary 
+                  : latestBrief.risk_summary?.headline || 'No summary available'}
               </p>
-              {latestBrief.vendor_accountability && (
-                <p className="text-[13px] text-neutral-500 mt-3 leading-relaxed">
-                  <span className="font-medium text-neutral-700">Vendor:</span> {latestBrief.vendor_accountability}
-                </p>
+              {latestBrief.risk_summary?.key_risks?.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {latestBrief.risk_summary.key_risks.map((risk, i) => (
+                    <div key={i} className={`text-[13px] p-2 rounded ${risk.severity === 'critical' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
+                      <span className="font-medium">{risk.risk}:</span> {risk.evidence}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {latestBrief.vendor_accountability?.cro_issues?.length > 0 && (
+                <div className="text-[13px] text-neutral-500 mt-3 leading-relaxed">
+                  <span className="font-medium text-neutral-700">Vendor Issues:</span>
+                  <ul className="list-disc list-inside mt-1">
+                    {latestBrief.vendor_accountability.cro_issues.map((issue, i) => (
+                      <li key={i}>{issue}</li>
+                    ))}
+                  </ul>
+                </div>
               )}
               {latestBrief.cross_domain_correlations?.length > 0 && (
                 <div className="mt-3 space-y-2">
@@ -162,7 +196,10 @@ export function SiteDossier() {
                 <div className="mt-4 pt-3 border-t border-purple-200/30">
                   <p className="text-[11px] font-medium text-neutral-500 mb-1.5">Recommended Actions</p>
                   {latestBrief.recommended_actions.map((a, i) => (
-                    <p key={i} className="text-[12px] text-neutral-600 mb-0.5">{i + 1}. {a}</p>
+                    <div key={i} className="text-[12px] text-neutral-600 mb-2">
+                      <span className="font-medium">{i + 1}. {typeof a === 'string' ? a : a.action}</span>
+                      {a.owner && <span className="text-neutral-400 ml-2">({a.owner})</span>}
+                    </div>
                   ))}
                 </div>
               )}
@@ -170,22 +207,23 @@ export function SiteDossier() {
           </motion.section>
         )}
 
-        {/* Radar Chart + Dimensions — reuse Site360Panel */}
-        <motion.section
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mb-8"
-        >
-          <Site360Panel
-            siteId={siteId}
-            siteName={siteName}
-            question={null}
-            onLaunchAnalysis={() => {
-              setInvestigation({ question: `Investigate risk profile for ${siteName}`, site: { id: siteId, name: siteName }, status: 'routing' })
-            }}
-          />
-        </motion.section>
+        {/* Performance Metrics */}
+        {(detail.enrollment_percent !== undefined || detail.dq_score !== undefined) && (
+          <motion.section
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="mb-8"
+          >
+            <h3 className="text-xs font-medium text-apple-secondary uppercase tracking-wide mb-3">Performance Metrics</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <MetricCard label="Enrollment" value={`${enrollmentPct.toFixed(0)}%`} trend={enrollmentPct >= 80 ? 'good' : enrollmentPct >= 50 ? 'neutral' : 'warn'} />
+              <MetricCard label="DQ Score" value={healthScore != null ? `${healthScore}` : '--'} trend={healthScore >= 70 ? 'good' : healthScore >= 40 ? 'neutral' : 'warn'} />
+              <MetricCard label="Open Queries" value={detail.open_queries || '0'} trend={detail.open_queries <= 5 ? 'good' : detail.open_queries <= 15 ? 'neutral' : 'warn'} />
+              <MetricCard label="Entry Lag" value={detail.mean_entry_lag ? `${detail.mean_entry_lag.toFixed(1)}d` : '--'} trend={detail.mean_entry_lag <= 3 ? 'good' : detail.mean_entry_lag <= 7 ? 'neutral' : 'warn'} />
+            </div>
+          </motion.section>
+        )}
 
         {/* AI Summary */}
         {detail.ai_summary && (
@@ -233,6 +271,25 @@ export function SiteDossier() {
           </div>
         </motion.section>
       </main>
+    </div>
+  )
+}
+
+function MetricCard({ label, value, trend }) {
+  const trendStyles = {
+    good: { text: 'text-emerald-600', bg: 'bg-emerald-50', dot: 'bg-emerald-500' },
+    neutral: { text: 'text-amber-600', bg: 'bg-amber-50', dot: 'bg-amber-500' },
+    warn: { text: 'text-red-600', bg: 'bg-red-50', dot: 'bg-red-500' },
+  }
+  const style = trendStyles[trend] || { text: 'text-apple-text', bg: 'bg-apple-surface', dot: 'bg-apple-secondary' }
+  
+  return (
+    <div className={`p-4 ${style.bg} border border-apple-border rounded-xl relative overflow-hidden`}>
+      <div className={`absolute top-3 right-3 w-2 h-2 rounded-full ${style.dot}`} />
+      <p className="text-caption text-apple-secondary mb-1">{label}</p>
+      <span className={`text-xl font-semibold ${style.text}`}>
+        {value}
+      </span>
     </div>
   )
 }
