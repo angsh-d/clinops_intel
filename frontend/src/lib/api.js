@@ -109,6 +109,10 @@ export async function getSiteDetail(siteId) {
   return cachedFetch(`/dashboard/site/${siteId}`)
 }
 
+export async function getSiteJourney(siteId, limit = 50) {
+  return cachedFetch(`/dashboard/site/${siteId}/journey?limit=${limit}`)
+}
+
 export async function getIntelligenceSummary() {
   return cachedFetch('/dashboard/intelligence-summary')
 }

@@ -71,7 +71,19 @@ The Data Integrity Agent (phantom_compliance) detects sophisticated fraud signal
 - **Narrative duplication**: Copy-paste screen failure reasons
 - **Cross-domain inconsistency**: Perfect metrics in one domain but gaps in another
 
+## Site Journey Timeline
+The Site Dossier includes a unified timeline aggregating events from multiple data sources:
+- **CRA Transitions**: Staff assignment changes with coverage gaps highlighted
+- **Monitoring Visits**: On-site/remote visits with findings and critical issues
+- **Screening Events**: Monthly aggregates with fail rates
+- **Randomization Events**: Monthly enrollment success counts
+- **Alerts**: AI-generated alerts with severity and agent attribution
+- **Query Events**: Monthly query volume with resolution rates
+
+API endpoint: `GET /api/dashboard/site/{site_id}/journey?limit=N`
+
 ## Recent Changes
+- 2026-02-04: Added unified Site Journey Timeline with events from 6+ data sources
 - 2026-02-04: Complete UX overhaul - replaced fragmented tab navigation with unified CommandCenter
 - 2026-02-04: New conversational-first interface with AI investigation as primary interaction
 - 2026-02-04: Added KPI summary cards (Enrolled, Sites at Risk, DQ Score, Screen Fail Rate)

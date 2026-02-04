@@ -1,0 +1,27 @@
+The Site Journey Timeline from the plan hasn't been implemented yet — it was a planned feature in Phase 3 that didn't get built. However, all the          
+  underlying data tables already exist:                                                                                           
+  ┌─────────────────────────────┬───────────────────────────────┬───────────────────────────────────────────────────────┐                                    
+  │            Table            │      Events it provides       │                      Key columns                      │                                    
+  ├─────────────────────────────┼───────────────────────────────┼───────────────────────────────────────────────────────┤                                    
+  │ cra_assignments             │ CRA transitions (swap events) │ start_date, end_date, is_current                      │                                    
+  ├─────────────────────────────┼───────────────────────────────┼───────────────────────────────────────────────────────┤                                    
+  │ monitoring_visits           │ CRA visit records             │ planned_date, actual_date, visit_type, findings_count │                                    
+  ├─────────────────────────────┼───────────────────────────────┼───────────────────────────────────────────────────────┤                                    
+  │ screening_log               │ Patient screening events      │ screening_date, outcome, failure_reason_code          │                                    
+  ├─────────────────────────────┼───────────────────────────────┼───────────────────────────────────────────────────────┤                                    
+  │ randomization_log           │ Randomization events          │ randomization_date                                    │
+  ├─────────────────────────────┼───────────────────────────────┼───────────────────────────────────────────────────────┤
+  │ alert_log                   │ Alert/signal events           │ created_at, severity, status                          │
+  ├─────────────────────────────┼───────────────────────────────┼───────────────────────────────────────────────────────┤
+  │ conversational_interactions │ Past investigations           │ created_at, user_query, site_id                       │
+  ├─────────────────────────────┼───────────────────────────────┼───────────────────────────────────────────────────────┤
+  │ queries                     │ eCRF query lifecycle          │ open_date, response_date, close_date                  │
+  ├─────────────────────────────┼───────────────────────────────┼───────────────────────────────────────────────────────┤
+  │ kri_snapshots               │ KRI status changes            │ snapshot_date, kri_value, status                      │
+  └─────────────────────────────┴───────────────────────────────┴───────────────────────────────────────────────────────┘
+  There's no backend endpoint that aggregates these into a chronological site journey yet. The existing /dashboard/site-metadata endpoint returns CRA
+  assignments and the last 8 monitoring visits, and /dashboard/site/{site_id} returns the last 5 alerts — but nothing stitches them together into a unified
+  timeline.
+
+  To build it, you'd need a new endpoint (e.g. /dashboard/site/{site_id}/journey) that queries across these tables, unions the events into a chronological
+  stream, and returns them as a typed event list. No schema changes needed — the data is all there, it just needs to be aggregated. 

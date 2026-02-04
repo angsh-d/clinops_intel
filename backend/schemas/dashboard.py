@@ -346,6 +346,23 @@ class SiteDetailResponse(BaseModel):
     monitoring_visits: list[MonitoringVisitSchema] = []
 
 
+# ── Site Journey Timeline ───────────────────────────────────────────────────
+
+class SiteJourneyEvent(BaseModel):
+    event_type: str  # cra_transition, monitoring_visit, screening, randomization, alert, query, kri_change
+    date: str
+    title: str
+    description: str | None = None
+    severity: str | None = None  # critical, warning, info, success
+    metadata: dict | None = None  # Additional event-specific data
+
+class SiteJourneyResponse(BaseModel):
+    site_id: str
+    events: list[SiteJourneyEvent]
+    event_counts: dict[str, int]  # Count by event type
+    data_sources: list[str]  # Tables used
+
+
 # ── Vendor Dashboard ────────────────────────────────────────────────────────
 
 class VendorMilestoneSchema(BaseModel):

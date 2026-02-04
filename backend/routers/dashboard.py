@@ -21,6 +21,7 @@ from backend.schemas.dashboard import (
     AgentInsight, AgentInsightsResponse,
     AgentActivityStatus, AgentActivityResponse,
     SiteMetricDetail, SiteAlertDetail, SiteDetailResponse,
+    SiteJourneyEvent, SiteJourneyResponse,
     VendorScorecard, VendorScorecardsResponse, VendorMilestoneSchema,
     VendorDetailResponse, VendorKPITrend, VendorSiteBreakdown,
     VendorComparisonResponse, VendorComparisonKPI, VendorComparisonValue,
@@ -979,6 +980,162 @@ def site_detail(
     )
     dashboard_cache.set(ck, result)
     return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SITE JOURNEY TIMELINE ENDPOINT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get(
+    "/site/{site_id}/journey",
+    response_model=SiteJourneyResponse,
+    summary="Site journey timeline",
+    description="Aggregates chronological events from multiple tables into a unified site journey.",
+)
+def site_journey(
+    site_id: str,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+):
+    """Get chronological site journey events from all relevant tables."""
+    from datetime import datetime
+    
+    events = []
+    data_sources = []
+    
+    # 1. CRA Assignments (transitions)
+    cra_rows = db.query(CRAAssignment).filter(CRAAssignment.site_id == site_id).all()
+    if cra_rows:
+        data_sources.append("cra_assignments")
+        for c in cra_rows:
+            if c.start_date:
+                events.append(SiteJourneyEvent(
+                    event_type="cra_transition",
+                    date=str(c.start_date),
+                    title=f"CRA {c.cra_id} assigned",
+                    description="Current CRA" if c.is_current else "Previous assignment",
+                    severity="info",
+                    metadata={"cra_id": c.cra_id, "is_current": c.is_current}
+                ))
+            if c.end_date and not c.is_current:
+                events.append(SiteJourneyEvent(
+                    event_type="cra_transition",
+                    date=str(c.end_date),
+                    title=f"CRA {c.cra_id} transitioned out",
+                    severity="info",
+                    metadata={"cra_id": c.cra_id}
+                ))
+    
+    # 2. Monitoring Visits
+    visit_rows = db.query(MonitoringVisit).filter(MonitoringVisit.site_id == site_id).order_by(MonitoringVisit.planned_date.desc()).limit(20).all()
+    if visit_rows:
+        data_sources.append("monitoring_visits")
+        for v in visit_rows:
+            event_date = str(v.actual_date) if v.actual_date else (str(v.planned_date) if v.planned_date else None)
+            if event_date:
+                is_missed = v.status == "Missed"
+                severity = "critical" if is_missed else ("warning" if (v.critical_findings or 0) > 0 else "success")
+                events.append(SiteJourneyEvent(
+                    event_type="monitoring_visit",
+                    date=event_date,
+                    title=f"{v.visit_type or 'Visit'}" + (" - MISSED" if is_missed else ""),
+                    description=f"{v.findings_count or 0} findings, {v.critical_findings or 0} critical" if not is_missed else f"{v.days_overdue or 0} days overdue",
+                    severity=severity,
+                    metadata={"visit_type": v.visit_type, "status": v.status, "findings": v.findings_count, "critical": v.critical_findings}
+                ))
+    
+    # 3. Screening Events (aggregated by month to avoid overwhelming timeline)
+    screening_rows = db.query(
+        func.date_trunc('month', ScreeningLog.screening_date).label('month'),
+        func.count(ScreeningLog.id).label('count'),
+        func.sum(case((ScreeningLog.outcome == 'Screen Failure', 1), else_=0)).label('failures')
+    ).filter(ScreeningLog.site_id == site_id).group_by(
+        func.date_trunc('month', ScreeningLog.screening_date)
+    ).order_by(func.date_trunc('month', ScreeningLog.screening_date).desc()).limit(12).all()
+    if screening_rows:
+        data_sources.append("screening_log")
+        for s in screening_rows:
+            if s.month:
+                fail_rate = round((s.failures / s.count) * 100, 1) if s.count else 0
+                events.append(SiteJourneyEvent(
+                    event_type="screening",
+                    date=str(s.month.date()),
+                    title=f"{s.count} screened",
+                    description=f"{s.failures} failures ({fail_rate}% fail rate)",
+                    severity="warning" if fail_rate > 40 else "info",
+                    metadata={"count": s.count, "failures": s.failures, "fail_rate": fail_rate}
+                ))
+    
+    # 4. Randomization Events (aggregated by month)
+    rand_rows = db.query(
+        func.date_trunc('month', RandomizationLog.randomization_date).label('month'),
+        func.count(RandomizationLog.id).label('count')
+    ).filter(RandomizationLog.site_id == site_id).group_by(
+        func.date_trunc('month', RandomizationLog.randomization_date)
+    ).order_by(func.date_trunc('month', RandomizationLog.randomization_date).desc()).limit(12).all()
+    if rand_rows:
+        data_sources.append("randomization_log")
+        for r in rand_rows:
+            if r.month:
+                events.append(SiteJourneyEvent(
+                    event_type="randomization",
+                    date=str(r.month.date()),
+                    title=f"{r.count} randomized",
+                    severity="success",
+                    metadata={"count": r.count}
+                ))
+    
+    # 5. Alert Events
+    alert_rows = db.query(AlertLog).filter(AlertLog.site_id == site_id).order_by(AlertLog.created_at.desc()).limit(15).all()
+    if alert_rows:
+        data_sources.append("alert_log")
+        for a in alert_rows:
+            if a.created_at:
+                events.append(SiteJourneyEvent(
+                    event_type="alert",
+                    date=str(a.created_at.date()),
+                    title=a.title or "Alert triggered",
+                    description=a.description[:100] if a.description else None,
+                    severity=a.severity or "warning",
+                    metadata={"status": a.status, "agent_id": a.agent_id}
+                ))
+    
+    # 6. Query Events (aggregated by month)
+    query_rows = db.query(
+        func.date_trunc('month', Query.open_date).label('month'),
+        func.count(Query.id).label('opened'),
+        func.sum(case((Query.status == 'Closed', 1), else_=0)).label('closed')
+    ).filter(Query.site_id == site_id).group_by(
+        func.date_trunc('month', Query.open_date)
+    ).order_by(func.date_trunc('month', Query.open_date).desc()).limit(12).all()
+    if query_rows:
+        data_sources.append("queries")
+        for q in query_rows:
+            if q.month:
+                events.append(SiteJourneyEvent(
+                    event_type="query",
+                    date=str(q.month.date()),
+                    title=f"{q.opened} queries opened",
+                    description=f"{q.closed} resolved",
+                    severity="warning" if q.opened > q.closed else "info",
+                    metadata={"opened": q.opened, "closed": q.closed}
+                ))
+    
+    # Sort all events chronologically (newest first)
+    events.sort(key=lambda e: e.date, reverse=True)
+    events = events[:limit]
+    
+    # Count by event type
+    event_counts = {}
+    for e in events:
+        event_counts[e.event_type] = event_counts.get(e.event_type, 0) + 1
+    
+    return SiteJourneyResponse(
+        site_id=site_id,
+        events=events,
+        event_counts=event_counts,
+        data_sources=data_sources
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
