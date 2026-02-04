@@ -203,41 +203,42 @@ export function CommandCenter() {
 
   return (
     <div className="min-h-screen bg-apple-bg">
-      <header className="sticky top-0 z-50 glass border-b border-apple-border">
-        <div className="px-6 py-4 flex items-center justify-between">
+      <header className="sticky top-0 z-50 bg-apple-surface/80 backdrop-blur-xl border-b border-apple-divider">
+        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => navigate('/')}
-              className="flex items-center gap-2 text-apple-secondary hover:text-apple-text transition-colors"
+              className="button-icon"
             >
-              <ArrowLeft className="w-4 h-4" />
-              <img src="/saama_logo.svg" alt="Saama" className="h-6" />
+              <ArrowLeft className="w-5 h-5" />
             </button>
-            <div className="w-px h-5 bg-apple-border" />
-            <span className="text-body font-medium text-apple-text">{studySummary?.study_id || studyId}</span>
-            <span className="text-caption text-apple-secondary">{studySummary?.phase}</span>
+            <div className="h-5 w-px bg-apple-divider" />
+            <div className="flex items-center gap-3">
+              <span className="text-body font-semibold text-apple-text">{studySummary?.study_id || studyId}</span>
+              <span className="text-caption text-apple-tertiary">{studySummary?.phase}</span>
+            </div>
           </div>
           
           <div className="flex items-center gap-6 text-caption">
-            <div className="flex items-center gap-2">
-              <div className="w-20 h-1.5 bg-apple-border rounded-full overflow-hidden">
+            <div className="flex items-center gap-3">
+              <div className="w-16 h-1 bg-apple-grey-200 rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-apple-text rounded-full transition-all" 
+                  className="h-full bg-apple-grey-600 rounded-full transition-all" 
                   style={{ width: `${progress}%` }} 
                 />
               </div>
-              <span className="font-mono text-apple-text">
+              <span className="font-mono text-apple-secondary text-[12px]">
                 {studySummary?.enrolled || 0}/{studySummary?.target || 0}
               </span>
             </div>
-            <div className="flex items-center gap-1.5 text-apple-secondary">
+            <div className="flex items-center gap-1.5 text-apple-tertiary">
               <MapPin className="w-3.5 h-3.5" />
               <span>{studySummary?.total_sites || 0} sites</span>
             </div>
             {conversationHistory.length > 0 && (
               <button
                 onClick={clearConversation}
-                className="text-apple-secondary hover:text-apple-text transition-colors"
+                className="button-ghost text-caption"
               >
                 New chat
               </button>
@@ -484,23 +485,20 @@ export function CommandCenter() {
 }
 
 function KPICard({ label, value, subvalue, trend }) {
-  const trendStyles = {
-    good: { text: 'text-emerald-600', bg: 'bg-emerald-50', dot: 'bg-emerald-500' },
-    neutral: { text: 'text-amber-600', bg: 'bg-amber-50', dot: 'bg-amber-500' },
-    warn: { text: 'text-red-600', bg: 'bg-red-50', dot: 'bg-red-500' },
+  const borderStyles = {
+    good: 'border-l-apple-success',
+    neutral: 'border-l-apple-warning',
+    warn: 'border-l-apple-critical',
   }
-  const style = trendStyles[trend] || { text: 'text-apple-text', bg: 'bg-apple-surface', dot: 'bg-apple-secondary' }
+  const borderStyle = borderStyles[trend] || 'border-l-apple-grey-300'
   
   return (
-    <div className={`p-4 ${style.bg} border border-apple-border rounded-xl relative overflow-hidden`}>
-      <div className={`absolute top-3 right-3 w-2 h-2 rounded-full ${style.dot}`} />
-      <p className="text-caption text-apple-secondary mb-1">{label}</p>
+    <div className={`metric-card border-l-[3px] ${borderStyle}`}>
+      <p className="metric-label mb-2">{label}</p>
       <div className="flex items-baseline gap-1.5">
-        <span className={`text-2xl font-semibold ${style.text}`}>
-          {value}
-        </span>
+        <span className="metric-value">{value}</span>
         {subvalue && (
-          <span className="text-caption text-apple-secondary">{subvalue}</span>
+          <span className="text-caption text-apple-tertiary">{subvalue}</span>
         )}
       </div>
     </div>
@@ -515,7 +513,7 @@ function ConversationMessage({ message, resolveText, onSiteClick }) {
         animate={{ opacity: 1, y: 0 }}
         className="flex justify-end"
       >
-        <div className="max-w-[80%] px-4 py-3 bg-apple-text text-white rounded-2xl rounded-br-md">
+        <div className="max-w-[80%] px-4 py-3 bg-apple-grey-900 text-white rounded-apple-lg rounded-br-apple-sm">
           <p className="text-body">{message.content}</p>
         </div>
       </motion.div>
@@ -536,7 +534,7 @@ function ConversationMessage({ message, resolveText, onSiteClick }) {
       className="space-y-4"
     >
       {synthesis?.executive_summary && (
-        <div className="p-5 bg-apple-surface border border-apple-border rounded-2xl">
+        <div className="card-elevated p-5">
           <p className="text-body text-apple-text leading-relaxed">
             {resolveText(synthesis.executive_summary)}
           </p>
@@ -544,15 +542,15 @@ function ConversationMessage({ message, resolveText, onSiteClick }) {
       )}
 
       {topHypothesis && (
-        <div className="p-4 bg-amber-50/50 border border-amber-200/50 rounded-xl">
-          <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-2">Root Cause</p>
-          <p className="text-body text-amber-900">{resolveText(topHypothesis.finding)}</p>
+        <div className="card p-4 border-l-[3px] border-l-apple-warning">
+          <p className="section-header mb-2">Root Cause</p>
+          <p className="text-body text-apple-text">{resolveText(topHypothesis.finding)}</p>
           {topHypothesis.causal_chain && (
             <div className="flex items-center gap-2 mt-3 flex-wrap">
               {topHypothesis.causal_chain.split(/\s*(?:→|->)\s*/).filter(Boolean).map((node, i, arr) => (
                 <div key={i} className="flex items-center gap-2">
-                  <span className="text-caption text-amber-700 bg-amber-100 px-2 py-0.5 rounded">{node.trim()}</span>
-                  {i < arr.length - 1 && <span className="text-amber-400">→</span>}
+                  <span className="text-caption text-apple-secondary bg-apple-grey-100 px-2 py-0.5 rounded-apple-sm">{node.trim()}</span>
+                  {i < arr.length - 1 && <span className="text-apple-grey-400">→</span>}
                 </div>
               ))}
             </div>
@@ -561,22 +559,22 @@ function ConversationMessage({ message, resolveText, onSiteClick }) {
       )}
 
       {topAction && (
-        <div className="p-4 bg-blue-50/50 border border-blue-200/50 rounded-xl">
+        <div className="card p-4 border-l-[3px] border-l-apple-accent">
           <div className="flex items-center gap-2 mb-2">
-            <p className="text-xs font-medium text-blue-700 uppercase tracking-wide">Recommended Action</p>
+            <p className="section-header">Recommended Action</p>
             {topAction.urgency === 'immediate' && (
-              <span className="text-[10px] font-medium text-white bg-blue-600 px-1.5 py-0.5 rounded">Now</span>
+              <span className="text-[10px] font-medium text-white bg-apple-grey-800 px-1.5 py-0.5 rounded-full">Now</span>
             )}
           </div>
-          <p className="text-body text-blue-900">{resolveText(topAction.action)}</p>
+          <p className="text-body text-apple-text">{resolveText(topAction.action)}</p>
           {topAction.owner && (
-            <p className="text-caption text-blue-600 mt-2">{topAction.owner}</p>
+            <p className="text-caption text-apple-tertiary mt-2">{topAction.owner}</p>
           )}
         </div>
       )}
 
       {hypotheses.length > 1 && (
-        <p className="text-caption text-apple-secondary text-center">
+        <p className="text-caption text-apple-tertiary text-center">
           + {hypotheses.length - 1} more findings, {nbas.length - 1} more actions
         </p>
       )}
