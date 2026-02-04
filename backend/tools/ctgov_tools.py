@@ -37,23 +37,25 @@ _SEARCH_FIELDS = [
     "Enrollment", "Start Date", "Completion Date",
 ]
 
-# Map user-friendly phase strings to BioMCP enum
-_PHASE_MAP = {
-    "1": TrialPhase.PHASE1,
-    "2": TrialPhase.PHASE2,
-    "3": TrialPhase.PHASE3,
-    "4": TrialPhase.PHASE4,
-    "phase1": TrialPhase.PHASE1,
-    "phase2": TrialPhase.PHASE2,
-    "phase3": TrialPhase.PHASE3,
-    "phase4": TrialPhase.PHASE4,
-    "early_phase1": TrialPhase.EARLY_PHASE1,
-    "not_applicable": TrialPhase.NOT_APPLICABLE,
-}
+# Map user-friendly phase strings to BioMCP enum (only if available)
+_PHASE_MAP = {}
+if BIOMCP_AVAILABLE and TrialPhase is not None:
+    _PHASE_MAP = {
+        "1": TrialPhase.PHASE1,
+        "2": TrialPhase.PHASE2,
+        "3": TrialPhase.PHASE3,
+        "4": TrialPhase.PHASE4,
+        "phase1": TrialPhase.PHASE1,
+        "phase2": TrialPhase.PHASE2,
+        "phase3": TrialPhase.PHASE3,
+        "phase4": TrialPhase.PHASE4,
+        "early_phase1": TrialPhase.EARLY_PHASE1,
+        "not_applicable": TrialPhase.NOT_APPLICABLE,
+    }
 
 
-def _parse_phase(phase_str: str | None) -> TrialPhase | None:
-    if not phase_str:
+def _parse_phase(phase_str: str | None):
+    if not phase_str or not _PHASE_MAP:
         return None
     return _PHASE_MAP.get(phase_str.lower().replace(" ", ""))
 
