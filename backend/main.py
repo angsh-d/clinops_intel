@@ -22,7 +22,11 @@ def _apply_column_migrations(bind):
     inspector = inspect(bind)
     migrations = [
         ("conversational_interactions", "synthesis_data", "JSONB"),
+        ("agent_findings", "dedup_hash", "VARCHAR(64)"),
+        ("agent_findings", "scan_id", "VARCHAR(50)"),
+        ("agent_findings", "directive_id", "VARCHAR(100)"),
     ]
+    # SAFETY: table, column, col_type are all from hardcoded list above — never from user input
     with bind.connect() as conn:
         for table, column, col_type in migrations:
             if table in inspector.get_table_names():
@@ -31,6 +35,20 @@ def _apply_column_migrations(bind):
                     conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {column} {col_type}'))
                     conn.commit()
                     logger.info("Added column %s.%s (%s)", table, column, col_type)
+        # Add unique constraint on dedup_hash if column exists but constraint doesn't
+        if "agent_findings" in inspector.get_table_names():
+            unique_names = {uc["name"] for uc in inspector.get_unique_constraints("agent_findings")}
+            if "uq_finding_dedup_hash" not in unique_names:
+                try:
+                    conn.execute(text(
+                        'CREATE UNIQUE INDEX IF NOT EXISTS uq_finding_dedup_hash '
+                        'ON agent_findings (dedup_hash) WHERE dedup_hash IS NOT NULL'
+                    ))
+                    conn.commit()
+                    logger.info("Added unique index uq_finding_dedup_hash on agent_findings.dedup_hash")
+                except Exception as e:
+                    logger.warning("Could not add unique index on dedup_hash: %s", e)
+                    conn.rollback()
 
 
 @asynccontextmanager
@@ -70,6 +88,10 @@ openapi_tags = [
         "name": "websocket",
         "description": "WebSocket endpoints for real-time streaming of query processing phases.",
     },
+    {
+        "name": "proactive",
+        "description": "Proactive intelligence: autonomous scans, directives, and site intelligence briefs.",
+    },
 ]
 
 app = FastAPI(
@@ -100,7 +122,7 @@ app.add_middleware(
 )
 
 # Register routers
-from backend.routers import query, agents, alerts, dashboard, feeds, ws  # noqa: E402
+from backend.routers import query, agents, alerts, dashboard, feeds, ws, proactive  # noqa: E402
 
 app.include_router(query.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
@@ -108,6 +130,7 @@ app.include_router(alerts.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(feeds.router, prefix="/api")
 app.include_router(ws.router)
+app.include_router(proactive.router, prefix="/api")
 
 
 @app.get("/")

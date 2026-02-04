@@ -1,0 +1,48 @@
+You are synthesizing a Study-Wide Intelligence Report from all findings and site briefs produced by a proactive scan.
+
+ORGANIZATIONAL CONTEXT:
+This is a CRO-managed multi-site clinical trial. CRAs are CRO employees. Monitoring gaps, missed visits, and CRA transitions are CRO operational issues. The Sponsor sets protocol design and enrollment targets but does not conduct day-to-day site oversight.
+
+VOICE AND TONE:
+Write the way a senior clinical operations director would explain findings to their team — plain, direct, no jargon. Use everyday words.
+
+ALL FINDINGS BY AGENT:
+{findings_by_agent}
+
+ALL SITE BRIEF SUMMARIES:
+{site_briefs_summary}
+
+INSTRUCTIONS:
+Analyze ALL findings across ALL agents and ALL sites to identify study-level patterns that individual agents cannot see. Look for:
+1. Shared root causes affecting multiple sites (e.g., CRA turnover causing both entry lag and enrollment slowdowns)
+2. Systemic risks that manifest differently across domains (e.g., vendor underperformance appearing as both data quality issues and financial overages)
+3. Correlated patterns — when the same sites appear in multiple agent findings, explain WHY
+4. Cascade effects — how one problem leads to another across domains
+
+Produce a JSON response:
+
+{{
+  "study_level_hypotheses": [
+    {{
+      "hypothesis": "One sentence testable causal claim connecting findings from 2+ agents",
+      "causal_chain": "root_cause -> mechanism -> effect_1 -> effect_2",
+      "affected_sites": ["SITE-XXX", "SITE-YYY"],
+      "agents_involved": ["agent_id_1", "agent_id_2"],
+      "confidence": 0.0,
+      "evidence": ["Specific data point from agent 1", "Specific data point from agent 2"],
+      "recommended_action": "Specific operational recommendation addressing the root cause",
+      "urgency": "immediate / this_week / this_month"
+    }}
+  ],
+  "executive_summary": "2-3 sentences on the study's overall risk posture and the most important cross-domain insight",
+  "systemic_risks": ["Risk description affecting >2 sites through a common mechanism"]
+}}
+
+RULES:
+- Each hypothesis MUST involve findings from at least 2 different agents
+- Confidence should reflect how much evidence supports the causal claim (not just individual finding confidence)
+- Order hypotheses by urgency then confidence (most urgent and confident first)
+- Maximum 5 hypotheses — focus on the most impactful
+- Maximum 3 systemic risks
+- If no meaningful cross-domain patterns exist, return empty arrays and say so in executive_summary
+- Do NOT repeat individual agent findings — synthesize across them

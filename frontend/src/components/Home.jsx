@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight, Users, Database, Brain, Shield, X, Search, Lightbulb, Wrench, CheckCircle, Eye, GitMerge, Globe, TrendingUp, DollarSign, BarChart3 } from 'lucide-react'
 import { useStore } from '../lib/store'
@@ -86,7 +87,8 @@ const ORCHESTRATOR = {
 }
 
 export function Home() {
-  const { setView, setStudyData } = useStore()
+  const navigate = useNavigate()
+  const { setStudyData, setCurrentStudyId } = useStore()
   const [dataModelOpen, setDataModelOpen] = useState(false)
   const [agentsOpen, setAgentsOpen] = useState(false)
   const [studies, setStudies] = useState([])
@@ -133,7 +135,8 @@ export function Home() {
       countries: Array(study.countries).fill(''),
       lastUpdated: new Date().toISOString()
     })
-    setView('study360')
+    setCurrentStudyId(study.id)
+    navigate(`/study/${study.id}`)
   }
 
   const openAgents = () => setAgentsOpen(true)

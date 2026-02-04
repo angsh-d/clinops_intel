@@ -28,6 +28,9 @@ from backend.schemas.dashboard import (
     FinancialByCountryResponse, CountrySpend,
     FinancialByVendorResponse, VendorSpend,
     CostPerPatientResponse, SiteCostEntry,
+    ThemeCluster, SiteBriefBadge, IntelligenceSummaryResponse,
+    ThemeFindingDetail, ThemeFindingsResponse,
+    CrossDomainCorrelation, StudyHypothesis, StudySynthesis,
 )
 from data_generators.models import (
     ECRFEntry, Query, DataCorrection, ScreeningLog,
@@ -38,7 +41,7 @@ from data_generators.models import (
     StudyBudget, BudgetCategory, BudgetLineItem, FinancialSnapshot,
     Invoice, PaymentMilestone, ChangeOrder, SiteFinancialMetric,
 )
-from backend.models.governance import AgentFinding, AlertLog
+from backend.models.governance import AgentFinding, AlertLog, ProactiveScan, SiteIntelligenceBrief
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -52,6 +55,39 @@ AGENT_DISPLAY_NAMES = {
     "site_rescue": "Site Decision Agent",
     "vendor_performance": "Vendor Performance Agent",
     "financial_intelligence": "Financial Intelligence Agent",
+}
+
+THEME_CLUSTERS = {
+    "compliance_integrity": {
+        "label": "Compliance & Data Integrity",
+        "agents": ["phantom_compliance", "data_quality"],
+        "icon": "shield",
+        "query": "What compliance and data integrity risks exist across our sites?",
+    },
+    "enrollment_risk": {
+        "label": "Enrollment at Risk",
+        "agents": ["enrollment_funnel", "site_rescue"],
+        "icon": "trending-down",
+        "query": "Which sites have enrollment at risk and what are the root causes?",
+    },
+    "financial_exposure": {
+        "label": "Financial Exposure",
+        "agents": ["financial_intelligence"],
+        "icon": "dollar-sign",
+        "query": "What financial risks and budget variances should we address?",
+    },
+    "vendor_accountability": {
+        "label": "Vendor Accountability",
+        "agents": ["vendor_performance"],
+        "icon": "bar-chart",
+        "query": "How are our vendors performing and where are the accountability gaps?",
+    },
+    "competitive_landscape": {
+        "label": "Competitive Landscape",
+        "agents": ["clinical_trials_gov"],
+        "icon": "globe",
+        "query": "What competitive threats are impacting our enrollment?",
+    },
 }
 
 
@@ -1277,5 +1313,299 @@ def cost_per_patient(db: Session = Depends(get_db)):
     sites.sort(key=lambda x: x.variance_pct or 0, reverse=True)
 
     result = CostPerPatientResponse(sites=sites)
+    dashboard_cache.set(ck, result)
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# INTELLIGENCE SUMMARY ENDPOINT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get(
+    "/intelligence-summary",
+    response_model=IntelligenceSummaryResponse,
+    summary="Agentic intelligence summary",
+    description="Thematic clusters from agent findings, alerts, and site intelligence briefs.",
+)
+def intelligence_summary(db: Session = Depends(get_db)):
+    """Aggregate agent findings into thematic clusters with site briefs."""
+    ck = cache_key("intelligence_summary")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
+    # 1. All findings ordered by severity desc, created_at desc
+    severity_order = case(
+        (AgentFinding.severity == "critical", 0),
+        (AgentFinding.severity == "high", 1),
+        (AgentFinding.severity == "warning", 2),
+        else_=3,
+    )
+    findings = db.query(AgentFinding).order_by(severity_order, AgentFinding.created_at.desc()).all()
+
+    # 2. Build reverse lookup: agent_id -> theme_id
+    agent_to_theme = {}
+    for theme_id, meta in THEME_CLUSTERS.items():
+        for agent_id in meta["agents"]:
+            agent_to_theme[agent_id] = theme_id
+
+    # 3. Group findings into themes
+    theme_data: dict[str, dict] = {}
+    all_flagged_sites = set()
+    total_critical = 0
+    total_high = 0
+
+    for f in findings:
+        if f.severity == "critical":
+            total_critical += 1
+        elif f.severity == "high":
+            total_high += 1
+
+        theme_id = agent_to_theme.get(f.agent_id)
+        if not theme_id:
+            continue
+
+        if theme_id not in theme_data:
+            theme_data[theme_id] = {
+                "worst_severity": f.severity or "info",
+                "count": 0,
+                "summaries": [],
+                "sites": set(),
+            }
+
+        td = theme_data[theme_id]
+        td["count"] += 1
+
+        # Update worst severity
+        sev_rank = {"critical": 0, "high": 1, "warning": 2, "info": 3}
+        if sev_rank.get(f.severity, 3) < sev_rank.get(td["worst_severity"], 3):
+            td["worst_severity"] = f.severity
+
+        # Collect summaries (top 3)
+        if len(td["summaries"]) < 3 and f.summary:
+            truncated = f.summary[:120] + "..." if len(f.summary) > 120 else f.summary
+            td["summaries"].append(truncated)
+
+        # Collect site IDs
+        if f.site_id:
+            td["sites"].add(f.site_id)
+            all_flagged_sites.add(f.site_id)
+        if f.summary:
+            for site_match in re.findall(r'SITE-\d+', f.summary):
+                td["sites"].add(site_match)
+                all_flagged_sites.add(site_match)
+
+    # Build theme cluster objects
+    themes = []
+    for theme_id, meta in THEME_CLUSTERS.items():
+        td = theme_data.get(theme_id)
+        themes.append(ThemeCluster(
+            theme_id=theme_id,
+            label=meta["label"],
+            icon=meta["icon"],
+            severity=td["worst_severity"] if td else "info",
+            finding_count=td["count"] if td else 0,
+            top_summaries=td["summaries"] if td else [],
+            affected_sites=sorted(td["sites"]) if td else [],
+            investigation_query=meta["query"],
+        ))
+
+    # 4. Open alert count
+    open_alerts = db.query(func.count(AlertLog.id)).filter(
+        AlertLog.status.in_(["open", "active"])
+    ).scalar() or 0
+
+    # 5. Site intelligence briefs
+    briefs = db.query(SiteIntelligenceBrief).order_by(
+        SiteIntelligenceBrief.created_at.desc()
+    ).all()
+
+    # Deduplicate by site_id (keep latest)
+    seen_sites = set()
+    site_briefs = []
+    for b in briefs:
+        if b.site_id in seen_sites:
+            continue
+        seen_sites.add(b.site_id)
+        risk = b.risk_summary or {}
+        site_briefs.append(SiteBriefBadge(
+            site_id=b.site_id,
+            trend_indicator=b.trend_indicator or "stable",
+            risk_level=risk.get("overall_risk", "unknown"),
+            headline=risk.get("headline"),
+        ))
+
+    # 6. Cross-domain correlations from latest brief per site only
+    cross_domain_list = []
+    cross_domain_seen = set()
+    for b in briefs:
+        if b.site_id in cross_domain_seen:
+            continue  # skip older briefs for same site
+        cross_domain_seen.add(b.site_id)
+        for corr in (b.cross_domain_correlations or []):
+            if isinstance(corr, dict) and corr.get("finding"):
+                cross_domain_list.append(CrossDomainCorrelation(
+                    site_id=b.site_id,
+                    finding=corr["finding"],
+                    agents_involved=corr.get("agents_involved", []),
+                    causal_chain=corr.get("causal_chain"),
+                    confidence=corr.get("confidence"),
+                ))
+    cross_domain_list.sort(key=lambda c: c.confidence or 0, reverse=True)
+    cross_domain_list = cross_domain_list[:10]
+
+    # 7. Study-wide synthesis from latest completed scan
+    latest_scan = db.query(ProactiveScan).filter(
+        ProactiveScan.status == "completed",
+        ProactiveScan.study_synthesis.isnot(None),
+    ).order_by(ProactiveScan.completed_at.desc()).first()
+
+    study_synth = None
+    if latest_scan and latest_scan.study_synthesis:
+        ss = latest_scan.study_synthesis
+        hypotheses = []
+        for h in ss.get("study_level_hypotheses", []):
+            if isinstance(h, dict) and h.get("hypothesis"):
+                try:
+                    hypotheses.append(StudyHypothesis(**h))
+                except Exception:
+                    logger.warning("Skipping malformed study hypothesis: %s", h.get("hypothesis", "")[:80])
+        study_synth = StudySynthesis(
+            executive_summary=ss.get("executive_summary"),
+            hypotheses=hypotheses,
+            systemic_risks=ss.get("systemic_risks", []),
+        )
+
+    # Latest scan timestamp
+    latest_finding = findings[0] if findings else None
+    latest_ts = latest_finding.created_at.isoformat() if latest_finding and latest_finding.created_at else None
+
+    result = IntelligenceSummaryResponse(
+        total_findings=len(findings),
+        critical_count=total_critical,
+        high_count=total_high,
+        sites_flagged=len(all_flagged_sites),
+        open_alerts=open_alerts,
+        briefs_count=len(site_briefs),
+        latest_scan_timestamp=latest_ts,
+        themes=themes,
+        site_briefs=site_briefs,
+        cross_domain_correlations=cross_domain_list,
+        study_synthesis=study_synth,
+    )
+    dashboard_cache.set(ck, result)
+    return result
+
+
+@router.get(
+    "/theme/{theme_id}/findings",
+    response_model=ThemeFindingsResponse,
+    summary="Theme findings drill-down",
+    description="All stored AgentFinding records for a given theme cluster.",
+)
+def theme_findings(theme_id: str, db: Session = Depends(get_db)):
+    """Return all findings for a theme cluster — pure SQL."""
+    from fastapi import HTTPException
+
+    if theme_id not in THEME_CLUSTERS:
+        raise HTTPException(status_code=404, detail=f"Theme '{theme_id}' not found")
+
+    ck = cache_key("theme_findings", theme_id)
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
+    meta = THEME_CLUSTERS[theme_id]
+    agent_ids = meta["agents"]
+
+    severity_order = case(
+        (AgentFinding.severity == "critical", 0),
+        (AgentFinding.severity == "high", 1),
+        (AgentFinding.severity == "warning", 2),
+        else_=3,
+    )
+    rows = db.query(AgentFinding).filter(
+        AgentFinding.agent_id.in_(agent_ids),
+    ).order_by(severity_order, AgentFinding.created_at.desc()).all()
+
+    critical_count = 0
+    high_count = 0
+    affected_sites: set[str] = set()
+    findings = []
+
+    for f in rows:
+        if f.severity == "critical":
+            critical_count += 1
+        elif f.severity == "high":
+            high_count += 1
+
+        # Collect site IDs
+        if f.site_id:
+            affected_sites.add(f.site_id)
+        if f.summary:
+            for m in re.findall(r'SITE-\d+', f.summary):
+                affected_sites.add(m)
+
+        detail = f.detail if isinstance(f.detail, dict) else {}
+        # Proactive scan stores f_data directly (has root_cause etc. at top level).
+        # Direct invocation stores {"findings": [...], ...} — try first finding as fallback.
+        root_cause = detail.get("root_cause")
+        causal_chain = detail.get("causal_chain")
+        rec_action = detail.get("recommended_action") or detail.get("issue")
+        if not root_cause and isinstance(detail.get("findings"), list) and detail["findings"]:
+            first = detail["findings"][0] if isinstance(detail["findings"][0], dict) else {}
+            root_cause = root_cause or first.get("root_cause")
+            causal_chain = causal_chain or first.get("causal_chain")
+            rec_action = rec_action or first.get("recommended_action") or first.get("issue")
+
+        findings.append(ThemeFindingDetail(
+            id=f.id,
+            agent_id=f.agent_id,
+            agent_name=AGENT_DISPLAY_NAMES.get(f.agent_id, f.agent_id or "Agent"),
+            severity=f.severity or "info",
+            site_id=f.site_id,
+            summary=f.summary or "",
+            root_cause=root_cause,
+            causal_chain=causal_chain,
+            recommended_action=rec_action,
+            confidence=f.confidence,
+            created_at=f.created_at.isoformat() if f.created_at else None,
+        ))
+
+    # Cross-domain hypotheses from site briefs for affected sites
+    cross_domain_hypotheses = []
+    if affected_sites:
+        theme_agents_set = set(agent_ids)
+        relevant_briefs = db.query(SiteIntelligenceBrief).filter(
+            SiteIntelligenceBrief.site_id.in_(list(affected_sites))
+        ).order_by(SiteIntelligenceBrief.created_at.desc()).all()
+
+        seen_brief_sites = set()
+        for b in relevant_briefs:
+            if b.site_id in seen_brief_sites:
+                continue
+            seen_brief_sites.add(b.site_id)
+            for corr in (b.cross_domain_correlations or []):
+                if isinstance(corr, dict) and corr.get("finding") and set(corr.get("agents_involved", [])) & theme_agents_set:
+                    cross_domain_hypotheses.append(CrossDomainCorrelation(
+                        site_id=b.site_id,
+                        finding=corr.get("finding", ""),
+                        agents_involved=corr.get("agents_involved", []),
+                        causal_chain=corr.get("causal_chain"),
+                        confidence=corr.get("confidence"),
+                    ))
+
+    result = ThemeFindingsResponse(
+        theme_id=theme_id,
+        label=meta["label"],
+        icon=meta["icon"],
+        investigation_query=meta["query"],
+        total=len(findings),
+        critical_count=critical_count,
+        high_count=high_count,
+        affected_sites=sorted(affected_sites),
+        findings=findings,
+        cross_domain_hypotheses=cross_domain_hypotheses,
+    )
     dashboard_cache.set(ck, result)
     return result

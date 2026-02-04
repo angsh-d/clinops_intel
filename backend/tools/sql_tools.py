@@ -1756,7 +1756,8 @@ def build_tool_registry() -> "ToolRegistry":
     registry.register(BurnRateProjectionTool())
     registry.register(ChangeOrderImpactTool())
     registry.register(FinancialImpactOfDelaysTool())
-    # Competitive intelligence tools (external API)
-    from backend.tools.ctgov_tools import CompetingTrialSearchTool
+    # Competitive intelligence tools (BioMCP-powered)
+    from backend.tools.ctgov_tools import CompetingTrialSearchTool, TrialDetailTool
     registry.register(CompetingTrialSearchTool())
+    registry.register(TrialDetailTool())
     return registry

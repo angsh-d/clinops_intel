@@ -1,0 +1,8 @@
+Detect vendor performance trends showing KPI degradation, milestone slippage, or unresolved issues. Investigate:
+
+1. Which vendors have KPI scores trending downward over the last 3 months?
+2. Are there vendors with overdue milestones or repeated milestone extensions?
+3. Which vendors have the highest volume of unresolved issue logs, and are resolution times increasing?
+4. Is there a correlation between vendor underperformance and site-level data quality or enrollment issues?
+
+Focus on identifying vendor-attributable root causes for operational problems and whether corrective action plans are needed.

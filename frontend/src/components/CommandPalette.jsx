@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, ArrowRight, AlertCircle, TrendingDown, Users, Shield } from 'lucide-react'
+import { Search, ArrowRight, AlertCircle, TrendingDown, Users, Shield, Clock, Radio } from 'lucide-react'
 import { useStore } from '../lib/store'
-import { getAttentionSites, getSitesOverview } from '../lib/api'
+import { getAttentionSites, getSitesOverview, getIntelligenceSummary } from '../lib/api'
 
 const suggestions = [
   { icon: AlertCircle, text: 'Why is data quality degrading at CBCC Global Research and what is the financial impact?', category: 'Invisible Collapse' },
@@ -13,8 +14,9 @@ const suggestions = [
 ]
 
 export function CommandPalette() {
-  const { setCommandOpen, setInvestigation, setSelectedSite, setView, siteNameMap, setSiteNameMap } = useStore()
-  const [query, setQuery] = useState('')
+  const navigate = useNavigate()
+  const { setCommandOpen, setInvestigation, siteNameMap, setSiteNameMap, commandQuery, setCommandQuery, currentStudyId } = useStore()
+  const [query, setQuery] = useState(commandQuery || '')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [recentSites, setRecentSites] = useState([])
   const inputRef = useRef(null)
@@ -66,6 +68,9 @@ export function CommandPalette() {
   
   useEffect(() => {
     inputRef.current?.focus()
+    if (commandQuery) {
+      setCommandQuery('')
+    }
   }, [])
   
   useEffect(() => {
@@ -89,8 +94,7 @@ export function CommandPalette() {
     if ('text' in item) {
       setInvestigation({ question: item.text, status: 'routing' })
     } else {
-      setView('study')
-      setSelectedSite({ id: item.id, name: item.name })
+      navigate(`/study/${currentStudyId}/sites/${item.id}`)
     }
     setCommandOpen(false)
   }

@@ -1,8 +1,9 @@
 import { create } from 'zustand'
 
 export const useStore = create((set, get) => ({
-  view: 'home',
-  setView: (view) => set({ view }),
+  // Default study ID — used by all study routes
+  currentStudyId: 'STUDY-001',
+  setCurrentStudyId: (id) => set({ currentStudyId: id }),
 
   selectedSite: null,
   setSelectedSite: (site) => set({ selectedSite: site }),
@@ -18,7 +19,6 @@ export const useStore = create((set, get) => ({
   // Investigation streaming state
   investigationPhases: [],
   addInvestigationPhase: (phase) => set((state) => {
-    // Deduplicate: skip if the last phase for this agent has the same phase name and iteration
     const existing = state.investigationPhases
     const last = [...existing].reverse().find(p => p.agent_id === phase.agent_id)
     if (last && last.phase === phase.phase && last.data?.iteration === phase.data?.iteration) {
@@ -33,9 +33,25 @@ export const useStore = create((set, get) => ({
   investigationError: null,
   setInvestigationError: (error) => set({ investigationError: error }),
 
+  // Current investigation query_id for persistence
+  investigationQueryId: null,
+  setInvestigationQueryId: (id) => set({ investigationQueryId: id }),
+
   commandOpen: false,
   setCommandOpen: (open) => set({ commandOpen: open }),
   toggleCommand: () => set((state) => ({ commandOpen: !state.commandOpen })),
+
+  commandQuery: '',
+  setCommandQuery: (q) => set({ commandQuery: q }),
+  openCommandWithQuery: (q) => set({ commandOpen: true, commandQuery: q }),
+
+  activeTheme: null,
+  setActiveTheme: (theme) => set({ activeTheme: theme }),
+  clearActiveTheme: () => set({ activeTheme: null }),
+
+  // Time lens — global temporal control
+  timeLens: '1M',
+  setTimeLens: (lens) => set({ timeLens: lens }),
 
   studyData: {
     enrolled: 0,
@@ -66,7 +82,7 @@ if (typeof window !== 'undefined') {
     if (e.key === 'Escape') {
       useStore.getState().setCommandOpen(false)
       useStore.getState().setSelectedSite(null)
-      useStore.getState().setInvestigation(null)
+      useStore.getState().clearActiveTheme()
     }
   })
 }

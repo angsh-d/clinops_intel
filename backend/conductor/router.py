@@ -16,6 +16,7 @@ from backend.prompts.manager import PromptManager
 from backend.agents.base import AgentOutput, OnStepCallback
 from backend.agents.registry import AgentRegistry
 from backend.tools.base import ToolRegistry
+from backend.tools.vector_tools import index_finding
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,43 @@ class ConductorRouter:
                 if out is not None:
                     agent_outputs[aid] = out
 
+        # 2b. Index agent findings in vector store for future context_search
+        for aid, out in agent_outputs.items():
+            for f_idx, f in enumerate(out.findings or []):
+                if isinstance(f, dict):
+                    index_finding(
+                        finding_id=f"reactive_{query_id}_{aid}_{f_idx}",
+                        agent_id=aid,
+                        summary=f.get("finding", f.get("summary", out.summary)),
+                        detail=f,
+                        site_id=f.get("site_id"),
+                        finding_type=out.finding_type,
+                        severity=f.get("severity", out.severity),
+                    )
+
+        # 2c. Adaptive re-routing based on cross_domain_followup
+        additional_outputs, reroute_rationale = await self._adaptive_reroute(
+            query, agent_outputs, set(selected_agents), on_step
+        )
+        if additional_outputs:
+            agent_outputs.update(additional_outputs)
+            # Index new findings
+            for aid, out in additional_outputs.items():
+                for f_idx, f in enumerate(out.findings or []):
+                    if isinstance(f, dict):
+                        index_finding(
+                            finding_id=f"reactive_{query_id}_{aid}_{f_idx}",
+                            agent_id=aid,
+                            summary=f.get("finding", f.get("summary", out.summary)),
+                            detail=f,
+                            site_id=f.get("site_id"),
+                            finding_type=out.finding_type,
+                            severity=f.get("severity", out.severity),
+                        )
+            # Force synthesis if rerouting added agents and total > 1
+            if len(agent_outputs) > 1:
+                requires_synthesis = True
+
         # 3. Synthesize if multiple agents returned results
         if requires_synthesis and len(agent_outputs) > 1:
             if on_step:
@@ -188,7 +226,110 @@ class ConductorRouter:
                 for aid, out in agent_outputs.items()
             },
             "synthesis": synthesis,
+            "adaptive_reroute": {
+                "triggered": bool(additional_outputs),
+                "agents_added": list(additional_outputs.keys()) if additional_outputs else [],
+                "rationale": reroute_rationale,
+            },
         }
+
+    async def _adaptive_reroute(
+        self,
+        query: str,
+        agent_outputs: dict[str, AgentOutput],
+        already_run: set[str],
+        on_step: OnStepCallback | None,
+    ) -> tuple[dict[str, AgentOutput], str]:
+        """Check cross_domain_followup from completed agents and route additional agents if needed.
+
+        Returns (agent_outputs_dict, rationale_string). Empty dict + empty string if no reroute.
+        """
+        from backend.config import SessionLocal
+
+        # Collect cross_domain_followup entries from each agent's detail
+        followups = []
+        for aid, out in agent_outputs.items():
+            detail = out.detail if isinstance(out.detail, dict) else {}
+            cdf = detail.get("cross_domain_followup", [])
+            if isinstance(cdf, list):
+                for item in cdf:
+                    if isinstance(item, dict) and item.get("question"):
+                        followups.append({
+                            "original_agent": aid,
+                            "question": item["question"],
+                            "target_agent": item.get("target_agent"),
+                        })
+
+        if not followups:
+            return {}, ""
+
+        # Compute available agents
+        all_agents = self.agent_registry.list_agents()
+        available = [a for a in all_agents if a["agent_id"] not in already_run]
+        if not available:
+            return {}, ""
+
+        # Ask LLM whether to reroute
+        prompt = self.prompts.render(
+            "conductor_adaptive_reroute",
+            query=query,
+            completed_agent_followups=json.dumps(followups, default=str),
+            available_agents=json.dumps(available, default=str),
+        )
+
+        try:
+            response = await self.llm.generate_structured(
+                prompt,
+                system="You are a clinical operations intelligence conductor. Respond with valid JSON only.",
+            )
+            decision = parse_llm_json(response.text)
+        except Exception as e:
+            logger.error("Adaptive reroute LLM call failed: %s", e)
+            return {}, ""
+
+        if not decision.get("should_reroute"):
+            return {}, ""
+
+        # Cap at 2 additional agents, filter out already-run
+        additional_ids = [
+            aid for aid in decision.get("additional_agents", [])
+            if aid not in already_run
+        ][:2]
+
+        if not additional_ids:
+            return {}, ""
+
+        rationale = decision.get("routing_rationale", "")
+        logger.info("Adaptive reroute: adding agents %s — %s", additional_ids, rationale)
+
+        if on_step:
+            await on_step("adaptive_reroute", "conductor", {
+                "additional_agents": additional_ids,
+                "rationale": rationale,
+            })
+
+        # Run each additional agent
+        results: dict[str, AgentOutput] = {}
+        for aid in additional_ids:
+            agent_cls = self.agent_registry.get(aid)
+            if not agent_cls:
+                continue
+            agent_db = SessionLocal()
+            try:
+                agent = agent_cls(
+                    llm_client=self.llm,
+                    tool_registry=self.tool_registry,
+                    prompt_manager=self.prompts,
+                    db_session=agent_db,
+                )
+                output = await agent.run(query, session_id=str(uuid.uuid4()), on_step=on_step)
+                results[aid] = output
+            except Exception as e:
+                logger.error("Adaptive reroute agent %s failed: %s", aid, e)
+            finally:
+                agent_db.close()
+
+        return results, rationale
 
     async def _synthesize(self, query: str, agent_outputs: dict[str, AgentOutput]) -> dict:
         """Cross-domain synthesis: LLM identifies shared root causes across agents."""

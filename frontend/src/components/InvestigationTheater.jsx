@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ChevronDown, ChevronRight, ChevronLeft, ExternalLink, Copy, Check, Loader2, Search, ArrowRight, AlertCircle, BarChart3, Lightbulb, ListChecks, FileText, Shield, TrendingUp } from 'lucide-react'
+import { X, ChevronDown, ChevronRight, ChevronLeft, ExternalLink, Copy, Check, Loader2, Search, ArrowRight, AlertCircle, BarChart3, Lightbulb, ListChecks, FileText, Shield, TrendingUp, Link2, MessageSquare } from 'lucide-react'
 import { useStore } from '../lib/store'
-import { startInvestigation, connectInvestigationStream } from '../lib/api'
+import { startInvestigation, connectInvestigationStream, getQueryStatus, submitFollowUp } from '../lib/api'
 import { Site360Panel } from './Site360Panel'
 
 const PHASE_LABELS = {
@@ -12,6 +13,7 @@ const PHASE_LABELS = {
   plan: 'Planning',
   act: 'Investigating',
   reflect: 'Evaluating',
+  adaptive_reroute: 'Cross-Domain Re-routing',
   synthesize: 'Synthesizing',
   complete: 'Complete',
 }
@@ -226,27 +228,101 @@ function confidenceLabel(value) {
 }
 
 export function InvestigationTheater() {
-  const { investigation, setInvestigation, setView, view, studyData, investigationPhases, addInvestigationPhase, investigationResult, setInvestigationResult, investigationError, setInvestigationError } = useStore()
+  const navigate = useNavigate()
+  const routeParams = useParams()
+  const { investigation, setInvestigation, studyData, investigationPhases, addInvestigationPhase, investigationResult, setInvestigationResult, investigationError, setInvestigationError, investigationQueryId, setInvestigationQueryId, currentStudyId } = useStore()
   const resolveText = useResolveText()
   const [loading, setLoading] = useState(true)
   const [showTrace, setShowTrace] = useState(false)
   const [timelineCollapsed, setTimelineCollapsed] = useState(true)
   const [phase, setPhase] = useState(() => investigation?.site ? 'overview' : 'analyzing')
   const [displayMode, setDisplayMode] = useState('brief')
+  const [followUpInput, setFollowUpInput] = useState('')
+  const [followUpLoading, setFollowUpLoading] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
   const wsRef = useRef(null)
+
+  // If navigated directly via /investigate/:queryId, load from backend
+  useEffect(() => {
+    if (routeParams.queryId && !investigation) {
+      setInvestigationQueryId(routeParams.queryId)
+      async function loadExisting() {
+        try {
+          const result = await getQueryStatus(routeParams.queryId)
+          if (result.status === 'completed') {
+            setInvestigationResult({
+              synthesis: result.synthesis,
+              agent_outputs: result.agent_outputs,
+            })
+            setInvestigation({ question: result.question || 'Investigation', status: 'complete' })
+            setLoading(false)
+          } else if (result.status === 'processing' || result.status === 'pending') {
+            setInvestigation({ question: result.question || 'Investigation', status: 'routing' })
+            const ws = connectInvestigationStream(routeParams.queryId, {
+              onPhase: (msg) => addInvestigationPhase(msg),
+              onComplete: (msg) => { setInvestigationResult(msg); setLoading(false) },
+              onError: (err) => { setInvestigationError(err); setLoading(false) },
+            })
+            wsRef.current = ws
+          }
+        } catch {
+          setInvestigationError('Investigation not found')
+          setLoading(false)
+        }
+      }
+      loadExisting()
+    }
+  }, [routeParams.queryId])
 
   const handleLaunchAnalysis = () => {
     setPhase('analyzing')
   }
-  
+
   const handleShowFullAnalysis = () => {
     setDisplayMode('full')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
-  
+
   const handleBackToSummary = () => {
     setDisplayMode('brief')
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleCopyLink = () => {
+    const url = investigationQueryId
+      ? `${window.location.origin}/investigate/${investigationQueryId}`
+      : window.location.href
+    navigator.clipboard.writeText(url)
+    setLinkCopied(true)
+    setTimeout(() => setLinkCopied(false), 2000)
+  }
+
+  const handleFollowUp = async () => {
+    if (!followUpInput.trim() || !investigationQueryId) return
+    setFollowUpLoading(true)
+    try {
+      // Close existing WebSocket before starting new follow-up
+      if (wsRef.current) {
+        wsRef.current.close()
+        wsRef.current = null
+      }
+      const { query_id } = await submitFollowUp(investigationQueryId, followUpInput.trim())
+      setFollowUpInput('')
+      setInvestigationQueryId(query_id)
+      navigate(`/investigate/${query_id}`, { replace: true })
+      // Reset and stream new investigation
+      setInvestigation({ question: followUpInput.trim(), status: 'routing' })
+      setLoading(true)
+      const ws = connectInvestigationStream(query_id, {
+        onPhase: (msg) => addInvestigationPhase(msg),
+        onComplete: (msg) => { setInvestigationResult(msg); setLoading(false); setFollowUpLoading(false) },
+        onError: (err) => { setInvestigationError(err); setLoading(false); setFollowUpLoading(false) },
+      })
+      wsRef.current = ws
+    } catch (error) {
+      setInvestigationError(error.message)
+      setFollowUpLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -264,6 +340,9 @@ export function InvestigationTheater() {
         )
 
         if (cancelled) return
+        setInvestigationQueryId(query_id)
+        // Update URL to be shareable
+        navigate(`/investigate/${query_id}`, { replace: true })
 
         const ws = connectInvestigationStream(query_id, {
           onPhase: (msg) => {
@@ -324,15 +403,15 @@ export function InvestigationTheater() {
     >
       {/* Site 360 Overview Phase */}
       {phase === 'overview' && investigation.site && (
-        <div className="h-full bg-white">
+        <div className="min-h-full bg-white">
           <div className="sticky top-0 bg-white/95 backdrop-blur-xl border-b border-neutral-100 z-10 px-6 py-5">
             <div className="max-w-4xl mx-auto flex items-center justify-between">
               <button
-                onClick={() => { setInvestigation(null); setView('study'); window.scrollTo(0, 0); }}
+                onClick={() => { setInvestigation(null); navigate(-1); }}
                 className="flex items-center gap-1.5 text-[13px] text-neutral-500 hover:text-neutral-900 transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
-                <span>Back to Study</span>
+                <span>Back</span>
               </button>
               <div className="text-center">
                 <h1 className="text-[17px] font-semibold text-neutral-900 tracking-tight">Investigation Studio</h1>
@@ -355,13 +434,12 @@ export function InvestigationTheater() {
       <div className="max-w-3xl mx-auto px-6 py-12 bg-white min-h-screen">
         <div className="flex items-center mb-8">
           <button
-            onClick={() => { 
+            onClick={() => {
               if (phase === 'analyzing' && investigation.site) {
                 setPhase('overview')
               } else {
-                setInvestigation(null); 
-                setView('study'); 
-                window.scrollTo(0, 0);
+                setInvestigation(null);
+                navigate(-1);
               }
             }}
             className="flex items-center gap-1.5 text-[13px] text-neutral-500 hover:text-neutral-900 transition-colors"
@@ -411,7 +489,7 @@ export function InvestigationTheater() {
           </motion.div>
         ) : (
           <div>
-            <AgentTimeline phases={investigationPhases} loading={loading} />
+            <AgentTimeline phases={investigationPhases} loading={loading} reroutedAgents={investigationResult?.adaptive_reroute?.agents_added} />
             {isComplete && (
               <button
                 onClick={() => setTimelineCollapsed(true)}
@@ -421,6 +499,30 @@ export function InvestigationTheater() {
               </button>
             )}
           </div>
+        )}
+
+        {/* Adaptive Re-routing Indicator */}
+        {isComplete && investigationResult?.adaptive_reroute?.triggered && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-4 bg-purple-50/60 border border-purple-200/50 rounded-xl px-4 py-3 flex items-start gap-3"
+          >
+            <div className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center shrink-0 mt-0.5">
+              <ArrowRight className="w-3 h-3 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-[12px] font-medium text-purple-700">
+                Cross-domain re-routing activated
+              </p>
+              <p className="text-[11px] text-purple-600/70 mt-0.5">
+                Added {investigationResult.adaptive_reroute.agents_added.map(a => AGENT_NAMES[a] || a).join(', ')}
+                {investigationResult.adaptive_reroute.rationale && (
+                  <span> — {investigationResult.adaptive_reroute.rationale}</span>
+                )}
+              </p>
+            </div>
+          </motion.div>
         )}
 
         {/* Executive Brief Mode - Clean consumable summary */}
@@ -561,7 +663,7 @@ export function InvestigationTheater() {
                 </button>
 
                 <AnimatePresence>
-                  {showTrace && <ReasoningTrace agentOutputs={agentOutputs} />}
+                  {showTrace && <ReasoningTrace agentOutputs={agentOutputs} reroutedAgents={investigationResult?.adaptive_reroute?.agents_added} />}
                 </AnimatePresence>
 
                 <div className="flex items-center gap-4 mt-6 pt-4 border-t border-neutral-100">
@@ -570,11 +672,46 @@ export function InvestigationTheater() {
                   </span>
                 </div>
 
-                <ActionButtons synthesis={synthesis} />
+                <ActionButtons synthesis={synthesis} onCopyLink={handleCopyLink} linkCopied={linkCopied} />
               </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Follow-up input — shown after investigation completes */}
+        {isComplete && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.6 }}
+            className="mt-8 border-t border-neutral-100 pt-6"
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <MessageSquare className="w-4 h-4 text-neutral-400" />
+              <span className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Follow Up</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="text"
+                value={followUpInput}
+                onChange={(e) => setFollowUpInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleFollowUp()}
+                placeholder="Ask a follow-up question about these findings..."
+                className="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-[14px] text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-400 transition-colors"
+                disabled={followUpLoading}
+              />
+              {followUpInput.trim() && (
+                <button
+                  onClick={handleFollowUp}
+                  disabled={followUpLoading}
+                  className="px-4 py-3 bg-neutral-900 text-white rounded-xl text-[14px] font-medium hover:bg-neutral-800 transition-colors disabled:opacity-50"
+                >
+                  {followUpLoading ? 'Sending...' : 'Ask'}
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
 
         {/* Loading state when waiting for results */}
         {loading && !investigationError && investigationPhases.length === 0 && (
@@ -854,7 +991,8 @@ function ReasoningDetail({ phases }) {
 }
 
 
-function AgentTimeline({ phases, loading }) {
+function AgentTimeline({ phases, loading, reroutedAgents }) {
+  const reroutedSet = useMemo(() => new Set(reroutedAgents || []), [reroutedAgents])
   const [expandedIterations, setExpandedIterations] = useState({})
 
   const prpaOrder = ['perceive', 'reason', 'plan', 'act', 'reflect']
@@ -921,6 +1059,9 @@ function AgentTimeline({ phases, loading }) {
               <div className="flex items-center justify-between mb-2.5">
                 <span className="text-caption font-medium text-apple-text">
                   {AGENT_NAMES[agent] || agent}
+                  {reroutedSet.has(agent) && (
+                    <span className="ml-2 text-[9px] font-semibold text-purple-600 bg-purple-50 border border-purple-200/60 px-1.5 py-0.5 rounded-full uppercase tracking-wider">cross-domain</span>
+                  )}
                 </span>
                 {loading && latestPhase && (
                   <span className="flex items-center gap-1.5 text-xs text-apple-accent">
@@ -935,6 +1076,12 @@ function AgentTimeline({ phases, loading }) {
                     {PHASE_LABELS[p.phase] || p.phase}
                     {p.data?.query && ` — "${p.data.query}"`}
                     {p.data?.agents && ` — ${p.data.agents.join(', ')}`}
+                    {p.phase === 'adaptive_reroute' && p.data?.additional_agents && (
+                      <span> — adding {p.data.additional_agents.map(a => AGENT_NAMES[a] || a).join(', ')}</span>
+                    )}
+                    {p.phase === 'adaptive_reroute' && p.data?.rationale && (
+                      <span className="block text-[11px] text-apple-secondary/70 mt-0.5">{p.data.rationale}</span>
+                    )}
                   </p>
                 ))}
               </div>
@@ -955,6 +1102,9 @@ function AgentTimeline({ phases, loading }) {
             <div className="flex items-center justify-between mb-2.5">
               <span className="text-caption font-medium text-apple-text">
                 {AGENT_NAMES[agent] || agent}
+                {reroutedSet.has(agent) && (
+                  <span className="ml-2 text-[9px] font-semibold text-purple-600 bg-purple-50 border border-purple-200/60 px-1.5 py-0.5 rounded-full uppercase tracking-wider">cross-domain</span>
+                )}
               </span>
               {loading && latestPhase && (
                 <span className="flex items-center gap-1.5 text-xs text-apple-accent">
@@ -1280,8 +1430,9 @@ function summarizeTrace(trace) {
   return parts.join(' · ')
 }
 
-function ReasoningTrace({ agentOutputs }) {
+function ReasoningTrace({ agentOutputs, reroutedAgents }) {
   const resolveText = useResolveText()
+  const reroutedSet = useMemo(() => new Set(reroutedAgents || []), [reroutedAgents])
   return (
     <motion.div
       initial={{ height: 0, opacity: 0 }}
@@ -1294,10 +1445,13 @@ function ReasoningTrace({ agentOutputs }) {
           const traceSummary = summarizeTrace(output.reasoning_trace)
 
           return (
-            <div key={agentId} className="p-4 bg-apple-bg/80 rounded-xl border border-apple-border/40">
+            <div key={agentId} className={`p-4 bg-apple-bg/80 rounded-xl border ${reroutedSet.has(agentId) ? 'border-purple-200/60' : 'border-apple-border/40'}`}>
               <div className="flex items-center justify-between mb-2.5">
                 <p className="text-caption font-medium text-apple-text">
                   {AGENT_NAMES[agentId] || agentId}
+                  {reroutedSet.has(agentId) && (
+                    <span className="ml-2 text-[9px] font-semibold text-purple-600 bg-purple-50 border border-purple-200/60 px-1.5 py-0.5 rounded-full uppercase tracking-wider">cross-domain</span>
+                  )}
                   {output.severity && (
                     <span className={`ml-2 text-[10px] font-medium px-2 py-0.5 rounded-full ${
                       output.severity === 'critical' ? 'bg-red-50 text-red-600' :
@@ -1458,7 +1612,7 @@ function IntegrityAssessmentCard({ assessment }) {
   )
 }
 
-function ActionButtons({ synthesis }) {
+function ActionButtons({ synthesis, onCopyLink, linkCopied }) {
   const [copied, setCopied] = useState(false)
 
   const handleCopy = () => {
@@ -1482,6 +1636,10 @@ function ActionButtons({ synthesis }) {
       <button onClick={handleCopy} className="button-secondary flex items-center gap-2 rounded-xl">
         {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
         {copied ? 'Copied' : 'Copy'}
+      </button>
+      <button onClick={onCopyLink} className="button-secondary flex items-center gap-2 rounded-xl">
+        {linkCopied ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+        {linkCopied ? 'Link Copied' : 'Share Link'}
       </button>
     </div>
   )

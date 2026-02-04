@@ -28,7 +28,6 @@ function cachedFetch(endpoint, ttlMs = DASHBOARD_TTL) {
 
 export function invalidateApiCache() {
   _cache.clear()
-  _inflight.clear()
 }
 
 async function fetchApi(endpoint) {
@@ -43,6 +42,32 @@ async function fetchApi(endpoint) {
     throw error
   }
 }
+
+async function postApi(endpoint, body) {
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`)
+  }
+  return await response.json()
+}
+
+async function putApi(endpoint, body) {
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`)
+  }
+  return await response.json()
+}
+
+// ── Dashboard endpoints ──────────────────────────────────────────────────────
 
 export async function getStudySummary() {
   return cachedFetch('/dashboard/study-summary')
@@ -84,6 +109,22 @@ export async function getSiteDetail(siteId) {
   return cachedFetch(`/dashboard/site/${siteId}`)
 }
 
+export async function getIntelligenceSummary() {
+  return cachedFetch('/dashboard/intelligence-summary')
+}
+
+export async function getThemeFindings(themeId) {
+  return cachedFetch(`/dashboard/theme/${themeId}/findings`)
+}
+
+export async function getAgentActivity() {
+  return cachedFetch('/dashboard/agent-activity')
+}
+
+export async function getAlertEnhanced(alertId) {
+  return cachedFetch(`/dashboard/alert-enhanced/${alertId}`)
+}
+
 // ── Vendor endpoints ──────────────────────────────────────────────────────
 
 export async function getVendorScorecards() {
@@ -120,6 +161,98 @@ export async function getCostPerPatient() {
   return cachedFetch('/dashboard/cost-per-patient')
 }
 
+// ── Alert endpoints ──────────────────────────────────────────────────────
+
+export async function getAlerts({ status, severity, site_id, limit = 50 } = {}) {
+  const params = new URLSearchParams()
+  if (status) params.set('status', status)
+  if (severity) params.set('severity', severity)
+  if (site_id) params.set('site_id', site_id)
+  if (limit) params.set('limit', String(limit))
+  const qs = params.toString()
+  return cachedFetch(`/alerts/${qs ? '?' + qs : ''}`, 30_000)
+}
+
+export async function getAlert(alertId) {
+  return fetchApi(`/alerts/${alertId}`)
+}
+
+export async function acknowledgeAlert(alertId, acknowledgedBy = 'CODM Lead') {
+  return postApi(`/alerts/${alertId}/acknowledge`, { acknowledged_by: acknowledgedBy })
+}
+
+export async function suppressAlert(alertId, { reason, created_by = 'CODM Lead', expires_in_days = 7 }) {
+  return postApi(`/alerts/${alertId}/suppress`, { reason, created_by, expires_in_days })
+}
+
+// ── Proactive scan endpoints ─────────────────────────────────────────────
+
+export async function triggerScan(triggerType = 'api', agentFilter = null) {
+  const body = { trigger_type: triggerType }
+  if (agentFilter) body.agent_filter = agentFilter
+  return postApi('/proactive/scan', body)
+}
+
+export async function getScanStatus(scanId) {
+  return fetchApi(`/proactive/scan/${scanId}`)
+}
+
+export async function getScans(limit = 20, offset = 0) {
+  return cachedFetch(`/proactive/scans?limit=${limit}&offset=${offset}`, 30_000)
+}
+
+export async function getScanBriefs(scanId) {
+  return cachedFetch(`/proactive/briefs/scan/${scanId}`, 60_000)
+}
+
+export async function getSiteBriefs(siteId, limit = 10) {
+  return cachedFetch(`/proactive/briefs/${siteId}?limit=${limit}`, 60_000)
+}
+
+// ── Directive endpoints ──────────────────────────────────────────────────
+
+export async function getDirectives() {
+  return cachedFetch('/proactive/directives', 60_000)
+}
+
+export async function toggleDirective(directiveId, enabled) {
+  invalidateApiCache()
+  return putApi(`/proactive/directives/${directiveId}/toggle`, { enabled })
+}
+
+export async function createDirective({ directive_id, agent_id, name, description, prompt_text, priority }) {
+  invalidateApiCache()
+  return postApi('/proactive/directives', { directive_id, agent_id, name, description, prompt_text, priority })
+}
+
+// ── Agent endpoints ──────────────────────────────────────────────────────
+
+export async function getAgents() {
+  return cachedFetch('/agents/', 300_000)
+}
+
+export async function getAgentFindings(agentId, limit = 20) {
+  return cachedFetch(`/agents/${agentId}/findings?limit=${limit}`, 30_000)
+}
+
+// ── Query endpoints (follow-up, status) ──────────────────────────────────
+
+export async function getQueryStatus(queryId) {
+  return fetchApi(`/query/${queryId}/status`)
+}
+
+export async function submitFollowUp(queryId, question) {
+  return postApi(`/query/${queryId}/follow-up`, { question })
+}
+
+// ── Feeds ────────────────────────────────────────────────────────────────
+
+export async function getHealthCheck() {
+  return cachedFetch('/feeds/health', 60_000)
+}
+
+// ── Investigation (existing) ─────────────────────────────────────────────
+
 export async function startInvestigation(query, siteId) {
   const response = await fetch(`${API_BASE}/agents/investigate`, {
     method: 'POST',
@@ -147,7 +280,6 @@ export function connectInvestigationStream(queryId, { onPhase, onComplete, onErr
         return
       }
       if (msg.phase === 'keepalive') {
-        // Keepalive message to prevent proxy/browser timeout — ignore
         return
       }
       if (msg.phase === 'complete') {
@@ -155,7 +287,6 @@ export function connectInvestigationStream(queryId, { onPhase, onComplete, onErr
         invalidateApiCache()
         onComplete?.(msg)
       } else if (msg.phase === 'info') {
-        // Server info message (e.g. query already processing) — treat as phase
         onPhase?.(msg)
       } else {
         onPhase?.(msg)

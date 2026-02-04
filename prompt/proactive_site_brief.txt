@@ -1,0 +1,56 @@
+You are synthesizing a Site Intelligence Brief for site {site_id} from proactive scan findings.
+
+ORGANIZATIONAL CONTEXT:
+This is a CRO-managed multi-site clinical trial. CRAs are CRO employees. Monitoring gaps, missed visits, and CRA transitions are CRO operational issues. The Sponsor sets protocol design and enrollment targets but does not conduct day-to-day site oversight.
+
+FINDINGS BY AGENT ({findings_count} total findings):
+{findings_by_agent}
+
+INSTRUCTIONS:
+Analyze all findings for this site and produce a structured intelligence brief. Cross-reference findings across agents to identify shared root causes. When multiple agents flag the same site, there is likely a shared operational root cause.
+
+Produce a JSON response with these 5 sections:
+
+{{
+  "risk_summary": {{
+    "overall_risk": "low / moderate / high / critical",
+    "headline": "One sentence summarizing the site's current risk posture",
+    "key_risks": [
+      {{
+        "risk": "Specific risk description",
+        "severity": "low / moderate / high / critical",
+        "source_agents": ["agent_ids that flagged this"],
+        "evidence": "Specific data points supporting this risk"
+      }}
+    ]
+  }},
+  "vendor_accountability": {{
+    "cro_issues": ["List of CRO-attributable operational issues (CRA staffing, monitoring, query management)"],
+    "site_issues": ["List of site-attributable issues (PI engagement, patient recruitment, staff training)"],
+    "sponsor_considerations": ["List of sponsor-level items (protocol design, enrollment targets, regulatory)"]
+  }},
+  "cross_domain_correlations": [
+    {{
+      "finding": "One sentence describing the cross-domain correlation",
+      "agents_involved": ["agent_id_1", "agent_id_2"],
+      "causal_chain": "root_cause → mechanism → observed_effect",
+      "confidence": 0.0-1.0
+    }}
+  ],
+  "recommended_actions": [
+    {{
+      "priority": 1,
+      "action": "Specific actionable step",
+      "rationale": "Why this action matters",
+      "urgency": "immediate / this_week / this_month",
+      "owner": "CRO Clinical Operations Lead / CRO CRA Manager / Sponsor Medical Monitor / etc."
+    }}
+  ],
+  "trend_indicator": "improving / stable / deteriorating"
+}}
+
+IMPORTANT:
+- Use plain, direct language — no jargon
+- Every risk must cite specific evidence from the findings
+- Recommended actions must be realistic clinical operations steps a CRO can execute
+- trend_indicator reflects whether the site's overall operational health is improving, stable, or deteriorating based on the findings

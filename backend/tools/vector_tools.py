@@ -65,3 +65,47 @@ class ContextSearchTool(BaseTool):
             documents=[text],
             metadatas=[metadata],
         )
+
+
+# ── Module-level helper for indexing findings from any pipeline ──
+
+_index_tool: ContextSearchTool | None = None
+
+
+def index_finding(
+    finding_id: str | int,
+    agent_id: str,
+    summary: str,
+    detail: dict | None = None,
+    site_id: str | None = None,
+    finding_type: str | None = None,
+    severity: str | None = None,
+) -> None:
+    """Index a finding in the vector store for semantic retrieval.
+
+    Safe to call from any pipeline — failures are logged but never raised.
+    """
+    global _index_tool
+    try:
+        if _index_tool is None:
+            _index_tool = ContextSearchTool()
+
+        # Build searchable text: summary + truncated detail
+        text_parts = [summary]
+        if detail:
+            text_parts.append(json.dumps(detail, default=str)[:3000])
+        text = "\n".join(text_parts)
+
+        # ChromaDB metadata values must be str, int, float, or bool
+        metadata = {"agent_id": agent_id}
+        if site_id:
+            metadata["site_id"] = site_id
+        if finding_type:
+            metadata["finding_type"] = finding_type
+        if severity:
+            metadata["severity"] = severity
+
+        _index_tool.store_finding(str(finding_id), text, metadata)
+        logger.debug("Indexed finding %s in vector store", finding_id)
+    except Exception:
+        logger.warning("Failed to index finding %s in vector store", finding_id, exc_info=True)

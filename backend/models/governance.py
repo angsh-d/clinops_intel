@@ -40,10 +40,14 @@ class AgentFinding(Base):
     data_signals = Column(JSONB)
     reasoning_trace = Column(JSONB)
     confidence = Column(Float)
+    dedup_hash = Column(String(64), unique=True)
+    scan_id = Column(String(50))
+    directive_id = Column(String(100))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     __table_args__ = (
         Index("ix_findings_agent", "agent_id"),
         Index("ix_findings_site", "site_id"),
+        Index("ix_findings_scan", "scan_id"),
     )
 
 
@@ -137,4 +141,44 @@ class CacheEntry(Base):
     __table_args__ = (
         UniqueConstraint("namespace", "cache_key", name="uq_cache_ns_key"),
         Index("ix_cache_namespace", "namespace"),
+    )
+
+
+# ── proactive_scans ─────────────────────────────────────────────────────────
+class ProactiveScan(Base):
+    __tablename__ = "proactive_scans"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    scan_id = Column(String(50), nullable=False, unique=True)
+    status = Column(String(20), nullable=False, default="pending")  # pending/running/completed/failed
+    trigger_type = Column(String(30), nullable=False, default="api")  # api/schedule/data_refresh
+    directives_executed = Column(JSONB)
+    agent_results = Column(JSONB)
+    findings_count = Column(Integer, default=0)
+    alerts_count = Column(Integer, default=0)
+    brief_ids = Column(JSONB)
+    study_synthesis = Column(JSONB)  # study-wide cross-domain synthesis
+    started_at = Column(DateTime)
+    completed_at = Column(DateTime)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    error_detail = Column(Text)
+    __table_args__ = (
+        Index("ix_scan_status", "status"),
+    )
+
+
+# ── site_intelligence_briefs ────────────────────────────────────────────────
+class SiteIntelligenceBrief(Base):
+    __tablename__ = "site_intelligence_briefs"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    scan_id = Column(String(50), nullable=False)
+    site_id = Column(String(20), nullable=False)
+    risk_summary = Column(JSONB)
+    vendor_accountability = Column(JSONB)
+    cross_domain_correlations = Column(JSONB)
+    recommended_actions = Column(JSONB)
+    trend_indicator = Column(String(20))  # improving/stable/deteriorating
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    __table_args__ = (
+        Index("ix_brief_scan", "scan_id"),
+        Index("ix_brief_site", "site_id"),
     )

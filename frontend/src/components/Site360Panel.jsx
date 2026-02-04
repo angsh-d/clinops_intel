@@ -631,7 +631,7 @@ export function Site360Panel({ siteId, siteName, question, onLaunchAnalysis }) {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="h-full overflow-y-auto bg-white"
+      className="bg-white"
     >
       <div className="max-w-4xl mx-auto px-6 py-10">
         {/* Header */}

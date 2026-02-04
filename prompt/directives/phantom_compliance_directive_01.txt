@@ -1,0 +1,8 @@
+Flag sites showing suspiciously low variance across multiple data quality domains that may indicate fabrication or rubber-stamping. Investigate:
+
+1. Which sites show near-zero variance in eCRF entry lag, query resolution time, or data correction rates — suggesting manufactured compliance?
+2. Are there sites where CRA monitoring reviews show uniform pass rates across all domains — suggesting rubber-stamping rather than genuine source data verification?
+3. Do any sites show weekday-only data entry patterns with no weekend or holiday entries, inconsistent with genuine clinical workflows?
+4. Are there sites where query resolution times cluster suspiciously around specific thresholds?
+
+Distinguish between genuinely high-performing sites and sites showing statistical patterns inconsistent with real clinical operations.

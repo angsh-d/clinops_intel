@@ -1,0 +1,8 @@
+Identify sites with worsening entry lag trends, high query burden, or monitoring gaps that suggest hidden data quality debt. Specifically investigate:
+
+1. Which sites have eCRF entry lags exceeding 5 days and whether the trend is worsening?
+2. Which sites have an open query count above 15, and what is the query aging distribution?
+3. Are there sites where CRA monitoring visits are overdue or where CRA transitions have disrupted data review cadence?
+4. Which sites show a pattern of increasing data corrections that may indicate systematic entry errors?
+
+Focus on identifying the root cause of any data quality degradation — is it a staffing issue, a process gap, or a site capability problem?

@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Command } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { getVendorScorecards, getVendorDetail, getVendorComparison } from '../lib/api'
+import { StudyNav } from './StudyNav'
 
 export function VendorDashboard() {
-  const { setView, toggleCommand, studyData } = useStore()
+  const { toggleCommand, studyData } = useStore()
   const [scorecards, setScorecards] = useState([])
   const [comparison, setComparison] = useState(null)
   const [selectedVendor, setSelectedVendor] = useState(null)
@@ -56,27 +56,7 @@ export function VendorDashboard() {
 
   return (
     <div className="min-h-screen bg-apple-bg">
-      {/* Header */}
-      <header className="sticky top-0 z-50 glass border-b border-apple-border">
-        <div className="px-5 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setView('study360')} className="flex items-center gap-2 text-apple-secondary hover:text-apple-text transition-colors">
-              <ArrowLeft className="w-4 h-4" />
-              <span className="text-caption">Back</span>
-            </button>
-            <div className="w-px h-5 bg-apple-border" />
-            <span className="text-body font-medium text-apple-text">Vendor Management</span>
-          </div>
-          <button
-            onClick={toggleCommand}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-apple-surface border border-apple-border rounded-lg text-caption text-apple-secondary hover:text-apple-text transition-all"
-          >
-            <Command className="w-3 h-3" />
-            <span>Ask</span>
-            <kbd className="ml-0.5 px-1 py-0.5 bg-apple-bg rounded text-[10px] font-mono">K</kbd>
-          </button>
-        </div>
-      </header>
+      <StudyNav active="vendors" />
 
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
         {/* Vendor Cards Grid */}

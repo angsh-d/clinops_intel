@@ -1,5 +1,6 @@
 """BaseAgent with PRPA (Perceive-Reason-Plan-Act-Reflect) loop."""
 
+import json
 import logging
 import uuid
 from abc import ABC, abstractmethod
@@ -56,13 +57,24 @@ OnStepCallback = Callable[[str, str, Any], Coroutine[Any, Any, None]]
 class BaseAgent(ABC):
     """Abstract agent implementing the PRPA reasoning loop.
 
-    Subclasses implement perceive/reason/plan/act/reflect for their domain.
+    Subclasses implement perceive() for their domain. The reason/plan/act/reflect
+    and _build_output methods have concrete defaults that use class-level
+    configuration attributes. Subclasses can override any method if needed.
+
     The on_step callback is invoked at each phase for WebSocket streaming.
     """
 
     agent_id: str = ""
     agent_name: str = ""
     description: str = ""
+
+    # Subclass configuration for the default reason/plan/reflect/_build_output
+    finding_type: str = ""
+    prompt_prefix: str = ""
+    system_prompt_reason: str = ""
+    system_prompt_plan: str = ""
+    system_prompt_reflect: str = ""
+    fallback_summary: str = "No significant issues detected."
 
     def __init__(
         self,
@@ -206,35 +218,180 @@ class BaseAgent(ABC):
                 logger.warning("on_step callback failed for %s/%s — continuing agent execution", agent_id, phase)
         return safe
 
+    # ── PERCEIVE (abstract — each agent must implement) ──
+
     @abstractmethod
     async def perceive(self, ctx: AgentContext) -> dict:
         """Gather raw data signals broadly."""
         ...
 
-    @abstractmethod
+    # ── REASON (concrete default — uses prompt_prefix + system_prompt_reason) ──
+
     async def reason(self, ctx: AgentContext) -> list:
         """LLM-driven hypothesis generation from perceptions."""
-        ...
+        logger.info("[%s] REASON: generating hypotheses via LLM", self.agent_id)
 
-    @abstractmethod
+        site_directory = json.dumps(
+            [{"site_id": s["site_id"], "name": s["name"]}
+             for s in ctx.perceptions.get("site_metadata", [])
+             if isinstance(s, dict) and "site_id" in s and "name" in s],
+            default=str,
+        )
+
+        prompt = self.prompts.render(
+            f"{self.prompt_prefix}_reason",
+            perceptions=self._safe_json_str(ctx.perceptions),
+            query=ctx.query,
+            site_directory=site_directory,
+        )
+        response = await self.llm.generate_structured(
+            prompt,
+            system=self.system_prompt_reason,
+        )
+        try:
+            parsed = self._parse_json(response.text)
+            hypotheses = parsed.get("hypotheses", [])
+            logger.info("[%s] REASON: generated %d hypotheses", self.agent_id, len(hypotheses))
+            return hypotheses
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.error("[%s] REASON: failed to parse LLM response: %s\nRaw text: %s", self.agent_id, e, response.text[:500])
+            raise RuntimeError(f"[{self.agent_id}] REASON phase failed to parse LLM response: {e}") from e
+
+    # ── PLAN (concrete default — uses prompt_prefix + system_prompt_plan) ──
+
     async def plan(self, ctx: AgentContext) -> list:
-        """LLM-driven investigation plan from hypotheses."""
-        ...
+        """LLM-driven investigation plan — the LLM chooses tools and order."""
+        logger.info("[%s] PLAN: generating investigation plan via LLM", self.agent_id)
 
-    @abstractmethod
+        prompt = self.prompts.render(
+            f"{self.prompt_prefix}_plan",
+            hypotheses=self._safe_json_str(ctx.hypotheses),
+            tool_descriptions=self.tools.list_tools_text(),
+            prior_results=self._safe_json_str(ctx.action_results) if ctx.iteration > 1 else "First iteration — no prior results.",
+            iteration=str(ctx.iteration),
+            reflection_gaps=self._safe_json_str(ctx.reflection.get("remaining_gaps", [])) if ctx.iteration > 1 else "N/A",
+        )
+        response = await self.llm.generate_structured(
+            prompt,
+            system=self.system_prompt_plan,
+        )
+        try:
+            parsed = self._parse_json(response.text)
+            steps = parsed.get("plan_steps", [])
+            logger.info("[%s] PLAN: %d investigation steps planned", self.agent_id, len(steps))
+            return steps
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.error("[%s] PLAN: failed to parse LLM response: %s", self.agent_id, e)
+            return []
+
+    # ── ACT (concrete default — identical across all agents) ──
+
     async def act(self, ctx: AgentContext) -> list:
-        """Execute planned tool invocations."""
-        ...
+        """Execute each LLM-planned tool invocation."""
+        logger.info("[%s] ACT: executing %d planned steps", self.agent_id, len(ctx.plan_steps))
+        results = []
 
-    @abstractmethod
+        for step in ctx.plan_steps:
+            tool_name = step.get("tool_name", "")
+            tool_args = step.get("tool_args", {})
+            purpose = step.get("purpose", "")
+            logger.info("[%s] ACT: invoking %s for: %s", self.agent_id, tool_name, purpose)
+
+            result = await self.tools.invoke(tool_name, self.db, **tool_args)
+            results.append({
+                "step_id": step.get("step_id"),
+                "tool_name": tool_name,
+                "purpose": purpose,
+                "success": result.success,
+                "data": result.data,
+                "row_count": result.row_count,
+                "error": result.error,
+            })
+
+        return results
+
+    # ── REFLECT (concrete default — uses prompt_prefix + system_prompt_reflect) ──
+
     async def reflect(self, ctx: AgentContext) -> dict:
-        """LLM-driven evaluation of investigation completeness."""
-        ...
+        """LLM evaluates whether the investigation reached root cause."""
+        logger.info("[%s] REFLECT: evaluating completeness via LLM", self.agent_id)
 
-    @abstractmethod
+        prompt = self.prompts.render(
+            f"{self.prompt_prefix}_reflect",
+            query=ctx.query,
+            hypotheses=self._safe_json_str(ctx.hypotheses),
+            action_results=self._safe_json_str(ctx.action_results),
+            iteration=str(ctx.iteration),
+            max_iterations=str(ctx.max_iterations),
+        )
+        response = await self.llm.generate_structured(
+            prompt,
+            system=self.system_prompt_reflect,
+        )
+        try:
+            parsed = self._parse_json(response.text)
+            logger.info("[%s] REFLECT: goal_satisfied=%s, findings=%d",
+                        self.agent_id,
+                        parsed.get("is_goal_satisfied"),
+                        len(parsed.get("findings_summary", [])))
+            return parsed
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.error("[%s] REFLECT: failed to parse: %s\nRaw text: %s", self.agent_id, e, response.text[:500])
+            raise RuntimeError(f"[{self.agent_id}] REFLECT phase failed to parse LLM response: {e}") from e
+
+    # ── BUILD OUTPUT (concrete default — uses finding_type + fallback_summary) ──
+
     async def _build_output(self, ctx: AgentContext) -> AgentOutput:
-        """Build structured output from completed context."""
-        ...
+        """Build structured output from the completed PRPA context."""
+        findings = ctx.reflection.get("findings_summary", [])
+
+        confidences = [f.get("confidence", 0) for f in findings]
+        if not confidences:
+            # No findings is a legitimate outcome — agent found nothing wrong.
+            logger.info("[%s] PRPA loop completed with no findings", self.agent_id)
+            return AgentOutput(
+                agent_id=self.agent_id,
+                finding_type=self.finding_type,
+                severity=ctx.reflection.get("overall_severity", "low"),
+                summary=self.fallback_summary,
+                detail={
+                    "findings": [],
+                    "remaining_gaps": ctx.reflection.get("remaining_gaps", []),
+                    "cross_domain_followup": ctx.reflection.get("cross_domain_followup", []),
+                },
+                data_signals=ctx.perceptions,
+                reasoning_trace=ctx.reasoning_trace,
+                confidence=0.0,
+                findings=[],
+            )
+        avg_confidence = sum(confidences) / len(confidences)
+        severity = ctx.reflection.get("overall_severity")
+        if not severity:
+            raise RuntimeError(f"[{self.agent_id}] _build_output: LLM reflect phase did not return overall_severity")
+
+        summary_parts = []
+        for f in findings:
+            site = f.get("site_id", "unknown")
+            finding = f.get("finding", "")
+            summary_parts.append(f"{site}: {finding}")
+
+        return AgentOutput(
+            agent_id=self.agent_id,
+            finding_type=self.finding_type,
+            severity=severity,
+            summary="; ".join(summary_parts) if summary_parts else self.fallback_summary,
+            detail={
+                "findings": findings,
+                "remaining_gaps": ctx.reflection.get("remaining_gaps", []),
+                "cross_domain_followup": ctx.reflection.get("cross_domain_followup", []),
+            },
+            data_signals=ctx.perceptions,
+            reasoning_trace=ctx.reasoning_trace,
+            confidence=avg_confidence,
+            findings=findings,
+        )
+
+    # ── Utility methods ──
 
     def _parse_json(self, text: str) -> dict | list:
         """Extract JSON from LLM response, handling markdown fences."""

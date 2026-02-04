@@ -433,3 +433,92 @@ class SiteCostEntry(BaseModel):
 
 class CostPerPatientResponse(BaseModel):
     sites: list[SiteCostEntry]
+
+
+# ── Cross-Domain & Study Synthesis ─────────────────────────────────────────
+
+class CrossDomainCorrelation(BaseModel):
+    site_id: str
+    finding: str
+    agents_involved: list[str]
+    causal_chain: str | None
+    confidence: float | None
+
+
+class StudyHypothesis(BaseModel):
+    hypothesis: str
+    causal_chain: str | None
+    affected_sites: list[str] = []
+    agents_involved: list[str] = []
+    confidence: float | None = None
+    evidence: list[str] = []
+    recommended_action: str | None = None
+    urgency: str | None = None
+
+    model_config = {"extra": "ignore"}
+
+
+class StudySynthesis(BaseModel):
+    executive_summary: str | None
+    hypotheses: list[StudyHypothesis]
+    systemic_risks: list[str]
+
+
+# ── Intelligence Summary ───────────────────────────────────────────────────
+
+class ThemeCluster(BaseModel):
+    theme_id: str
+    label: str
+    icon: str
+    severity: str
+    finding_count: int
+    top_summaries: list[str]
+    affected_sites: list[str]
+    investigation_query: str
+
+class SiteBriefBadge(BaseModel):
+    site_id: str
+    trend_indicator: str
+    risk_level: str
+    headline: str | None
+
+class IntelligenceSummaryResponse(BaseModel):
+    total_findings: int
+    critical_count: int
+    high_count: int
+    sites_flagged: int
+    open_alerts: int
+    briefs_count: int
+    latest_scan_timestamp: str | None
+    themes: list[ThemeCluster]
+    site_briefs: list[SiteBriefBadge]
+    cross_domain_correlations: list[CrossDomainCorrelation] = []
+    study_synthesis: StudySynthesis | None = None
+
+
+# ── Theme Findings Drill-Down ─────────────────────────────────────────────
+
+class ThemeFindingDetail(BaseModel):
+    id: int
+    agent_id: str
+    agent_name: str
+    severity: str
+    site_id: str | None
+    summary: str
+    root_cause: str | None
+    causal_chain: str | None
+    recommended_action: str | None
+    confidence: float | None
+    created_at: str | None
+
+class ThemeFindingsResponse(BaseModel):
+    theme_id: str
+    label: str
+    icon: str
+    investigation_query: str
+    total: int
+    critical_count: int
+    high_count: int
+    affected_sites: list[str]
+    findings: list[ThemeFindingDetail]
+    cross_domain_hypotheses: list[CrossDomainCorrelation] = []

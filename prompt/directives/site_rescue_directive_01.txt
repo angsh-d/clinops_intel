@@ -1,0 +1,8 @@
+Identify sites with declining enrollment trajectory that may need rescue intervention or closure decision. Investigate:
+
+1. Which sites have enrolled zero patients in the last 60 days despite being active?
+2. Which sites are below 50% of their enrollment target with less than 6 months remaining?
+3. Are there sites showing concurrent deterioration in both enrollment and data quality — suggesting operational breakdown?
+4. For underperforming sites, what is the root cause: referral pipeline exhaustion, competitive pressure, PI disengagement, or operational constraints?
+
+For each at-risk site, assess whether rescue intervention or closure is the better operational decision based on available evidence.

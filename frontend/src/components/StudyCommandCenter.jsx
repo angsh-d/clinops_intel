@@ -1,103 +1,18 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, ChevronUp, Command, MapPin, ArrowRight } from 'lucide-react'
+import { ChevronDown, ChevronUp, ArrowRight } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { getStudySummary, getSitesOverview, getAttentionSites, getAgentInsights } from '../lib/api'
 import { WorldMap } from './WorldMap'
+import { StudyNav } from './StudyNav'
 
-/* ── Proactive Insights — cross-domain patterns requiring review ─────────── */
-
-const PROACTIVE_INSIGHTS = [
-  {
-    id: 'cbcc-vendor-cascade',
-    site: 'CBCC Global Research',
-    siteId: 'SITE-022',
-    category: 'Vendor Impact',
-    query: 'Why is data quality degrading at CBCC Global Research and what is the financial impact?',
-    agents: ['DQ', 'EF', 'VP', 'FI', 'CI'],
-    accent: 'from-red-500 to-orange-500',
-    apparent: 'Entry lag high, queries elevated — retrain site staff on data entry procedures',
-    finding: 'Vendor CRA swap \u2192 4.2d lag spike \u2192 query flood \u2192 enrollment freeze \u2192 $340K in delay costs. Root cause is vendor staffing transition. Recommend vendor corrective action plan',
-    provenance: [
-      { agent: 'Data Quality', detail: 'Entry lag spiked to 4.2d (vs 1.8d study avg) coinciding with CRA-007 offboarding. Open query rate 34% above peer median.', action: 'Escalate lag source before retraining staff.' },
-      { agent: 'Vendor Performance', detail: 'CRA-007 \u2192 CRA-012 transition left 18-day coverage gap. Visit completion dropped to 88.3%.', action: 'Issue CAPA to VEND-001 regarding staffing levels.' },
-      { agent: 'Enrollment Funnel', detail: 'Enrollment velocity dropped 40% during lag spike period. 3 subjects in screening pipeline stalled.', action: 'Hold new screening until data backlog clears.' },
-      { agent: 'Financial Intelligence', detail: 'Quality-driven rework costing $136K in unbudgeted monitoring. Projected $340K total delay cost at current trajectory.', action: 'Cap billable monitoring visits until quality stabilizes.' },
-      { agent: 'Competitive Intelligence', detail: 'No competing trials detected in catchment area — confirms enrollment drop is internally driven, not market-related.', action: null },
-    ],
-  },
-  {
-    id: 'canterbury-supply-chain',
-    site: 'Canterbury District Health Board',
-    siteId: 'SITE-041',
-    category: 'Supply Chain',
-    query: 'Why are patients withdrawing consent at Canterbury District Health Board and what should we do about it?',
-    agents: ['EF', 'DQ', 'VP', 'FI', 'SD'],
-    accent: 'from-amber-500 to-yellow-500',
-    apparent: 'Consent withdrawal rate spiking — investigate patient safety or treatment concerns',
-    finding: 'Kit stockout \u2192 randomization frozen 23 days \u2192 67% consent withdrawal. Withdrawals driven by wait time, not treatment concerns. Site rescue-viable pending supply chain resolution',
-    provenance: [
-      { agent: 'Enrollment Funnel', detail: '67% consent withdrawal over 23-day period. All withdrawals cited wait time, not treatment concerns. Screening pipeline otherwise healthy (SF rate 18%).', action: null },
-      { agent: 'Data Quality', detail: 'eCRF completion rate remained stable through withdrawal period — data entry discipline intact.', action: 'Not a data quality issue.' },
-      { agent: 'Vendor Performance', detail: 'Kit vendor (VEND-003) had 3 shipment delays in 6 weeks. Regional depot stockout confirmed.', action: 'Escalate to vendor for expedited resupply.' },
-      { agent: 'Financial Intelligence', detail: 'Sunk cost of $89K per withdrawn subject. Site closure would write off $1.2M. Rescue cost estimated at $180K.', action: 'Rescue ROI positive if supply restored within 30 days.' },
-      { agent: 'Site Decision', detail: 'Site enrollment capacity at 85th percentile when operational. Recommend rescue with supply chain remediation.', action: 'Do not close — rescue-viable.' },
-    ],
-  },
-  {
-    id: 'cru-hungary-compliance',
-    site: 'CRU Hungary',
-    siteId: 'SITE-074',
-    category: 'Compliance Risk',
-    query: "Is CRU Hungary's perfect data quality genuine or is the data too good to be true?",
-    agents: ['PC', 'DQ', 'EF', 'SD'],
-    accent: 'from-purple-500 to-pink-500',
-    apparent: 'All KRIs green — top-performing site, replicate best practices across the study',
-    finding: 'Near-zero variance across all KRIs simultaneously \u2014 entry lag, queries, completions, monitoring. Statistically implausible for a real clinical site. Recommend for-cause audit',
-    provenance: [
-      { agent: 'Data Integrity', detail: 'KRI variance at 0.02 std dev across all metrics — 4.7 sigma below expected. Pattern consistent with data fabrication profile.', action: 'Initiate for-cause audit.' },
-      { agent: 'Data Quality', detail: 'Entry lag consistently 1.0 \u00b1 0.1 days across all forms. Zero queries in 90 days. Zero corrections.', action: 'Statistically implausible for 47 active subjects.' },
-      { agent: 'Enrollment Funnel', detail: 'Screen failure rate exactly 20.0% for 6 consecutive months. Randomization timing shows no natural variance.', action: 'Pattern suggests pre-determined outcomes.' },
-      { agent: 'Site Decision', detail: 'If fabrication confirmed, 47 subjects may require re-consent or exclusion. Timeline impact: 4\u20136 month delay.', action: 'Prepare contingency enrollment plan.' },
-    ],
-  },
-  {
-    id: 'highlands-competitive',
-    site: 'Highlands Oncology Group',
-    siteId: 'SITE-055',
-    category: 'Competitive Intelligence',
-    query: 'Why has enrollment declined at Highlands Oncology Group and should we rescue or close the site?',
-    agents: ['EF', 'CI', 'DQ', 'SD', 'FI'],
-    accent: 'from-blue-500 to-indigo-500',
-    apparent: 'Enrollment declining with improved screen failure rate — site winding down naturally',
-    finding: 'Competing trial opened nearby \u2192 60% screening volume drop. Screen failure rate improved from 42% to 15% \u2014 selection bias from reduced volume, not genuine quality gain. Rescue decision depends on competitor trial duration',
-    provenance: [
-      { agent: 'Enrollment Funnel', detail: 'Screening volume dropped 60% (12/mo to 5/mo) over 8 weeks. SF rate improved from 42% to 15%.', action: 'Volume drop + SF improvement = selection bias, not quality gain.' },
-      { agent: 'Competitive Intelligence', detail: 'Phase III oncology trial opened at competing site 12 miles away. Overlapping indication and eligibility. Expected duration 18 months.', action: 'Rescue depends on competitor timeline.' },
-      { agent: 'Data Quality', detail: 'Data quality metrics stable — no degradation in entry lag or query rates.', action: 'Site operational discipline is intact.' },
-      { agent: 'Site Decision', detail: 'At 5/mo screening rate, site misses target by 14 months. Break-even requires competitor closure within 6 months.', action: 'Conditional rescue with 90-day reassessment.' },
-      { agent: 'Financial Intelligence', detail: '$420K invested to date. Closure write-off vs $95K rescue cost for 6-month extension.', action: 'Rescue NPV positive only if screening recovers to 8+/mo.' },
-    ],
-  },
-  {
-    id: 'leicester-monitoring',
-    site: 'Leicester Royal Infirmary',
-    siteId: 'SITE-017',
-    category: 'Monitoring Efficacy',
-    query: 'Why has enrollment dropped at Leicester Royal Infirmary despite increased monitoring?',
-    agents: ['DQ', 'EF', 'VP', 'FI', 'CI'],
-    accent: 'from-teal-500 to-cyan-500',
-    apparent: 'Monitoring doubled but enrollment still declining — site has fundamental operational issues',
-    finding: '2x monitoring frequency \u2192 PI audit anxiety \u2192 overcautious screening \u2192 30% enrollment drop + 15% more screen failures. Recommend reducing visit frequency to baseline and tracking enrollment recovery',
-    provenance: [
-      { agent: 'Data Quality', detail: 'Entry lag increased from 1.5d to 4.8d after monitoring frequency doubled. Query response time also degraded.', action: 'Site slowing down under oversight pressure.' },
-      { agent: 'Enrollment Funnel', detail: 'Enrollment dropped 30% (10/mo to 7/mo). Screen failure rate increased from 22% to 37%. PI applying stricter exclusion criteria.', action: 'Overcautious screening since monitoring increase.' },
-      { agent: 'Vendor Performance', detail: 'Monitoring vendor billed 2x visits. Visit findings decreased 40% — fewer issues found per visit despite more visits.', action: 'Diminishing returns on monitoring investment.' },
-      { agent: 'Financial Intelligence', detail: 'Additional monitoring cost $67K with no quality improvement. Net negative ROI on monitoring increase.', action: 'Revert to standard monitoring frequency.' },
-      { agent: 'Competitive Intelligence', detail: 'No external competitive factors. Enrollment decline is purely internal and coincides with monitoring change.', action: 'Confirms monitoring as causal factor.' },
-    ],
-  },
-]
+const SEVERITY_ACCENT = {
+  critical: 'from-red-500 to-orange-500',
+  high: 'from-amber-500 to-yellow-500',
+  warning: 'from-purple-500 to-pink-500',
+  info: 'from-blue-500 to-indigo-500',
+}
 
 /* ────────────────────────────────────────────────────────────────────────────
  * StudyCommandCenter — 2-column study view
@@ -106,7 +21,8 @@ const PROACTIVE_INSIGHTS = [
  * ──────────────────────────────────────────────────────────────────────────── */
 
 export function StudyCommandCenter() {
-  const { setView, setSelectedSite, setInvestigation, setSites, setSiteNameMap, toggleCommand, studyData, setStudyData } = useStore()
+  const navigate = useNavigate()
+  const { currentStudyId, setSelectedSite, setInvestigation, setSites, setSiteNameMap, siteNameMap, toggleCommand, studyData, setStudyData } = useStore()
 
   const [sites, setSitesLocal] = useState([])
   const [attentionSites, setAttentionSites] = useState([])
@@ -229,31 +145,32 @@ export function StudyCommandCenter() {
 
   return (
     <div className="min-h-screen bg-apple-bg flex flex-col">
-      <CommandHeader
-        studyData={studyData}
-        setView={setView}
-        toggleCommand={toggleCommand}
-      />
+      <StudyNav active="sites" />
 
       {/* Proactive Insights strip */}
-      <div className="border-b border-apple-border bg-apple-bg/50">
-        <div className="px-5 py-3">
-          <div className="flex items-center gap-2 mb-2.5">
-            <h3 className="text-caption font-medium text-apple-secondary uppercase tracking-wider">Proactive Insights</h3>
-            <span className="text-[10px] text-apple-secondary/50 font-mono">{PROACTIVE_INSIGHTS.length}</span>
-          </div>
-          <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-1 px-1">
-            {PROACTIVE_INSIGHTS.map((insight, i) => (
-              <InsightCard
-                key={insight.id}
-                insight={insight}
-                defaultExpanded={false}
-                onInvestigate={() => handleInvestigate(insight.query, { id: insight.siteId, name: insight.site })}
-              />
-            ))}
+      {insights.length > 0 && (
+        <div className="border-b border-apple-border bg-apple-bg/50">
+          <div className="px-5 py-3">
+            <div className="flex items-center gap-2 mb-2.5">
+              <h3 className="text-caption font-medium text-apple-secondary uppercase tracking-wider">Proactive Insights</h3>
+              <span className="text-[10px] text-apple-secondary/50 font-mono">{insights.length}</span>
+            </div>
+            <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-1 px-1">
+              {insights.map((insight) => (
+                <InsightCard
+                  key={insight.id}
+                  insight={insight}
+                  defaultExpanded={false}
+                  onInvestigate={() => handleInvestigate(
+                    `Investigate: ${insight.title}`,
+                    insight.sites?.[0] ? { id: insight.sites[0], name: siteNameMap[insight.sites[0]] || insight.sites[0] } : undefined
+                  )}
+                />
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden">
         {/* LEFT RAIL */}
@@ -298,70 +215,7 @@ export function StudyCommandCenter() {
 
 /* ── CommandHeader ───────────────────────────────────────────────────────── */
 
-function CommandHeader({ studyData, setView, toggleCommand }) {
-  const enrolled = studyData.enrolled || 0
-  const target = studyData.target || 0
-  const progress = target > 0 ? Math.round((enrolled / target) * 100) : 0
-  const totalSites = studyData.totalSites || studyData.total_sites || 0
-  const countries = studyData.countries?.length || 0
-
-  return (
-    <header className="sticky top-0 z-50 glass border-b border-apple-border">
-      <div className="px-5 py-3 flex items-center justify-between gap-4">
-        {/* Left: Logo + Study */}
-        <div className="flex items-center gap-3 flex-shrink-0">
-          <button onClick={() => setView('study360')} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-            <img src="/saama_logo.svg" alt="Saama" className="h-6" />
-            <div className="w-px h-5 bg-apple-border" />
-            <span className="text-body font-medium text-apple-text">DSP</span>
-          </button>
-        </div>
-
-        {/* Center: Study KPI strip */}
-        <div className="flex items-center gap-5 text-caption">
-          <span className="font-medium text-apple-text">{studyData.studyId || ''}</span>
-          <span className="text-apple-secondary">{studyData.phase || ''}</span>
-          <div className="flex items-center gap-2">
-            <div className="w-24 h-1.5 bg-apple-border rounded-full overflow-hidden">
-              <div className="h-full bg-apple-text rounded-full transition-all" style={{ width: `${progress}%` }} />
-            </div>
-            <span className="font-mono text-apple-text">{enrolled}/{target}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <MapPin className="w-3 h-3 text-apple-secondary" />
-            <span className="text-apple-secondary">{totalSites} sites</span>
-            <span className="text-apple-secondary/40 mx-0.5">/</span>
-            <span className="text-apple-secondary">{countries} ctry</span>
-          </div>
-        </div>
-
-        {/* Right: Nav */}
-        <nav className="flex items-center gap-3 flex-shrink-0">
-          <button
-            onClick={() => setView('vendors')}
-            className="px-3 py-1.5 text-caption text-apple-secondary hover:text-apple-text hover:bg-apple-surface rounded-lg transition-all"
-          >
-            Vendors
-          </button>
-          <button
-            onClick={() => setView('financials')}
-            className="px-3 py-1.5 text-caption text-apple-secondary hover:text-apple-text hover:bg-apple-surface rounded-lg transition-all"
-          >
-            Financials
-          </button>
-          <button
-            onClick={toggleCommand}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-apple-surface border border-apple-border rounded-lg text-caption text-apple-secondary hover:text-apple-text hover:border-apple-text/20 transition-all"
-          >
-            <Command className="w-3 h-3" />
-            <span>Ask</span>
-            <kbd className="ml-0.5 px-1 py-0.5 bg-apple-bg rounded text-[10px] font-mono">K</kbd>
-          </button>
-        </nav>
-      </div>
-    </header>
-  )
-}
+/* CommandHeader removed — now using shared StudyNav component */
 
 
 /* ── RiskPosture ─────────────────────────────────────────────────────────── */
@@ -525,72 +379,76 @@ function MapPanel({ sites, hoveredSite, onSiteHover, onSiteClick, highlightedSit
 /* ── InsightCard ─────────────────────────────────────────────────────────── */
 
 function InsightCard({ insight, onInvestigate, defaultExpanded = false }) {
-  const [showProvenance, setShowProvenance] = useState(defaultExpanded)
+  const [showDetail, setShowDetail] = useState(defaultExpanded)
+  const accent = SEVERITY_ACCENT[insight.severity] || SEVERITY_ACCENT.info
 
   return (
     <div className="min-w-[300px] max-w-[340px] snap-start flex-shrink-0 card flex flex-col">
-      <div className={`h-[2px] bg-gradient-to-r ${insight.accent} rounded-t-2xl`} />
+      <div className={`h-[2px] bg-gradient-to-r ${accent} rounded-t-2xl`} />
       <div className="p-3.5 flex flex-col flex-1">
-        {/* Site name + category */}
+        {/* Title + severity */}
         <div className="flex items-start justify-between gap-2 mb-2">
-          <h4 className="text-caption font-medium text-apple-text leading-snug">{insight.site}</h4>
+          <h4 className="text-caption font-medium text-apple-text leading-snug">{insight.title}</h4>
           <span className="text-[10px] text-apple-secondary bg-apple-bg border border-apple-border rounded px-1.5 py-0.5 flex-shrink-0 whitespace-nowrap">
-            {insight.category}
+            {insight.severity}
           </span>
         </div>
 
-        {/* Agent badges */}
-        <div className="flex flex-wrap gap-1 mb-2.5">
-          {insight.agents.map(a => (
-            <span key={a} className="px-1 py-px text-[9px] font-mono rounded bg-apple-bg border border-apple-border text-apple-secondary/70">
-              {a}
-            </span>
-          ))}
+        {/* Agent + confidence */}
+        <div className="flex flex-wrap items-center gap-1 mb-2.5">
+          <span className="px-1 py-px text-[9px] font-mono rounded bg-apple-bg border border-apple-border text-apple-secondary/70">
+            {insight.agent}
+          </span>
+          {insight.confidence > 0 && (
+            <span className="text-[9px] text-apple-secondary/50 font-mono">{Math.round(insight.confidence * 100)}%</span>
+          )}
+          {insight.sites?.length > 0 && (
+            <span className="text-[9px] text-apple-secondary/50">{insight.sites.length} site{insight.sites.length > 1 ? 's' : ''}</span>
+          )}
         </div>
 
-        {/* Apparent cause (strikethrough) */}
-        <p className="text-[11px] text-apple-secondary/60 line-through mb-1.5 leading-snug">{insight.apparent}</p>
+        {/* Summary */}
+        <p className="text-[11px] text-apple-text leading-relaxed">{insight.summary}</p>
 
-        {/* Actual finding */}
-        <p className="text-[11px] text-apple-text leading-relaxed">{insight.finding}</p>
-
-        {/* Provenance toggle */}
-        <button
-          onClick={() => setShowProvenance(v => !v)}
-          className="mt-2.5 flex items-center gap-1.5 text-[11px] font-medium text-apple-accent hover:text-apple-accent/80 transition-colors self-start"
-        >
-          {showProvenance ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-          <span>What the data shows ({insight.provenance.length})</span>
-        </button>
-
-        {/* Provenance detail */}
-        <AnimatePresence initial={false}>
-          {showProvenance && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="overflow-hidden"
+        {/* Detail toggle */}
+        {(insight.recommendation || insight.impact) && (
+          <>
+            <button
+              onClick={() => setShowDetail(v => !v)}
+              className="mt-2.5 flex items-center gap-1.5 text-[11px] font-medium text-apple-accent hover:text-apple-accent/80 transition-colors self-start"
             >
-              <div className="mt-2 space-y-2 max-h-[220px] overflow-y-auto pr-0.5">
-                {insight.provenance.map((p, i) => (
-                  <div key={i} className="bg-apple-bg rounded-lg p-2.5 border border-apple-border/50">
-                    <div className="flex items-baseline gap-1.5 mb-1">
-                      <span className="text-[9px] font-semibold uppercase tracking-wider text-apple-accent">{p.agent}</span>
-                      <span className="text-[9px] text-apple-secondary/40">&middot;</span>
-                      <span className="text-[9px] text-apple-secondary/50">{insight.site} ({insight.siteId})</span>
-                    </div>
-                    <p className="text-[10px] text-apple-text leading-relaxed">{p.detail}</p>
-                    {p.action && (
-                      <p className="text-[10px] text-apple-secondary italic mt-1">{p.action}</p>
+              {showDetail ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              <span>{showDetail ? 'Hide details' : 'Show details'}</span>
+            </button>
+
+            <AnimatePresence initial={false}>
+              {showDetail && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-2 space-y-2 max-h-[220px] overflow-y-auto pr-0.5">
+                    {insight.recommendation && (
+                      <div className="bg-apple-bg rounded-lg p-2.5 border border-apple-border/50">
+                        <span className="text-[9px] font-semibold uppercase tracking-wider text-apple-accent">Recommendation</span>
+                        <p className="text-[10px] text-apple-text leading-relaxed mt-1">{insight.recommendation}</p>
+                      </div>
+                    )}
+                    {insight.impact && (
+                      <div className="bg-apple-bg rounded-lg p-2.5 border border-apple-border/50">
+                        <span className="text-[9px] font-semibold uppercase tracking-wider text-apple-accent">Impact</span>
+                        <p className="text-[10px] text-apple-text leading-relaxed mt-1">{insight.impact}</p>
+                      </div>
                     )}
                   </div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>
+        )}
 
         {/* Investigate */}
         <button

@@ -1,713 +1,505 @@
-# High-Level Solution Outline
+# Clinical Operations Intelligence Platform — Solution Outline
+
+**Audience:** Technical stakeholders (CTOs, architects, engineering leads)
+**Scope:** Agentic backend architecture, dual-mode intelligence, and data model
+
+---
+
+## 1. Executive Summary
+
+Clinical trial operations generate large volumes of structured data across dozens of systems — but the data does not come from a single unified source. In a typical Phase III trial, the sponsor contracts a **Global CRO** for monitoring and data management across most regions, one or more **Regional CROs** for specific countries (e.g., Japan, China), a **Central Lab** vendor, an **IRT/IWRS** vendor for randomization and supply, an **EDC** platform vendor, an **imaging** vendor, and specialists for safety/PV and patient recruitment. Each vendor operates its own systems, delivers data on its own schedule, and is accountable to its own contractual KPIs.
+
+Operational oversight of this multi-vendor ecosystem remains manual, reactive, and dashboard-driven. Traditional approaches rely on static KRI thresholds and rule-based alerting, which miss non-obvious cross-domain patterns — especially those that span vendor boundaries (e.g., a CRO's CRA transition causing a downstream data quality collapse that masks an enrollment stall attributable to the IRT vendor's supply chain delay).
+
+This platform replaces threshold-based monitoring with **LLM-first autonomous agents** that investigate clinical operations data the way an experienced CODM lead would: forming hypotheses from signals, selecting investigative tools, evaluating evidence, and iterating until the investigation is complete. The system is designed for the **multi-CRO reality** — where a Global CRO manages most geographies while Regional CROs handle specific countries, and operational problems frequently originate at vendor handoff boundaries.
+
+**The platform operates in two complementary modes:**
+
+1. **Proactive Mode (Primary)** — When operational data lands in the Common Operational Data Model (CODM), the system autonomously launches a site performance scan across all agents. Each agent runs its PRPA cognitive loop against fresh data — without any user query — producing pre-emptive findings, alerts, and per-site intelligence briefs before anyone asks a question.
+
+2. **Reactive Mode** — An Orchestrator Agent routes natural-language queries to the appropriate agents, which investigate using the same PRPA loop and tool infrastructure. This enables ad-hoc deep dives complementing proactive surveillance.
+
+**Core differentiation:** Agents do not answer questions — they investigate them. Whether triggered by data ingestion or a user query, a multi-iteration cognitive loop perceives signals, reasons about root causes, plans which tools to invoke, acts on those plans, and reflects on whether the investigation is complete. Every metric includes its formula, data source, and causal chain.
+
+---
+
+## 2. Architecture Overview
+
+The platform has two entry points into a shared agent/tool/CODM infrastructure:
+
+```
+  ┌──────────────────────────┐                  ┌──────────────────────────┐
+  │   PROACTIVE MODE         │                  │   REACTIVE MODE          │
+  │                          │                  │                          │
+  │   Source Systems          │                  │   Natural Language       │
+  │   (EDC, IRT, CTMS,      │                  │   Query                  │
+  │    Vendors, Finance,     │                  │                          │
+  │    Digital Protocol)     │                  │                          │
+  └────────────┬─────────────┘                  └────────────┬─────────────┘
+               │                                             │
+  ┌────────────▼─────────────┐                  ┌────────────▼─────────────┐
+  │   Data Ingestion Layer   │                  │   Orchestrator Agent     │
+  │   Normalize → CODM       │                  │   (LLM semantic routing) │
+  └────────────┬─────────────┘                  └───┬────────┬─────────┬──┘
+               │                                    │        │         │
+  ┌────────────▼─────────────┐                      │        │         │
+  │  Proactive Scan Engine   │                      │        │         │
+  │                          │                      │        │         │
+  │  ┌────────────────────┐  │                      │        │         │
+  │  │ 1. Select from     │  │                      │        │         │
+  │  │    Directive       │  │                      │        │         │
+  │  │    Catalog         │  │                      │        │         │
+  │  │    (user-curated,  │  │                      │        │         │
+  │  │     per agent)     │  │                      │        │         │
+  │  └────────┬───────────┘  │                      │        │         │
+  │           │              │                      │        │         │
+  │  ┌────────▼───────────┐  │          ┌───────────▼┐ ┌────▼─────┐ ┌─▼──────────────┐
+  │  │ 2. Execute Agent   │──┼─────────►│  Agent A   │ │ Agent B  │ │  Agent C       │
+  │  │    PRPA Loops      │  │          │ (PRPA loop)│ │ (PRPA)   │ │ (PRPA loop)    │
+  │  │    (all agents,    │  │          │ isolated DB│ │ isolated │ │ isolated DB    │
+  │  │     isolated DB)   │  │          └──────┬─────┘ └────┬─────┘ └──┬─────────────┘
+  │  └────────┬───────────┘  │                 │            │           │
+  │           │              │                 │            │           │
+  │  ┌────────▼───────────┐  │       ┌─────────▼────────────▼───────────▼──────┐
+  │  │ 3. Persist         │  │       │          ToolRegistry                   │
+  │  │    Findings →      │◄─┼───────│   (self-describing, LLM-selected)      │
+  │  │    agent_findings  │  │       └────┬────────────────────────────────┬───┘
+  │  │    Raise Alerts →  │  │            │                                │
+  │  │    alert_log       │  │    ┌───────▼────────┐            ┌──────────▼──────┐
+  │  └────────┬───────────┘  │    │  SQL Tools     │            │  External APIs   │
+  │           │              │    │  (30+ tools)   │            │ (ClinicalTrials  │
+  │  ┌────────▼───────────┐  │    │                │            │  .gov)           │
+  │  │ 4. Assemble Site   │  │    └───────┬────────┘            └─────────────────┘
+  │  │    Intelligence    │  │            │
+  │  │    Briefs          │  │    ┌───────▼────────┐
+  │  │    (LLM cross-     │  │    │  CODM Database │
+  │  │     agent synth.)  │  │    │  (PostgreSQL)  │
+  │  └────────┬───────────┘  │    │  38 tables     │
+  │           │              │    └───────┬────────┘
+  └───────────┼──────────────┘            │
+              │                  ┌────────▼───────────────────┐
+              │                  │  Cross-Domain Synthesis    │
+              │                  │  (LLM merges findings)     │
+              │                  └────────┬───────────────────┘
+              │                           │
+              ▼                           ▼
+  ┌──────────────────────────┐  ┌────────────────────────────┐
+  │  Site Intelligence       │  │  Structured Response       │
+  │  Briefs                  │  │  + Reasoning Trace         │
+  │  • Risk Summary          │  │                            │
+  │  • Cross-Domain          │  │                            │
+  │    Correlations          │  │                            │
+  │  • Recommended Actions   │  │                            │
+  │  • Trend Indicators      │  │                            │
+  └──────────────────────────┘  └────────────────────────────┘
+       (Proactive output)            (Reactive output)
+```
+
+**Left path (Proactive):** Data ingestion triggers an autonomous scan — agents run PRPA loops against fresh data using internally generated investigation directives. Findings are persisted, alerts raised, and site intelligence briefs assembled.
+
+**Right path (Reactive):** A user submits a natural-language query. The Orchestrator Agent routes it to relevant agents, which run the same PRPA loops and tools. Results are synthesized into a structured response with full reasoning traces.
+
+WebSocket streaming runs parallel to the reactive pipeline. The client POSTs a query and receives a `query_id`, then connects to `/ws/query/{query_id}`. The server emits `{phase, agent_id, data}` events at each PRPA phase boundary, giving the frontend real-time visibility into investigation progress.
 
-## Agentic Clinical Operations Intelligence System
+---
 
-**Autonomous AI Agents that Investigate Operational Signals, Reason About Risk, and Drive Proactive Trial Optimization**
+## 3. Data Ingestion & CODM
 
-----------
+### Data Ingestion Layer
 
-## 1. Overview and Vision
+Operational data flows into CODM from clinical trial vendor systems. Ingestion is the trigger for proactive analysis — when fresh data lands, the system has new signals to investigate.
 
-Clinical trials are increasingly delivered through CRO partners and distributed vendor ecosystems. While CROs manage day-to-day execution across sites, monitoring, enrollment, and vendors, sponsors often require stronger capabilities for continuous oversight, early risk detection, and proactive intervention.
+**The multi-vendor data reality:** Sponsors do not receive data from abstract "source systems." They receive structured extracts from specific contracted vendors, each delivering on its own schedule, format, and completeness level. The ingestion layer must normalize across these vendor-specific feeds.
 
-The Agentic Clinical Operations Intelligence System is an autonomous intelligence layer that integrates operational telemetry across the trial ecosystem and deploys goal-directed AI agents to:
+**Vendor-mediated data sources:**
 
--   **Autonomously investigate** emerging site risks by decomposing complex operational signals into root-cause hypotheses and evidence-backed recommendations
+| Vendor Type | Example Vendor | Data Delivered | Typical Frequency | CODM Target Tables |
+|-------------|---------------|----------------|-------------------|-------------------|
+| **EDC Vendor** | Medidata Rave | eCRF entries, queries, data corrections | Daily extract | `ecrf_entries`, `queries`, `data_corrections` |
+| **IRT/IWRS Vendor** | Almac | Randomization events, kit inventory, depot shipments, screening logs | Daily extract | `randomization_log`, `randomization_events`, `kit_inventory`, `depot_shipments`, `screening_log` |
+| **Global CRO** | IQVIA | Monitoring visits, CRA assignments, overdue actions, site activation status | Weekly transfer | `monitoring_visits`, `cra_assignments`, `overdue_actions`, `sites` (partial) |
+| **Regional CRO(s)** | EPS (Japan) | Same as Global CRO, for assigned countries | Weekly transfer | Same tables, country-scoped |
+| **Central Lab** | Covance | Lab results, sample tracking | Weekly transfer | Referenced via `subject_visits`, lab-related `queries` |
+| **Imaging Vendor** | Bioclinica | Image review status, adjudication outcomes | Biweekly transfer | Referenced via `subject_visits`, imaging-related `queries` |
+| **Safety/PV Vendor** | PharSafer | SAE reports, safety narratives | As reported | Referenced via safety-related `queries` and `kri_snapshots` |
+| **Patient Recruitment Vendor** | StudyKIK | Referral volumes, pre-screening funnels | Weekly report | Feeds into `screening_log` referral attribution |
+| **Sponsor Finance / ERP** | Internal | Budgets, invoices, change orders, payment milestones | Monthly close | `study_budget`, `budget_line_items`, `financial_snapshots`, `invoices`, `change_orders`, `payment_milestones` |
+| **Digital Protocol (Sponsor)** | Internal | Study config, visit schedule, eligibility criteria, arms, stratification | As amended | `study_config`, `study_arms`, `visit_schedule`, `visit_activities`, `eligibility_criteria`, `stratification_factors` |
 
--   **Converse with users** through natural language interaction, enabling drill-down questioning, contextual follow-ups, and collaborative investigation of operational issues
+**Multi-CRO ingestion pattern:** In a multi-CRO model, monitoring data arrives from multiple CROs covering different geographies. The Global CRO (e.g., IQVIA) provides monitoring visit data, CRA assignments, and site oversight for most countries, while Regional CROs (e.g., EPS for Japan) provide the same data types for their assigned countries. The ingestion layer normalizes both feeds into the same CODM tables, with `vendor_site_assignments` tracking which vendor is responsible for which site. This enables apples-to-apples comparison of CRO performance across regions.
 
--   **Correlate cross-domain signals** — connecting data quality, enrollment, monitoring, and supply signals to surface compound risks that siloed reports miss
+**Ingestion flow:** Vendor extracts are received on defined schedules (daily, weekly, biweekly, or monthly depending on data type), normalized to the CODM schema, and loaded into PostgreSQL. The platform does not own the source-of-truth — it ingests and normalizes vendor data for investigative purposes. Each ingestion cycle triggers a proactive scan for the affected data domains.
 
--   **Diagnose enrollment constraints** — distinguishing screening shortfalls from supply-driven interruptions, operational delays, and eligibility barriers so teams intervene at the right point
+### Common Operational Data Model (CODM)
 
-### Agentic Design Philosophy
+In a multi-CRO trial, the Global CRO's CTMS, the Regional CRO's CTMS, the EDC vendor's database, the IRT vendor's supply system, and the central lab's LIMS each have proprietary schemas and deliver data in different formats. CODM normalizes all vendor feeds into a single PostgreSQL schema that agents can query uniformly — enabling cross-vendor analysis that no single vendor's system can provide.
 
-The system is built on a **Perceive-Reason-Plan-Act-Reflect (PRPA)** cognitive loop that distinguishes it from traditional analytics dashboards. Each agent does not simply compute metrics from inputs — it perceives operational state, reasons about anomalies and their causes, plans multi-step investigations, acts by invoking tools and requesting cross-agent context, and reflects on whether its goal has been satisfied. This cognitive loop enables agents to handle novel situations, chain together evidence from multiple sources, and produce explanations that trace from raw signal to recommendation.
+### Table Inventory (46 tables)
 
-The system supports informed decision-making by clinical operations teams through explainable, conversational intelligence.
+The CODM schema contains 38 operational tables and 8 governance tables, organized into the following domains:
 
-> **Scope note:** This document details the architecture for the system's two-phase delivery. Phase 1 (MVP) delivers Data Quality and Enrollment Funnel agents with EDC and enrollment feeds. Phase 2 (Full Scope) adds Monitoring Gaps and Site Risk Synthesis agents with RBQM/CTMS and IRT/Supply feeds. Capabilities beyond this scope — milestone tracking, vendor SLA monitoring, portfolio intelligence, graduated autonomy, what-if simulation — are documented in the Future Expansion section and are deliberately excluded from current delivery due to higher data access barriers and lower feasibility confidence.
+| Domain | Tables | Key Tables | Primary Agents |
+|--------|--------|------------|----------------|
+| Study Configuration | 7 | `study_config`, `visit_schedule`, `eligibility_criteria` | All (study context) |
+| Site & Staffing | 3 | `sites`, `cra_assignments` | data_quality, site_rescue |
+| Supply Chain | 3 | `kit_inventory`, `depot_shipments` | enrollment_funnel, site_rescue |
+| Enrollment & Screening | 4 | `screening_log`, `enrollment_velocity`, `randomization_log` | enrollment_funnel, site_rescue |
+| Clinical Data | 3 | `ecrf_entries`, `queries`, `subject_visits` | data_quality, phantom_compliance |
+| Data Quality | 3 | `data_corrections`, `monitoring_visits`, `kri_snapshots` | data_quality, phantom_compliance |
+| Operations | 1 | `overdue_actions` | data_quality |
+| Vendor Management | 6 | `vendors`, `vendor_site_assignments`, `vendor_kpis` | vendor_performance |
+| Financial | 8 | `budget_line_items`, `financial_snapshots`, `invoices`, `change_orders` | financial_intelligence |
+| Governance | 8 | `agent_findings`, `alert_log`, `audit_trail` | Platform internals |
 
-----------
+**Architectural notes:**
+- `sites` is the atomic unit of operational analysis — every agent investigates at site granularity.
+- `vendor_site_assignments` is the multi-vendor-per-site junction table (indexed on both `vendor_id` and `site_id`), enabling attribution of operational issues to specific vendors.
+- `cra_assignments` tracks CRA transitions — a leading indicator of operational disruption that agents cross-reference with data quality and enrollment signals.
+- Governance tables (`backend/models/governance.py`) record platform operations: findings, alerts, audit trail, and runtime configuration.
 
-## 2. Data Foundation: Sponsor Digital Oversight Feed
+**→ See [`data_dictionary.md`](data_dictionary.md) for complete column definitions, data types, indexes, production source systems, refresh cadences, and cross-table relationships for all 46 tables.**
 
-The platform is powered by structured operational data feeds sourced from CRO systems and vendor partners through standardized extracts and integration mechanisms.
+---
 
-Rather than requiring sponsors to directly operate CRO platforms, the solution leverages a Sponsor Digital Oversight Feed that includes key trial execution signals refreshed on appropriate cadences (daily or weekly depending on source).
+## 4. Proactive Intelligence Engine
 
-### 2.1 Data Integration Architecture
+The proactive engine is the platform's primary operating mode. Rather than waiting for users to ask questions, the system autonomously investigates operational health after each data ingestion cycle.
 
-The Oversight Feed is built on a **Common Operational Data Model (CODM)** that normalizes signals across heterogeneous source systems into a unified schema. This addresses the reality that CROs operate different platforms (e.g., Medidata Rave, Oracle InForm, Veeva Vault CDMS) with varying schemas, APIs, and export formats.
+### Site Performance Scan
 
-**Integration approach:**
+When fresh data lands in CODM, the proactive engine launches a **Site Performance Scan** — a systematic sweep across all agents and all sites:
 
--   **Source adapters** map vendor-specific extracts (flat files, API responses, CDISC-aligned exports) into the CODM
+1. **Select Investigation Directives** — For each agent, the engine selects active directives from a **user-curated Directive Catalog**. Each directive is a prompt template stored as a `.txt` file in `/prompt/directives/` (e.g., `data_quality_directive_01.txt`), loaded via `PromptManager` with `{variable}` substitution for study-specific context. Operations leads can add, modify, or disable directives without code changes. The selected directives replace user queries as the input to the PRPA loop.
 
--   **Schema validation layer** detects format drift, missing fields, and structural anomalies at ingestion time
+2. **Execute Agent PRPA Loops** — Each agent runs its standard PRPA loop (up to 3 iterations) against the directive. The same tools, LLM calls, and convergence logic used in reactive mode apply here — agents perceive signals, reason about root causes, plan tool invocations, act, and reflect on completeness.
 
--   **Feed health monitoring** tracks extract freshness, completeness, and schema conformance — surfacing integration failures before they silently degrade agent outputs
+3. **Persist Findings** — Agent outputs are written to `agent_findings` with full reasoning traces. Findings above severity thresholds generate entries in `alert_log` (status: `open`).
 
-**CODM normalization risk:** EDC schemas vary significantly across vendor platforms (Medidata Rave, Oracle InForm, Veeva Vault CDMS). Field naming, data types, visit structures, and query lifecycle states differ across systems. Mapping these into a common model is the **primary technical effort in the data layer** and the most likely source of integration delays. Mitigation: the CODM design is protocol-aware and version-controlled, with explicit mapping documentation per source system. MVP targets a single CRO platform per study to reduce initial mapping complexity, expanding to multi-CRO normalization as mappings mature.
+4. **Assemble Site Intelligence Briefs** — A synthesis LLM call cross-references findings from all agents for each site, producing a **Site Intelligence Brief** — a per-site summary that integrates data quality, enrollment, compliance, vendor, and financial signals into a unified risk picture.
 
-**Refresh cadence tiers:**
+### Directive Catalog
 
--   **Daily or event-driven:** EDC telemetry, query counts, enrollment metrics, IRT supply events — sufficient for trend detection and daily operational review. IRT systems support event-driven data but extraction into an analytics layer may require API-level integration rather than flat-file exports; the phased approach gives time to negotiate access and build connectors.
+Investigation directives are the proactive counterpart to user queries. They live in a **Directive Catalog** — a set of user-curated prompt templates that define what the proactive engine investigates.
 
--   **Weekly:** Monitoring visit logs, RBQM KRI summaries — aligned with typical CRO reporting cadences
+**Storage & management:**
 
-The system treats feed reliability as a first-class concern. Stale or missing feeds trigger explicit data currency warnings on all downstream agent outputs rather than allowing silent degradation.
+- Each directive is a `.txt` file in `/prompt/directives/`, following the naming convention `{agent_id}_directive_{nn}.txt` (e.g., `data_quality_directive_01.txt`)
+- Directives are prompt templates with `{variable}` placeholders (e.g., `{study_id}`, `{data_window_days}`) substituted at runtime by `PromptManager` — consistent with the platform's existing prompt externalization pattern
+- A directive metadata file (`/prompt/directives/catalog.json`) tracks each directive's `agent_id`, `enabled` flag, `priority`, and `description`, allowing operations leads to enable/disable directives or adjust scan priority without editing prompt text
+- Directives can be added or modified by study teams, CODM leads, or operations managers — no code deployment required
 
-### 2.2 CRO Data Access Strategy
+**Default directives (shipped with the platform):**
 
-Obtaining granular operational telemetry from CROs requires deliberate contractual and technical preparation. CROs may treat operational data as proprietary, and data-sharing provisions vary across partnerships.
+| Agent | Directive File | Focus |
+|-------|---------------|-------|
+| `data_quality` | `data_quality_directive_01.txt` | Deteriorating eCRF entry lags, rising query burden, monitoring gaps |
+| `enrollment_funnel` | `enrollment_funnel_directive_01.txt` | Screening volume trends, randomization velocity, consent withdrawal rates |
+| `phantom_compliance` | `phantom_compliance_directive_01.txt` | Variance suppression, timestamp clustering, CRA rubber-stamping |
+| `site_rescue` | `site_rescue_directive_01.txt` | Enrollment trajectory risk, rescue feasibility assessment |
+| `vendor_performance` | `vendor_performance_directive_01.txt` | Cross-CRO performance comparison, vendor KPI adherence, vendor-attributable site-level issues, CRA staffing stability per CRO |
+| `financial_intelligence` | `financial_intelligence_directive_01.txt` | Budget variance, burn rate acceleration, change order accumulation |
 
-**Recommended approach:**
+Study teams can extend the catalog with study-specific directives (e.g., a directive focused on a particular country's regulatory compliance pattern, or a directive targeting sites in a rescue cohort).
 
--   **Contractual provisions:** Embed structured data feed requirements into CRO Master Service Agreements and study-level work orders, specifying data categories, formats, refresh cadences, and SLAs
+### Finding Persistence & Alert Generation
 
--   **Standardized feed specifications:** Provide CRO partners with a published feed specification (schema, file format, delivery mechanism) to reduce integration burden and negotiation friction
+Proactive findings flow into the governance tables:
 
--   **Graduated access model:** Begin with aggregated KPI-level feeds (lower CRO resistance) and expand to record-level telemetry as trust and demonstrated value increase
+- **`agent_findings`** — Every finding is stored with its `agent_id`, `finding_type`, `severity`, `summary`, `detail`, `data_signals`, `reasoning_trace`, and `confidence`. Findings are idempotent — re-scanning the same data does not create duplicate findings.
+- **`alert_log`** — Findings that exceed configured thresholds in `alert_thresholds` generate alerts. Alerts follow a lifecycle: `open` → `acknowledged` → `resolved`. Suppression rules in `suppression_rules` prevent alert fatigue for known issues.
 
--   **Mutual value positioning:** Frame the Oversight Feed as enabling collaborative risk management rather than CRO performance surveillance — shared visibility benefits both parties
+### Site Intelligence Brief
 
-### 2.3 Processing Architecture
+The brief is the primary proactive output — a per-site document that answers: *"What does the platform know about this site right now?"*
 
-**MVP processing model:**
+A brief synthesizes findings across all agents into:
+- **Risk Summary** — overall site health with contributing factors
+- **Vendor Accountability** — which vendors are responsible for each risk area at this site (via `vendor_site_assignments`), enabling the sponsor to direct escalation to the correct CRO or vendor
+- **Cross-Domain Correlations** — patterns that span agent and vendor domains (e.g., CRO's CRA transition → data quality collapse → enrollment stall → IRT supply misalignment)
+- **Recommended Actions** — prioritized interventions with expected impact, attributed to the responsible vendor where applicable
+- **Trend Indicators** — whether each signal is improving, stable, or deteriorating
 
--   **Scheduled batch analysis:** Full agent processing cycles (Agent 1, Agent 3) run on configurable schedules (daily, twice-daily) aligned with feed refresh cadences. This is the primary mode for comprehensive risk assessment.
+---
 
--   **Conversational request-response:** User queries are routed through the lightweight query router to the appropriate agent, which executes its PRPA loop on demand and returns findings. FastAPI WebSocket endpoints provide streaming delivery so users see reasoning as it unfolds.
+## 5. Orchestrator Agent & Ad-Hoc Q&A
 
-**Phase 2 processing model (additive):**
+The Orchestrator Agent (implemented as `ConductorRouter` in `backend/conductor/router.py`) provides the reactive complement to proactive scanning. When a user asks a natural-language question, the Orchestrator routes it to the appropriate agents for investigation.
 
--   **Internal event bus** (FastAPI async with Redis Streams): Data arrival events trigger downstream agent processing without waiting for the next scheduled cycle. Agent finding events at Critical severity trigger Conductor evaluation of cross-agent notification. User queries are routed through the full Conductor for multi-agent orchestration.
+### LLM-Driven Semantic Routing
 
--   **Event-triggered real-time analysis:** Critical data changes trigger targeted agent processing outside the scheduled cycle, enabling rapid response to emerging situations.
+The Orchestrator uses the LLM to understand query intent and select agents. There is zero keyword matching — the routing decision is made by rendering the `conductor_route` prompt template with the query and session context, then parsing the LLM's structured JSON response:
 
--   **Backpressure and throttling:** Rate limiting during high-volume periods (e.g., multiple feeds arriving simultaneously) to prevent agent overload while preserving processing order for Critical-severity events.
+```json
+{
+  "selected_agents": ["data_quality", "enrollment_funnel"],
+  "routing_rationale": "...",
+  "signal_summary": "...",
+  "requires_synthesis": true
+}
+```
 
-----------
+### Parallel Agent Execution
 
-## 3. Key Data Categories
+When multiple agents are selected, the Orchestrator runs them concurrently via `asyncio.gather`. Each agent receives an **isolated SQLAlchemy session** (`SessionLocal()`) to prevent concurrent access issues. Sessions are closed in a `finally` block regardless of outcome. Exceptions from individual agents are caught and logged without aborting others.
 
-The system ingests four data categories across two phases. Categories A and D are MVP feeds; Categories B and E are added in Phase 2. Additional categories (Milestones, Vendor KPIs, External Benchmarks) are documented in the Future Expansion section.
+### Cross-Domain Synthesis
 
-----------
+When `requires_synthesis` is true and multiple agents return results, the Orchestrator invokes a synthesis LLM call (`conductor_synthesize` prompt) that receives all agent outputs and identifies:
 
-### A. EDC Operational Telemetry (Data Quality and Query Signals) — MVP
+- Cross-domain findings (e.g., enrollment stall + data quality collapse share a CRA transition root cause)
+- Priority actions ranked by impact
+- An executive summary that integrates findings across domains
 
--   Visit-to-eCRF entry lag
+---
 
--   Open query counts and aging
+## 6. PRPA Cognitive Loop
 
--   Missing critical datapoints
+The PRPA (Perceive–Reason–Plan–Act–Reflect) loop is the core execution model shared by both proactive and reactive modes. Each agent runs up to **3 iterations** of this loop, converging when the Reflect phase determines the investigation goal is satisfied.
 
--   Data correction frequency
+```
+    ┌─────────────────────────────────────────────┐
+    │               PRPA Iteration                │
+    │                                             │
+    │  ┌──────────┐    ┌──────────┐               │
+    │  │ PERCEIVE │───►│  REASON  │               │
+    │  │ (SQL     │    │ (LLM     │               │
+    │  │  tools)  │    │ hypotheses)              │
+    │  └──────────┘    └────┬─────┘               │
+    │                       │                     │
+    │                  ┌────▼─────┐               │
+    │                  │   PLAN   │               │
+    │                  │ (LLM     │               │
+    │                  │ selects  │               │
+    │                  │  tools)  │               │
+    │                  └────┬─────┘               │
+    │                       │                     │
+    │                  ┌────▼─────┐               │
+    │                  │   ACT    │               │
+    │                  │ (execute │               │
+    │                  │  tools)  │               │
+    │                  └────┬─────┘               │
+    │                       │                     │
+    │                  ┌────▼─────┐    ┌────────┐ │
+    │                  │ REFLECT  │───►│ Goal   │ │
+    │                  │ (LLM     │    │ met?   │ │
+    │                  │ evaluates│    └───┬──┬─┘ │
+    │                  └──────────┘        │  │   │
+    │                              yes ◄───┘  └──►│ no → next iteration
+    │                               │             │
+    └───────────────────────────────┼─────────────┘
+                                    │
+                              AgentOutput
+```
 
-These signals provide early indicators of data quality trends and downstream database readiness risk.
+**Phase details:**
 
-----------
+| Phase | Input | LLM Role | Output |
+|-------|-------|----------|--------|
+| **Perceive** | Query or investigation directive + prior iteration context | None (data gathering) | Raw data signals from SQL tools |
+| **Reason** | Perceptions | Generates hypotheses with causal chains, site IDs, confidence scores | Hypothesis list |
+| **Plan** | Hypotheses + available tools | Selects tools and maps them to hypotheses | Ordered tool invocation plan |
+| **Act** | Plan steps | None (execution) | Tool results with row counts |
+| **Reflect** | All accumulated evidence | Evaluates completeness, identifies gaps | Goal satisfaction flag + remaining gaps |
 
-### B. Monitoring Oversight Signals (RBQM-Aligned) — Phase 2
+**Why this matters vs. simple LLM Q&A or RAG:** A single-pass LLM call or RAG retrieval answers what is in the data. PRPA investigates what the data means — it can discover that a site's clean data quality metrics are explained by a CRA who never reports findings, which is only discoverable by cross-referencing monitoring visit patterns with query lifecycle data across multiple tool invocations.
 
--   Monitoring cadence adherence
+In **proactive mode**, the "query" input to the PRPA loop is an investigation directive generated by the proactive engine. In **reactive mode**, it is the user's natural-language question. The loop logic is identical in both cases.
 
--   Last monitoring visit date
+---
 
--   Overdue follow-up actions
+## 7. Agent Framework
 
--   Centralized monitoring KRIs
+### BaseAgent Abstraction
 
-These inputs support monitoring oversight and risk-based prioritization.
+`BaseAgent` (`backend/agents/base.py`) defines the PRPA loop as a template method. Subclasses implement six abstract methods:
 
-----------
+- `perceive(ctx)` — gather domain-specific signals
+- `reason(ctx)` — LLM hypothesis generation
+- `plan(ctx)` — LLM tool selection
+- `act(ctx)` — tool execution
+- `reflect(ctx)` — LLM completeness evaluation
+- `_build_output(ctx)` — structure final findings
 
-### D. Enrollment Funnel Telemetry — MVP
+Agents are agnostic to their invocation mode — the same agent class handles both proactive scans (with investigation directives) and reactive queries (with user questions).
 
--   Screened vs randomized counts
+### AgentContext State Machine
 
--   Screen failure rates
+`AgentContext` is a mutable dataclass that flows through every phase:
 
--   Failure reason codes (structured) with NLP-assisted categorization of free-text narratives where available
+| Field | Type | Purpose |
+|-------|------|---------|
+| `query` | str | Original natural-language question or investigation directive |
+| `perceptions` | dict | Raw data signals gathered in Perceive |
+| `hypotheses` | list | LLM-generated hypotheses from Reason |
+| `plan_steps` | list | Tool invocation plan from Plan |
+| `action_results` | list | Accumulated results across all iterations |
+| `reflection` | dict | Latest Reflect output |
+| `is_goal_satisfied` | bool | Convergence flag |
+| `iteration` / `max_iterations` | int | Loop control (max 3) |
+| `reasoning_trace` | list | Append-only audit trail of every phase |
 
--   Enrollment velocity trends
+### AgentOutput
 
-These signals support enrollment forecasting and site-level intervention planning.
+Structured output returned to the Orchestrator (reactive mode) or persisted to `agent_findings` (proactive mode):
 
-**Note on NLP processing:** Free-text screen failure narratives vary in language, clinical specificity, and completeness across global sites. The system applies NLP categorization as an enrichment layer on top of structured reason codes rather than as a primary signal, ensuring reliability even when narrative quality is inconsistent.
+| Field | Type |
+|-------|------|
+| `agent_id` | str |
+| `finding_type` | str |
+| `severity` | str |
+| `summary` | str |
+| `detail` | dict |
+| `data_signals` | dict |
+| `reasoning_trace` | list |
+| `confidence` | float |
+| `findings` | list |
+| `investigation_complete` | bool |
+| `remaining_gaps` | list |
 
-----------
+### The 7 Specialized Agents
 
-### E. Randomization and Supply Continuity (IRT Signals) — Phase 2
+| Agent ID | Name | Investigation Domain |
+|----------|------|---------------------|
+| `data_quality` | Data Quality Agent | eCRF entry lags, query burden, data corrections, CRA assignments, monitoring gaps. Detects CRA transition impacts (attributable to the monitoring CRO via `vendor_site_assignments`), monitoring gap hidden debt, strict PI paradoxes. |
+| `enrollment_funnel` | Enrollment Funnel Agent | Screening volume, screen failure rates, randomization velocity, consent withdrawals, regional patterns. Detects competing trials, supply-chain-masked withdrawals, funnel stage decomposition. |
+| `clinical_trials_gov` | Competitive Intelligence Agent | BioMCP-powered ClinicalTrials.gov searches with geo-distance filtering, condition synonym expansion, and structured detail retrieval (protocol, locations, outcomes, references). Identifies competing trials near sites with unexplained enrollment decline — provides external evidence for cannibalization hypotheses. |
+| `phantom_compliance` | Data Integrity Agent | Variance suppression, CRA rubber-stamping, weekday entry clustering, correction provenance anomalies, narrative duplication, cross-domain inconsistencies. Flags sites where multiple fraud signals co-occur. |
+| `site_rescue` | Site Decision Agent | Enrollment trajectory, screen failure root causes (fixable vs structural), CRA staffing stability, supply constraints, competitive landscape. Produces rescue/close decision frameworks. |
+| `vendor_performance` | Vendor Performance Agent | Multi-CRO and vendor KPI adherence, site activation timelines, query resolution speed, monitoring completion. Compares Global CRO vs. Regional CRO performance across overlapping metrics. Cross-references vendor KPIs with site-level operational data via `vendor_site_assignments` to attribute site problems to specific vendors. Detects CRO staffing instability (CRA transitions), vendor milestone slippage, and issue accumulation patterns. |
+| `financial_intelligence` | Financial Intelligence Agent | Budget variance, cost per patient, vendor spending patterns, burn rate projections, change order impact, financial consequences of operational delays. |
 
--   Randomization delay or failure events
+### Agent Registration
 
--   Drug kit inventory gaps
+`AgentRegistry` (`backend/agents/registry.py`) is a dict-based lookup. `build_agent_registry()` imports all 7 agent classes and registers them. Both the Orchestrator Agent and the Proactive Scan Engine resolve agent IDs to classes at runtime via the same registry.
 
--   Resupply shipment lags
+---
 
--   Stratification balance indicators
+## 8. LLM Client Stack
 
-These inputs help prevent enrollment disruption due to supply constraints.
+### Abstract Interface
 
-----------
+`LLMClient` (`backend/llm/client.py`) defines two abstract methods:
 
-----------
+- `generate(prompt, system, temperature)` → `LLMResponse`
+- `generate_structured(prompt, system, temperature)` → `LLMResponse`
 
-## 3.5 Foundation Model Architecture
+`LLMResponse` carries `text`, `model`, `usage` (token counts), `raw` provider response, and an `is_fallback` flag.
 
-The system employs a phased model strategy, starting with a single model for MVP and introducing multi-model consensus in Phase 2.
+### Gemini Primary Client
 
-### MVP: Single-Model Reasoning
+`GeminiClient` (`backend/llm/gemini.py`) uses the `google-genai` SDK:
 
--   **Primary Reasoning Model:** Chain-of-thought reasoning for agent cognitive loops, investigation planning, and conversational response generation. Selected based on extended context window and structured output capabilities. Model version is locked per study to ensure reproducibility.
+- Configurable model name, temperature (default 0.0 for deterministic output), top_p, max output tokens
+- Timeout with exponential backoff retry (configurable retries)
+- Detects empty/blocked responses and raises to trigger failover
+- Supports both direct API key and Replit AI Integrations base URL
 
-### Phase 2: Multi-Model Strategy
+### Azure OpenAI Fallback
 
--   **Primary Reasoning Model:** Agent PRPA cycles, complex investigation planning, and cross-domain synthesis
+`AzureOpenAIClient` (`backend/llm/azure_openai.py`) provides the same interface over Azure OpenAI deployments.
 
--   **Consensus Partner Model:** Independent assessment for multi-model consensus on Critical-severity findings. Also used for natural language generation in narrative report synthesis where fluency is prioritized.
+### Failover Strategy
 
--   **Conservative Judgment Model:** Applied selectively for tasks requiring careful interpretation of ambiguous signals and situations where conservative judgment reduces risk of false positives in safety-adjacent contexts.
+`FailoverLLMClient` (`backend/llm/failover.py`) wraps both clients:
 
-> **Implementation note:** Specific model selections (e.g., Gemini, Azure OpenAI, Anthropic Claude) are configured via environment variables and may change as model capabilities evolve. The architecture depends on model *roles*, not specific versions.
+1. Every call attempts Gemini first
+2. On any exception, logs the failure and retries with Azure OpenAI
+3. Sets `is_fallback = True` on fallback responses — no silent degradation
 
-### Model Routing (Phase 2)
+### Prompt Externalization
 
-The Conductor selects the appropriate model for each sub-task based on:
+All prompts are `.txt` files in the `/prompt/` directory. `PromptManager` (`backend/prompts/manager.py`) loads templates by name and applies `{variable}` substitution at runtime. Prompt naming convention: `{agent_id}_{phase}.txt` (e.g., `data_quality_perceive.txt`, `conductor_route.txt`). Templates are cached in memory after first load.
 
--   **Task type:** Reasoning-heavy investigation vs. consensus validation vs. narrative generation
--   **Context window needs:** Long investigation chains route to models with larger context windows
--   **Latency requirements:** Real-time conversational interactions prefer lower-latency models
+---
 
-### Consensus Mechanism (Phase 2)
+## 9. Tool Framework & Dynamic Selection
 
--   Critical-severity findings require agreement from at least two models
--   When models disagree, the finding is flagged for human review with both assessments and their reasoning traces presented
--   Consensus is not required for Informational-tier findings or routine scheduled analysis
+### Self-Describing Tools
 
-### Prompt Management
+Every tool extends `BaseTool` (`backend/tools/base.py`) and exposes:
 
--   All prompts stored as `.txt` files in the `/prompt/` directory with `{variable_name}` placeholders for runtime substitution
--   Prompts organized by agent and function: `agent1_goal.txt`, `agent1_investigation.txt`, `conductor_decomposition.txt`, `conductor_synthesis.txt`, etc.
--   Prompt changes treated as configuration changes with version tracking and approval
+- `name` — unique identifier (e.g., `entry_lag_analysis`)
+- `description` — natural-language description of what the tool does and its arguments
+- `describe()` — returns `{name, description}` dict for LLM prompt injection
+- `execute(db_session, **kwargs)` → `ToolResult`
 
-### Model Governance
+`ToolResult` carries `tool_name`, `success`, `data`, `error`, and `row_count`.
 
--   Model versions locked per study to ensure reproducibility of assessments during a study's lifecycle
--   Model updates validated through shadow-mode execution (new model runs in parallel, outputs compared before promotion)
--   Performance tracked per agent: accuracy of predictions, false-positive rates, user feedback scores
+### ToolRegistry & LLM-Driven Selection
 
-### Hallucination Guardrails
+`ToolRegistry` maintains a dict of registered tools and provides:
 
--   Output validation layer checks agent claims against source data before surfacing to users — quantitative assertions (counts, dates, percentages) are verified against the underlying CODM records
--   Agents are required to cite specific data signals in their reasoning traces; unsupported claims are flagged and suppressed
--   Confidence scoring reflects data completeness and signal agreement, not model self-assessment
+- `list_tools_text()` — formatted tool descriptions injected into the Plan phase prompt
+- `invoke(name, db_session, **kwargs)` — executes a tool by name with result caching
 
-----------
+During the **Plan phase**, the LLM receives the full list of available tool descriptions and selects which to invoke based on the hypotheses it generated in the Reason phase. There is no hardcoded tool-to-agent mapping — any agent can invoke any tool if the LLM determines it is relevant. This applies in both proactive and reactive modes.
 
-## 4. Agent Layer: Specialized Clinical Operations Intelligence Agents
+### Result Caching
 
-The system consists of four goal-directed AI agents delivered across two phases. MVP deploys Agent 1 (Data Quality) and Agent 3 (Enrollment Funnel). Phase 2 adds Agent 2 (Monitoring Gaps) and Agent 4 (Site Risk Synthesis). Additional agents (Milestone Drift, Supply Continuity, Vendor Compliance, Portfolio Intelligence) are documented in the Future Expansion section.
+`ToolRegistry.invoke()` checks an in-memory LRU cache (`sql_tool_cache`) keyed by tool name + kwargs. Cache hits skip SQL execution entirely. Only successful results are cached.
 
-### 4.0 Agent Cognitive Architecture
+### Tool Categories (30+ tools)
 
-Every agent in the system follows the **Perceive-Reason-Plan-Act-Reflect (PRPA)** cognitive loop:
+| Domain | Tools |
+|--------|-------|
+| **Data Quality** | `entry_lag_analysis`, `query_burden`, `data_correction_analysis`, `cra_assignment_history`, `monitoring_visit_history`, `site_summary` |
+| **Enrollment Funnel** | `screening_funnel`, `enrollment_velocity`, `screen_failure_pattern`, `regional_comparison`, `kit_inventory`, `kri_snapshot` |
+| **Data Integrity** | `data_variance_analysis`, `timestamp_clustering`, `query_lifecycle_anomaly`, `monitoring_findings_variance`, `weekday_entry_pattern`, `cra_oversight_gap`, `cra_portfolio_analysis`, `correction_provenance`, `entry_date_clustering`, `screening_narrative_duplication`, `cross_domain_consistency` |
+| **Site Rescue** | `enrollment_trajectory`, `screen_failure_root_cause`, `supply_constraint_impact` |
+| **Vendor Performance** | `vendor_kpi_analysis` (KPI trends across all vendors), `vendor_site_comparison` (operational metrics per vendor via site assignments — enables Global CRO vs. Regional CRO comparison), `vendor_milestone_tracker`, `vendor_issue_log` |
+| **Financial** | `budget_variance_analysis`, `cost_per_patient_analysis`, `burn_rate_projection`, `change_order_impact`, `financial_impact_of_delays` |
+| **Cross-Domain** | `context_search` (vector similarity), `trend_projection` (forecasting) |
+| **External** | `competing_trial_search` (BioMCP — geo-distance, synonym expansion, pagination), `trial_detail` (BioMCP — protocol, locations, references, outcomes by NCT ID) |
 
-1.  **Perceive:** Ingest operational signals from the CODM and contextual inputs from adjacent agents. Detect anomalies, threshold breaches, and trend shifts relative to the agent's goal state.
+---
 
-2.  **Reason:** Apply LLM chain-of-thought reasoning to formulate hypotheses about observed patterns. Consider multiple explanations, weigh evidence, and identify information gaps that require further investigation.
+## 10. Key Design Decisions
 
-3.  **Plan:** Decompose the investigation into concrete steps — which tools to invoke, which additional data to query, which cross-agent context to request. The plan is logged for explainability.
+### No Hardcoded Thresholds
 
-4.  **Act:** Execute the investigation plan by invoking tools from the agent's Tool Registry: SQL queries against the CODM, vector similarity searches in ChromaDB, forecasting model invocations, cross-agent context requests via the Conductor.
+All anomaly detection is LLM-driven. The system does not use static rules like "flag if entry lag > 7 days." Instead, the LLM evaluates signals in context — a 5-day lag at a high-volume academic site is different from a 5-day lag at a community site with one patient. This eliminates false positives from one-size-fits-all thresholds and detects novel patterns that rules cannot anticipate.
 
-5.  **Reflect:** Evaluate whether the agent's Goal State has been satisfied. If the investigation is incomplete or the evidence is insufficient, loop back to Reason with updated context. If satisfied, formulate the output with full reasoning provenance.
+### Multi-CRO as a First-Class Concept
 
-**Agent components:**
+The platform assumes a multi-vendor operating model where a Global CRO manages most geographies while Regional CROs handle specific countries, and specialized vendors (central lab, IRT, imaging, ePRO, safety, recruitment) each own their data domain. The `vendor_site_assignments` junction table is the architectural keystone — it maps every site to its responsible vendors by role, enabling the platform to:
 
--   **Goal State:** A declarative objective that goes beyond detection — e.g., "Ensure data quality at all active sites remains within acceptable thresholds, and when it doesn't, investigate root causes and recommend specific remediation actions."
+- **Attribute site-level problems to specific vendors** — when data quality deteriorates at a site, the platform can identify which CRO's monitoring team is responsible
+- **Compare CRO performance across regions** — Global CRO's sites vs. Regional CRO's sites on the same operational metrics (entry lag, query burden, monitoring findings)
+- **Detect vendor handoff failures** — operational problems that emerge at the boundary between two vendors' responsibilities (e.g., CRO monitoring delays causing IRT supply chain misalignment)
+- **Track CRA-to-CRO affiliation** — CRA transitions are analyzed in the context of which CRO employs that CRA, connecting staffing instability to vendor performance
 
--   **Reasoning Engine:** LLM chain-of-thought processing with externalized prompts (loaded from `/prompt/agent{N}_*.txt`) that define the agent's reasoning patterns, domain knowledge, and investigation strategies.
+### Proactive-First Architecture
 
--   **Tool Registry:** Callable functions available to the agent — SQL query execution, vector similarity search, time-series forecasting, statistical analysis, cross-agent context requests, and report generation.
+The platform is designed around data-triggered investigation, not user-triggered queries. Proactive scanning ensures that operational risks are surfaced before anyone asks — the system operates as a continuous surveillance engine, not a Q&A chatbot. Ad-hoc queries complement this by enabling targeted deep dives into specific concerns.
 
--   **Working Memory:** ChromaDB scratchpad where the agent stores intermediate findings, hypotheses, and evidence during multi-step investigations. Persists within a processing cycle and is available for cross-agent discovery.
+### Idempotent Finding Generation
 
--   **Reflection Step:** Goal satisfaction evaluation that determines whether the agent has produced actionable, evidence-backed output or needs to continue investigating.
+Proactive scans must be safe to re-run. Findings are deduplicated by agent, site, finding type, and data window — re-scanning the same data produces the same findings without duplication. New findings are only created when underlying data signals change.
 
-**Concrete example — Agent 1 autonomous investigation:**
-Agent 1 detects a query spike at Site 042. Rather than simply reporting "query count exceeds threshold," the agent: (1) checks which CRF pages are affected, (2) in Phase 2, retrieves monitoring visit recency from Agent 2 context to determine if a recent visit triggered expected query generation, (3) queries historical episodes of similar spikes at this site, (4) examines whether a new CRA was recently assigned (potential training gap), and (5) formulates a root-cause hypothesis: "Query spike at Site 042 driven by CRF pages 4-7 (efficacy endpoints), not correlated with recent monitoring visit — pattern consistent with data entry training gap following CRA transition on 2026-01-15. Recommend targeted CRA training on efficacy CRF completion."
+### Scan vs. Query Priority
 
-### 4.1 Agent Communication and Cross-Domain Context
+When a proactive scan and a reactive query compete for resources, reactive queries take priority (lower latency expectation). Proactive scans are designed to be interruptible and resumable — a scan can yield to a reactive query and resume afterward without losing progress.
 
-**MVP: Independent agent operation**
+### DB Session Isolation Per Agent
 
-In Phase 1, Agents 1 and 3 operate independently — they have no data dependency on each other and produce findings from their own domain feeds. Each agent publishes its findings to a shared store (ChromaDB), building the foundation for cross-agent discovery in Phase 2. The lightweight query router directs user questions to the appropriate agent but does not synthesize across agents.
+Each agent run receives its own `SessionLocal()` instance, closed in a `finally` block. This prevents SQLAlchemy session state corruption when multiple agents execute concurrently via `asyncio.gather`. The pattern is enforced in both the Orchestrator's `_run_one()` method and the proactive scan engine.
 
-**Phase 2: Cross-domain communication**
+### Data Transparency
 
-Clinical operational signals are deeply correlated — enrollment delays may be driven by supply constraints, monitoring gaps compound data quality issues, and these cross-domain relationships are invisible in siloed reports. Phase 2 introduces multi-layered communication:
+Every calculated metric includes:
+- **Formula breakdown** (e.g., `"$150,000 actual - $120,000 planned = $30,000 over plan"`)
+- **Data source attribution** (e.g., `"site_financial_metrics table"`)
 
--   **Predefined dependency paths:** Each agent has a primary scope and contextual inputs from adjacent agents where causal relationships are established (e.g., IRT supply signals available to Agent 3, data quality trends available to Agent 2). Agent 4 (Site Risk Synthesis) receives full outputs from all domain agents.
+This ensures findings are auditable and stakeholders can trace any number back to its source table and calculation.
 
--   **Dynamic Conductor-mediated communication:** Any agent can request context from any other agent through the Conductor when its reasoning identifies a need not covered by predefined paths. Dynamic requests are logged as they may indicate new causal relationships.
+### Safe WebSocket Callbacks
 
--   **Shared Operational Context Store:** Agents publish findings as vector embeddings in ChromaDB, enabling semantic discovery — an agent investigating a site issue can search for related findings from other agents without knowing which agent to ask.
+The `on_step` callback is wrapped in `_make_safe_callback()` which swallows exceptions. If the WebSocket disconnects mid-investigation, the agent continues executing — the investigation is never aborted due to a frontend disconnect. The server also emits periodic `keepalive` messages during long LLM calls to prevent connection timeouts.
 
--   **Event-driven broadcast:** Critical findings trigger Conductor evaluation of which other agents should be notified immediately. All cross-agent communications are logged with timestamps and provenance.
+### Structured JSON Responses
 
-### 4.2 Alert Management and Prioritization
+All LLM calls use `generate_structured()` with a system instruction requiring valid JSON output. Temperature is set to 0.0 for deterministic outputs. Responses are parsed through `parse_llm_json()` which handles markdown fences and extraction from mixed content. Parse failures fall back to safe defaults rather than crashing the pipeline.
 
-Across hundreds of sites and multiple agents, unmanaged alert volume will cause user fatigue and system abandonment. The agent layer incorporates:
+### Tool Result Caching
 
--   **Severity tiering:** Alerts classified as Critical (requires action within 24-48 hours), Warning (trending toward risk threshold), and Informational (notable pattern, no action needed)
-
--   **Suppression rules:** Known issues with active mitigation plans are suppressed from repeated alerting until status changes
-
--   **Consolidation:** When multiple agents flag the same site (Phase 2), signals are merged into a single composite alert through Agent 4 (Site Risk Synthesis) rather than delivered as separate notifications
-
--   **Adaptive thresholds:** Alert thresholds adjust based on study phase, therapeutic area norms, and site maturity to reduce false positives
-
-### 4.3 Orchestration Layer — The Trial Operations Conductor
-
-The Conductor is an LLM-backed orchestrator that sits above the domain agents and below the user interaction layer. In MVP, it acts as a **lightweight query router** directing questions to Agents 1 and 3. In Phase 2, it becomes a **full multi-agent orchestrator** — coordinating cross-domain investigations, resolving contradictions between agents, and synthesizing unified responses.
-
-**Goal decomposition (Phase 2):**
-
--   When a user poses a complex question (e.g., "Why is enrollment behind in Japan?"), the Conductor decomposes it into sub-goals: assess enrollment velocity at Japanese sites (Agent 3), check for supply constraints (Agent 3 IRT enrichment), review monitoring coverage (Agent 2)
-
--   Sub-goals are dispatched to relevant agents with the query context, and the Conductor tracks completion
-
-**Dynamic agent selection:**
-
--   The Conductor determines which agents to involve based on query semantics, not a fixed routing table
-
--   For questions spanning multiple domains (Phase 2), the Conductor identifies the minimal set of agents needed and their execution order (parallel where independent, sequential where one agent's output informs another's investigation)
-
-**Result synthesis:**
-
--   The Conductor collects agent responses, resolves contradictions, and produces a coherent unified response
-
--   Contradictions are presented transparently: "Agent 3 identifies screening failure rates as the primary driver at 3 of 5 Japanese sites, while IRT supply signals indicate kit constraints at the remaining 2 sites — both factors are contributing to the regional shortfall"
-
-**Execution plan transparency:**
-
--   For complex investigations, the Conductor presents its plan to the user before execution: "To answer your question, I'll check enrollment velocity, supply status, and site activation timelines for Japanese sites. Proceed?"
-
--   Users can refine the plan or add constraints before the investigation runs
-
-**Multi-model consensus:**
-
--   The Conductor routes high-stakes assessments (escalation recommendations, critical-severity findings) through multiple models and synthesizes the consensus
-
--   Orchestration prompts stored in `/prompt/conductor_*.txt`
-
-----------
-
-## Agent 1: Data Quality and Query Burden Agent — MVP
-
-**Goal State:** "Ensure data quality at all active sites remains within acceptable thresholds. When quality degrades, investigate root causes — not just symptoms — and recommend specific, actionable remediation."
-
-**Inputs:** EDC lag, query volume, missingness
-**Contextual inputs (Phase 2):** Monitoring visit recency (Agent 2) — sites with recent monitoring visits may show transient query spikes that are expected rather than alarming. This correlation is available once monitoring feeds are integrated in Phase 2.
-
-**Tool Registry:**
-
--   SQL queries: CRF-page-level query breakdowns, query aging distributions, site-level trend analysis, CRA assignment history
--   Vector search: Historical query spike episodes at same site, similar patterns at other sites
--   Forecasting: Query backlog trajectory projection, database readiness impact modeling
--   Cross-agent context (Phase 2): Monitoring visit schedule (Agent 2)
-
-**Autonomous Reasoning Pattern:**
-Detect anomaly → Identify affected CRF pages → Query historical episodes → Examine CRA assignment changes → Formulate root-cause hypothesis → Generate targeted remediation recommendation with evidence chain. In Phase 2, add: check monitoring visit correlation (Agent 2 context) to distinguish expected post-visit query spikes from genuine degradation.
-
-**Capabilities:**
-
--   Detect abnormal query growth and investigate underlying causes
-
--   Predict backlog impact on database readiness
-
--   Prioritize sites requiring focused remediation with root-cause attribution
-
-**Outputs:**
-
--   Query backlog alerts with root-cause analysis
-
--   Data integrity risk indicators with signal provenance
-
--   Recommended site-level actions with evidence and expected impact
-
-----------
-
-## Agent 2: Monitoring Oversight Agent — Phase 2
-
-**Goal State:** "Ensure monitoring coverage across all sites maintains the cadence required by the study's risk-based monitoring plan. Identify monitoring gaps before they result in undetected site issues."
-
-**Inputs:** Monitoring cadence, KRIs, overdue actions (from RBQM/CTMS feeds, Phase 2)
-**Contextual inputs:** Data quality trends (Agent 1) — deteriorating data quality at a site strengthens the case for monitoring prioritization
-
-**Tool Registry:**
-
--   SQL queries: Visit schedule adherence, overdue action aging, KRI threshold analysis, CRA workload distribution
--   Vector search: Historical monitoring gap patterns and their outcomes
--   Forecasting: Monitoring capacity modeling, overdue action escalation projections
--   Cross-agent context: Data quality trends (Agent 1)
-
-**Autonomous Reasoning Pattern:**
-Detect monitoring cadence breach → Assess severity via KRI status → Check CRA workload and assignment changes → Evaluate data quality trajectory at affected sites → Prioritize based on compound risk → Recommend monitoring plan adjustment with rationale
-
-**Capabilities:**
-
--   Identify monitoring gaps outside expected tolerance and assess compounding risk
-
--   Highlight sites requiring targeted review with prioritization rationale
-
--   Support centralized monitoring workflows with evidence-based recommendations
-
-**Outputs:**
-
--   Monitoring cadence alerts with compounding risk assessment
-
--   Oversight prioritization recommendations with evidence chain
-
-----------
-
-## Agent 3: Enrollment Funnel Intelligence Agent — MVP (with Phase 2 IRT enrichment)
-
-**Goal State:** "Maintain enrollment trajectory within protocol targets. When shortfalls emerge, diagnose whether the driver is screening volume, screen failure rates, or operational delays — and recommend targeted interventions. In Phase 2, distinguish screening shortfalls from supply-driven interruptions using IRT data."
-
-**Inputs:** Screening trends, randomization rates, failure reason codes and NLP-categorized narratives
-**Contextual inputs (Phase 2):** IRT supply signals — enrollment diagnosis is enriched with supply-constraint data, allowing the agent to identify sites where drug supply constraints (kit stockouts, depot shipping delays, randomization system issues) are the binding factor, not screening volume. Supply-driven enrollment delays are among the most common and most misdiagnosed causes of site underperformance.
-
-**Tool Registry:**
-
--   SQL queries: Site-level enrollment funnel decomposition, screen failure reason code analysis, regional enrollment velocity comparison
--   NLP analysis: Screen failure narrative categorization and clustering
--   Vector search: Historical enrollment rescue strategies and their effectiveness
--   Forecasting: Enrollment trajectory projection, time-to-target modeling
--   Cross-agent context (Phase 2): IRT supply availability, monitoring visit context (Agent 2)
-
-**Autonomous Reasoning Pattern:**
-Detect enrollment shortfall → Decompose funnel by stage (screening → eligibility → consent → randomization) → Identify binding constraint per site → In Phase 2, check IRT supply constraints to distinguish screening shortfalls from supply-driven interruptions → Evaluate screen failure drivers → Recommend site-specific interventions with projected impact
-
-**Capabilities:**
-
--   Predict enrollment trajectory by site with multi-factor attribution
-
--   Identify drivers of screen failures through structured and NLP analysis
-
--   Recommend enrollment support and rescue strategies informed by institutional memory
-
-**Outputs:**
-
--   Enrollment shortfall forecasts with binding constraint identification
-
--   Exclusion driver insights with NLP-enriched categorization
-
--   Site-level prioritization for intervention with projected impact
-
-----------
-
-## Agent 4: Site Risk Synthesis Agent — Phase 2
-
-**Goal State:** "Produce a unified, explainable risk assessment for every active site by fusing signals across all active domain agents. Ensure no compound risk goes undetected because it spans multiple domains."
-
-**Inputs:** Outputs from Agents 1-3 (Data Quality, Monitoring Gaps, Enrollment Funnel)
-**Feedback outputs:** Cross-domain pattern signals returned to upstream agents
-
-**Tool Registry:**
-
--   Cross-agent context: Full output retrieval from Agents 1-3
--   Vector search: Context Store for pattern matching
--   Risk modeling: Multi-factor composite scoring with configurable weights, confidence-adjusted aggregation
--   Report generation: Narrative synthesis of compound risk with full signal provenance
-
-**Autonomous Reasoning Pattern:**
-Collect domain agent outputs → Identify sites flagged by multiple agents → Investigate causal connections between cross-domain signals (e.g., rising queries + overdue monitoring + slowing enrollment) → Compute composite risk scores with confidence weighting → Generate narrative explanation tracing from raw signals to recommendations → Broadcast critical findings to Conductor for cross-agent notification
-
-**Capabilities:**
-
--   Fuse multi-domain risk indicators into composite site risk scores
-
--   Attribute risk drivers with traceable signal provenance — each recommendation links back to the specific data signals, agent assessments, and thresholds that produced it
-
--   Prioritize sites requiring immediate attention using weighted multi-factor ranking
-
--   Generate confidence-scored intervention plans where confidence reflects data completeness, signal agreement across agents, and historical pattern reliability
-
-**Explainability approach:**
-
--   Every site risk assessment includes a **signal provenance chain:** raw data signal → agent-level assessment → synthesis weighting → composite score
-
--   Recommendations are presented with **contributing factor breakdowns** showing which agents and signals drove the prioritization
-
--   Confidence scores are categorized as High (strong agreement across multiple agents with fresh data), Medium (partial agreement or some data currency gaps), or Low (limited signal coverage, flagged for manual review)
-
-**Outputs:**
-
--   Emerging critical risk site list with composite scores
-
--   Signal-to-driver-to-action summaries with full provenance
-
--   Integrated oversight recommendations with confidence classifications
-
-----------
-
-## 5. Insight Modules and Sponsor Dashboards
-
-The platform delivers actionable intelligence through role-specific modules, delivered incrementally across phases:
-
-**MVP Dashboards:**
-
--   **Enrollment Rescue Hub:** screening and recruitment diagnostics (Agent 3)
--   **Data Quality Monitor:** query burden trends and site-level data health (Agent 1)
-
-**Phase 2 Dashboards:**
-
--   **Site Risk Radar:** emerging high-risk sites with contributing drivers across all domains (Agent 4)
--   **Monitoring Oversight View:** monitoring cadence compliance and gap detection (Agent 2)
-
-**Future Expansion Dashboards:**
-
--   Milestone Tracker, Supply Continuity Monitor, Vendor Performance Cockpit — deferred until corresponding agents and data feeds are available
-
-All dashboard modules display **data currency indicators** showing the freshness of underlying feeds, so users can distinguish between insights based on current data and those relying on stale inputs.
-
-### 5.1 Conversational Intelligence Interface
-
-A natural language query interface embedded within dashboards enables users to investigate operational issues interactively rather than through static drill-downs.
-
-**Capabilities:**
-
--   **Natural language queries:** Users ask questions in plain language — "Why is Site 042 showing a query spike?" or "Which sites are at risk of missing the enrollment target?" — and the Conductor decomposes the query into an agent investigation plan
-
--   **Conversational drill-down:** Any alert, finding, or dashboard element can be explored through follow-up questions — "What caused this?" → "Is this the same pattern we saw last quarter?" → "What intervention worked last time?"
-
--   **Clarification and disambiguation:** When queries are ambiguous ("Show me the problem sites"), the system asks clarifying questions rather than guessing — "Do you mean sites with Critical-severity alerts, sites at risk of milestone miss, or sites with enrollment shortfalls?"
-
--   **Session memory:** Conversational context persists within a session, enabling contextual follow-ups — after discussing Site 042, the user can ask "What about their neighbor Site 043?" without restating the full context
-
--   **Streaming responses:** Delivered via FastAPI WebSocket endpoints so users see the investigation unfold in real time — first the plan, then interim findings, then the synthesized response
-
--   **Full audit trail:** All conversational interactions are logged with timestamps, user identity, query text, agent investigation plans, and responses — supporting compliance and continuous improvement
-
--   **Role-aware response depth:** Responses adapt to the user's persona (Section 6) — an Executive Team member receives portfolio-level summaries, while a Study Manager receives site-level operational detail
-
-### 5.2 Dashboard Architecture
-
-Dashboard modules integrate with the Conversational Intelligence Interface, enabling users to transition seamlessly between structured visualizations and investigative conversation.
-
-----------
-
-## 6. Stakeholder Personas Supported
-
-### Consumers
-
--   **Sponsor Clinical Operations Leaders:** site oversight and intervention prioritization
-
--   **CRO Oversight Managers:** execution transparency and governance
-
--   **Study Managers:** operational control and milestone management
-
--   **Medical Monitors:** early detection of deviation-heavy or unstable sites
-
--   **Executive Teams:** portfolio-level performance assurance
-
-### Operational Roles (System Sustainment)
-
--   **Data Integration Analysts:** feed health monitoring, source adapter maintenance, schema drift resolution
-
--   **Agent Configuration Owners:** alert threshold tuning, suppression rule management, agent parameter calibration per study
-
--   **Platform Operations:** system monitoring, model performance tracking, incident response
-
-----------
-
-## 7. Feedback Loop and Continuous Improvement
-
-The system incorporates real-time mechanisms to learn from outcomes, adapt agent behavior, and improve recommendations continuously.
-
--   **Real-time outcome tracking:** When alerts result in interventions, the system tracks whether the intervention resolved the flagged risk immediately — not at quarterly intervals. Outcome data feeds back into agent reasoning within the same study lifecycle.
-
--   **Inline user feedback:** Through the conversational interface, users provide nuanced annotations on agent findings — not just "actionable/irrelevant" but contextual feedback: "Correct finding but the recommended action isn't feasible because of regulatory hold at this site." This structured feedback informs both suppression rules and agent reasoning.
-
--   **Continuous rolling model calibration:** Enrollment forecasts and risk scores are compared against actuals on a rolling basis. Systematic bias is detected and model parameters recalibrated continuously rather than at fixed quarterly intervals. In MVP, calibration relies on enrollment trajectory accuracy and data quality prediction hit rates — expanding to cross-domain risk scores in Phase 2.
-
--   **Agent self-evaluation scorecards:** Each agent maintains performance metrics: prediction accuracy, false-positive rate, and user feedback scores. Scorecards are visible to Agent Configuration Owners and inform tuning decisions.
-
--   **Prompt evolution:** Prompts are versioned in the `/prompt/` directory. Updated prompts are validated through shadow-mode testing (new prompt runs in parallel with production prompt, outputs compared) before promotion. Prompt changes are logged as configuration changes.
-
--   **Reinforcement from outcomes:** The system maintains a growing corpus of (situation, action, outcome) triples in ChromaDB. During agent reasoning, relevant historical outcomes are retrieved via similarity search and presented as context — enabling agents to learn from within-study experience without retraining the underlying models. Cross-study institutional memory is a Future Expansion capability.
-
-----------
-
-## 8. Representative Use Cases
-
-### MVP: Autonomous Multi-Step Investigation (Agent 1)
-Agent 1 detects a query spike at Site 042. Through its PRPA cognitive loop, it traces the spike to CRF pages 4-7 (efficacy endpoints), discovers a CRA reassignment occurred two weeks prior, and queries historical episodes for similar patterns. The agent formulates a root-cause hypothesis: data entry training gap following CRA transition. It recommends targeted CRA training on efficacy CRF completion with a projected 60% query reduction within 2 weeks based on historical precedent from a similar episode at Site 019 six months ago. In Phase 2, Agent 1 would additionally request monitoring visit context from Agent 2 to confirm no correlation with recent visits.
-
-### MVP: Enrollment Funnel Diagnosis (Agent 3)
-Agent 3 identifies that 3 of 5 Japanese sites have screening rates 40% below target. It decomposes the funnel: Site 305 shows persistent low referral volume (2.1/month vs. target 5/month), while Sites 301/303 show normal screening rates but were activated late. The agent recommends a referral pathway assessment at Site 305 and projects screening ramp-up at Sites 301/303 within 4 weeks. In Phase 2, IRT supply signals would be checked to rule out supply-driven interruptions as a contributing factor.
-
-### Phase 2: Conversational Cross-Domain Investigation
-A Study Manager asks: "Why are we behind on enrollment in Japan?" The Conductor decomposes this into sub-goals dispatched to Agents 2 and 3. Agent 3 identifies that 3 of 5 Japanese sites have screening rates 40% below target, with IRT data confirming adequate drug supply. Agent 2 reports monitoring cadence drift at 2 of the underperforming sites. Agent 4 synthesizes: "Japanese enrollment shortfall is driven by persistent low referral volume at Site 305 (screening rate 2.1/month vs. target of 5/month), compounded by monitoring gaps at Sites 301/303 that may be masking data quality issues. Recommend referral pathway assessment at Site 305 and priority monitoring visits at Sites 301/303."
-
-### Phase 2: Compound Risk Detection (Agent 4)
-Agent 4 identifies Site 042 as a compound risk: Agent 1 reports rising query backlog (CRF pages 4-7), Agent 2 flags an overdue monitoring visit (3 weeks past schedule), and Agent 3 shows declining screen-to-randomization ratio. No single signal is Critical in isolation, but the combination surfaces a site that needs immediate attention. Agent 4 produces a prioritized watch list with Site 042 at the top, with full signal provenance: "Site 042 — compound risk: data quality degradation + monitoring gap + enrollment deceleration. Most likely driver: CRA transition 2 weeks ago without adequate handover."
-
-----------
-
-## 9. Compliance and Data Governance
-
-The system operates within regulated clinical trial environments and must satisfy applicable data governance requirements:
-
--   **Audit trail:** All agent-generated assessments, alerts, and recommendations are logged with timestamps, input data versions, and model versions to support traceability
-
--   **Access control:** Role-based access ensures stakeholders see only the data categories and sites within their authorization scope
-
--   **Data residency:** The platform supports configurable data residency to comply with regional requirements (GDPR, local data protection regulations) based on sponsor and study geography
-
--   **GxP positioning:** The system is positioned as a **decision-support tool** — it surfaces insights and recommendations but does not automate clinical or regulatory decisions. This classification informs the validation approach and avoids the full burden of GxP-validated system requirements while maintaining appropriate quality controls
-
--   **Validation approach:** The platform follows a risk-based validation strategy aligned with GAMP 5 principles, with documented requirements, configuration testing, and periodic performance reviews
-
--   **Action audit trail:** All agent-generated recommendations include full provenance: triggering signal, agent reasoning trace, recommended action, timestamp, and affected entities. When graduated autonomy is enabled (Future Expansion), autonomous actions will be queryable and auditable by compliance teams.
-
--   **Model governance:** Model versions are locked per study. Model updates undergo shadow-mode validation before promotion. Reasoning traces are logged for all agent cognitive loops, enabling post-hoc review of any agent assessment.
-
--   **Prompt version control:** Prompt changes are treated as configuration changes requiring documented approval. All prompt versions are retained with effective date ranges, enabling reconstruction of agent behavior at any historical point.
-
--   **Conversational interaction logging:** All user queries, agent investigation plans, and system responses are logged with user identity, timestamps, and session context. Retention policies align with study documentation requirements.
-
--   **Multi-model consensus for critical outputs:** Escalation recommendations and Critical-severity findings require agreement from at least two foundation models. Disagreements are routed to human review with full reasoning traces from both models.
-
-----------
-
-## 10. Outcomes Enabled
-
-### MVP Outcomes
-
--   Earlier identification of site data quality risks through autonomous multi-step investigation (Agent 1)
-
--   Enrollment shortfall diagnosis with binding-constraint identification per site (Agent 3)
-
--   Conversational Q&A replacing manual cross-referencing of static reports
-
-### Phase 2 Outcomes
-
--   Supply-aware enrollment diagnosis eliminating misattribution of supply-driven delays to site performance (Agent 3 + IRT)
-
--   Monitoring gap detection before undetected site issues compound (Agent 2)
-
--   Cross-domain site risk prioritization surfacing compound risks invisible in siloed reports (Agent 4)
-
--   Enhanced oversight consistency across CROs through unified intelligence layer
-
-### Future Expansion Outcomes
-
--   Improved milestone predictability with causal attribution
-
--   Reduced operational disruption through proactive autonomous actions (graduated autonomy)
-
--   Portfolio-level operational intelligence and cross-study knowledge transfer
-
--   Proactive scenario planning through what-if simulation
-
-----------
-
-## 11. Implementation Approach
-
-The system is designed for two-phase delivery to manage complexity and demonstrate value incrementally. Additional capabilities are documented as Future Expansion.
-
-### Phase 1 — MVP
-
-**Data:** EDC Operational Telemetry (Category A) + Enrollment Funnel Telemetry (Category D)
-
-**Agents:** Agent 1 (Data Quality) + Agent 3 (Enrollment Funnel) — implemented with PRPA cognitive loops and tool use
-
-**Model:** Single primary reasoning model for agent PRPA cycles (model selection configured via environment variables; see Section 3.5)
-
-**Platform:** Lightweight query router · Conversational interface MVP (basic natural language queries with streaming responses) · Dashboard with data currency indicators
-
-**Dashboards:** Data Quality Monitor + Enrollment Rescue Hub
-
-**Rationale:** These two domains have the most readily available data (EDC exports and screening logs are standard CRO deliverables), address the highest-frequency sponsor pain points, and do not require RBQM, IRT, or vendor portal integrations which carry higher access barriers. The MVP establishes the PRPA cognitive loop pattern and conversational interface as architectural foundations.
-
-### Phase 2 — Full Scope
-
-**Adds:** Monitoring Oversight (Category B) + IRT / Supply Signals (Category E)
-
-**Agents:** Agent 2 (Monitoring Gaps) + Agent 4 (Site Risk Synthesis)
-
-**Enrichments:** Agent 3 (Enrollment Funnel) gains IRT supply-context enrichment, enabling supply-aware enrollment diagnosis. Agent 1 (Data Quality) gains monitoring visit correlation context from Agent 2.
-
-**Platform:** Full Conductor multi-agent orchestration · Multi-model consensus for Critical-severity findings · Event-driven processing for real-time response · Cross-domain site risk prioritization
-
-**Dashboards:** Site Risk Radar + Monitoring Oversight View
-
-**Rationale:** RBQM/CTMS monitoring data and IRT supply signals are the next priority. Monitoring feeds enable gap detection — a high-value capability for study leadership. IRT signals eliminate the blind spot where supply-driven enrollment delays are misattributed to site performance. The Conductor enables the cross-agent reasoning that distinguishes this system from siloed analytics. IRT integration may require API-level access rather than flat-file exports — the phased approach gives time to negotiate data access and build connectors.
-
-----------
-
-## 12. Feasibility Assessment and Key Risks
-
-This section addresses why we believe the system is buildable within the two-phase scope, and where the primary risks lie.
-
-### Why This Is Feasible
-
--   **MVP data feeds are standard CRO deliverables.** EDC query exports and enrollment screening logs are routinely provided to sponsors as flat files or structured extracts. No novel data access negotiation is required for Phase 1.
-
--   **The agent architecture builds on proven patterns.** LLM-powered reasoning loops with tool use (SQL queries, vector search, forecasting) are well-established patterns in agentic AI frameworks. The PRPA cognitive loop is an orchestration pattern, not a research problem.
-
--   **Two MVP agents are independently useful.** Agent 1 and Agent 3 deliver value without cross-agent communication. Each solves a real problem (query backlog diagnosis, enrollment constraint identification) with a single data feed. This eliminates the integration-complexity risk from MVP.
-
--   **The technology stack is mature.** FastAPI, ChromaDB, Redis, and commercial LLM APIs are production-grade components with established deployment patterns. No custom model training is required — agents use prompted reasoning over structured data.
-
--   **Phased delivery manages integration risk.** Phase 2 capabilities (monitoring feeds, IRT integration, multi-agent orchestration) are additive. The MVP can ship and deliver value while Phase 2 integration challenges are resolved in parallel.
-
-### Key Technical Risks
-
-| Risk | Severity | Mitigation |
-|------|----------|------------|
-| **CODM normalization complexity** — EDC schemas vary significantly across CRO platforms | High | MVP targets a single CRO platform per study; mapping documentation is versioned; schema validation catches drift at ingestion |
-| **IRT data access** — IRT integration may require API-level access rather than flat files | Medium | Deferred to Phase 2; phased approach gives time to negotiate access and evaluate integration patterns |
-| **LLM reasoning reliability** — agent hypotheses may be incorrect or unsupported | Medium | Output validation layer verifies quantitative claims against CODM records; agents must cite specific data signals; hallucination guardrails suppress unsupported claims |
-| **Alert fatigue** — too many findings overwhelm users | Medium | Severity tiering, suppression rules, adaptive thresholds, and Phase 2 consolidation through Agent 4 |
-| **CRO data access negotiation** — CROs may resist granular data sharing | Medium | Graduated access model (KPI-level first); mutual value positioning; contractual provisions in MSAs |
-| **Feed staleness** — delayed or missing feeds silently degrade agent outputs | Low | Feed health monitoring at ingestion; explicit data currency warnings on all downstream outputs |
-
-### What We Are Not Doing (Deliberate Exclusions)
-
-The following are common pitfalls in clinical analytics platforms that we deliberately avoid:
-
--   **No custom model training.** Agents use prompted reasoning over structured data — no ML training pipelines, no labeled datasets, no model drift monitoring. This dramatically reduces time to value and operational burden.
--   **No real-time streaming from source systems.** Daily batch feeds are sufficient for operational intelligence. Attempting real-time EDC or CTMS streaming adds integration complexity with marginal benefit.
--   **No direct CRO system integration.** The system consumes exported data feeds, not live API connections to CRO platforms. This avoids the security, authentication, and uptime dependencies that derail integration projects.
-
-----------
-
-## Appendix A: Future Expansion (not in current scope)
-
-The following capabilities are architecturally planned but excluded from Phase 1-2 delivery. Each item lists the prerequisite that must be met before it becomes feasible.
-
-### Future Agents
-
--   **Milestone Drift Agent:** Operational milestone tracking (site activation, cycle times, visit adherence). *Prerequisite:* deeper CTMS integration with record-level milestone data.
--   **Supply Continuity Agent:** Standalone supply agent with autonomous resupply actions, inventory depletion forecasting, and stratification balance monitoring. *Prerequisite:* mature IRT API integration and graduated autonomy framework.
--   **Vendor Compliance Agent:** Vendor SLA monitoring (imaging, labs, ECG turnaround KPIs). *Prerequisite:* vendor portal integrations with established data sharing agreements.
--   **Portfolio Intelligence Agent:** Cross-study benchmarking, institutional memory, resource optimization. *Prerequisite:* platform operational across multiple studies with established feedback loops.
-
-### Future Platform Capabilities
-
--   **Graduated Autonomy Framework:** Tiered autonomy model (Tier 0 Inform → Tier 1 Recommend → Tier 2 Act and Notify → Tier 3 Act Autonomously). *Prerequisite:* proven agent accuracy, established rollback mechanisms, regulatory alignment.
--   **What-If Simulation Engine:** Scenario evaluation with shadow data injection and impact propagation. *Prerequisite:* mature agent capabilities and multiple data feeds for reliable projections.
--   **External Benchmark Enrichment:** Historical site performance, trial density, portfolio benchmarks. *Prerequisite:* cross-study data infrastructure.
-
-### Future Data Categories
-
--   **Operational Milestone Events (CTMS Extracts):** Site activation milestones, startup cycle times, visit schedule adherence, issue resolution timelines. *Prerequisite:* CTMS integration depth beyond Phase 1-2 scope.
--   **Vendor Performance KPIs:** Upload timeliness, rejection rates, turnaround times, lab delays. *Prerequisite:* vendor portal integrations.
--   **External Benchmarks:** Historical site performance, trial density, portfolio benchmarks. *Prerequisite:* cross-study data infrastructure.
+Identical SQL tool invocations within a session return cached results, avoiding redundant database queries when multiple agents or iterations request the same data. The cache is keyed by tool name + kwargs and only stores successful results.

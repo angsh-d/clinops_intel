@@ -1,0 +1,67 @@
+{
+  "directives": [
+    {
+      "directive_id": "data_quality_directive_01",
+      "agent_id": "data_quality",
+      "name": "Data Quality Debt Detection",
+      "description": "Identify sites with worsening entry lag trends, high query burden, or monitoring gaps.",
+      "prompt_file": "data_quality_directive_01.txt",
+      "enabled": true,
+      "priority": "high"
+    },
+    {
+      "directive_id": "enrollment_funnel_directive_01",
+      "agent_id": "enrollment_funnel",
+      "name": "Enrollment Pipeline Health",
+      "description": "Detect enrollment velocity drops, screen failure spikes, and consent withdrawal patterns.",
+      "prompt_file": "enrollment_funnel_directive_01.txt",
+      "enabled": true,
+      "priority": "high"
+    },
+    {
+      "directive_id": "clinical_trials_gov_directive_01",
+      "agent_id": "clinical_trials_gov",
+      "name": "Competitive Landscape Shifts",
+      "description": "Monitor for new competing trials, enrollment target changes, or status changes in the competitive landscape.",
+      "prompt_file": "clinical_trials_gov_directive_01.txt",
+      "enabled": true,
+      "priority": "medium"
+    },
+    {
+      "directive_id": "phantom_compliance_directive_01",
+      "agent_id": "phantom_compliance",
+      "name": "Data Integrity Surveillance",
+      "description": "Flag sites showing suspiciously low variance or patterns suggesting fabrication or rubber-stamping.",
+      "prompt_file": "phantom_compliance_directive_01.txt",
+      "enabled": true,
+      "priority": "high"
+    },
+    {
+      "directive_id": "site_rescue_directive_01",
+      "agent_id": "site_rescue",
+      "name": "At-Risk Site Identification",
+      "description": "Identify sites with declining enrollment trajectory that may need rescue intervention or closure.",
+      "prompt_file": "site_rescue_directive_01.txt",
+      "enabled": true,
+      "priority": "high"
+    },
+    {
+      "directive_id": "vendor_performance_directive_01",
+      "agent_id": "vendor_performance",
+      "name": "Vendor KPI Degradation",
+      "description": "Detect vendor performance trends showing KPI degradation, milestone slippage, or unresolved issues.",
+      "prompt_file": "vendor_performance_directive_01.txt",
+      "enabled": true,
+      "priority": "medium"
+    },
+    {
+      "directive_id": "financial_intelligence_directive_01",
+      "agent_id": "financial_intelligence",
+      "name": "Budget Variance & Burn Rate",
+      "description": "Identify budget overruns, cost-per-patient anomalies, and burn rate projection risks.",
+      "prompt_file": "financial_intelligence_directive_01.txt",
+      "enabled": true,
+      "priority": "medium"
+    }
+  ]
+}

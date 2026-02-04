@@ -1,0 +1,8 @@
+Identify budget overruns, cost-per-patient anomalies, and burn rate projection risks. Investigate:
+
+1. Which budget categories show variance exceeding 10% from plan, and what is driving the overrun?
+2. What is the current cost-per-patient compared to budget, and which sites have the highest cost-per-patient?
+3. At the current burn rate, when will the budget be exhausted relative to the planned study timeline?
+4. Are there change orders or scope changes that are driving unplanned costs?
+
+Focus on identifying financial risks that could impact study completion and whether corrective financial actions are needed.

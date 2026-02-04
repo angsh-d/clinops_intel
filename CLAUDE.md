@@ -82,23 +82,44 @@ React 18 + Vite + Tailwind CSS + Zustand (state management). Key views:
 - `InvestigationTheater.jsx` — displays agent investigation results
 
 ### Active Agents
-- **data_quality** (`DataQualityAgent`) — eCRF entry lags, query burden, data corrections, CRA assignments, monitoring
-- **enrollment_funnel** (`EnrollmentFunnelAgent`) — screening volume, screen failures, randomization, consent withdrawals, kit inventory
+Registered in `backend/agents/registry.py`:
+- **data_quality** — eCRF entry lags, query burden, data corrections, CRA assignments, monitoring
+- **enrollment_funnel** — screening volume, screen failures, randomization, consent withdrawals, kit inventory
+- **clinical_trials_gov** — competitive intelligence from ClinicalTrials.gov API
+- **phantom_compliance** — data integrity & fraud detection (variance suppression, weekday patterns, CRA rubber-stamping)
+- **site_rescue** — enrollment trajectory, screen failure root cause, supply constraints
+- **vendor_performance** — vendor KPI analysis, milestone tracking, issue logs
+- **financial_intelligence** — budget variance, cost per patient, burn rate projection, change orders
+
+### WebSocket Streaming
+Agents stream progress to the frontend via WebSocket during investigations:
+1. Client POSTs to `/api/agents/investigate` → receives `query_id`
+2. Client connects to `/ws/query/{query_id}`
+3. Server streams `{phase, agent_id, data}` at each PRPA phase
+4. `on_step` callbacks are wrapped in try/except to survive WebSocket disconnects
+5. Server sends `{phase: "keepalive"}` messages to prevent timeout during long LLM calls
+
+### API Routers
+`backend/routers/` — query processing, direct agent invocation, alerts, dashboard (pure SQL aggregations, no LLM), data freshness feeds, WebSocket streaming.
 
 ## Environment Variables
 
 Settings loaded from `.env` via Pydantic Settings (`backend/config.py`):
-- `EXTERNAL_DATABASE_URL` — PostgreSQL connection string for external Neon database
+- `EXTERNAL_DATABASE_URL` — PostgreSQL connection string (Neon)
 - `AI_INTEGRATIONS_GEMINI_API_KEY`, `AI_INTEGRATIONS_GEMINI_BASE_URL` — Gemini via Replit
 - `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION`
-- Primary model: `gemini-3-pro-preview`, Embedding: `text-embedding-004`
+- `PRIMARY_LLM` — model name (default: `gemini-3-pro-preview`), `EMBEDDING_MODEL` — `text-embedding-004`
+- 20+ operational thresholds (query aging, DQ scores, attention sites) also in `.env`
 
 ## Key Conventions
 
 - **No hardcoded thresholds** — all anomaly detection is LLM-driven, not rule-based
 - **No fallback/mock data** — always use real integrations and fix root causes
-- **Logging** — all logs go to `./tmp/` directory, never project root
+- **Logging** — all logs go to `./tmp/` directory, never project root; use `from pipeline.logging_config import setup_logging`
 - **Archiving** — superseded files go to `.archive/<timestamp>/` immediately; never keep multiple versions in workspace
 - **Prompts** — every prompt is a separate `.txt` file in `/prompt/`; load via `PromptManager`
 - **Max output tokens** — always set `max_output_tokens` to the model's maximum on all LLM API calls
 - **DB session isolation** — each agent run gets its own SQLAlchemy session to prevent concurrent access issues
+- **Data transparency** — all calculated metrics must include formula breakdowns and data source attribution
+- **Tool self-description** — tools expose `describe()` for LLM-driven dynamic selection during the Plan phase
+- **Vite proxy** — frontend proxies `/api` → `localhost:8000` and `/ws` → WebSocket; no separate CORS config needed in dev

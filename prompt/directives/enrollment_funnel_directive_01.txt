@@ -1,0 +1,8 @@
+Analyze the enrollment pipeline across all sites to detect velocity drops, screen failure spikes, and consent withdrawal patterns. Investigate:
+
+1. Which sites have enrollment velocity below target, and is the gap widening or narrowing?
+2. Are there sites with screen failure rates above 40%, and what are the primary exclusion criteria driving failures?
+3. Are consent withdrawal rates elevated at any sites, and do they correlate with specific protocol amendments or operational changes?
+4. Are there sites with kit inventory shortfalls that could bottleneck upcoming randomizations?
+
+Identify whether enrollment issues are site-specific operational problems or study-wide protocol challenges.

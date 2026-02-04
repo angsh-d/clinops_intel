@@ -17,10 +17,12 @@ AVAILABLE TOOLS:
 {tool_descriptions}
 
 PLANNING PRINCIPLES:
-- Use the competing_trial_search tool with location_terms matching the site's city/state/country
+- PREFERRED: Use competing_trial_search with lat/lon coordinates for accurate geo-distance search. Get coordinates from site_summary if available.
+- FALLBACK: If lat/lon not available, use location_terms with city/state — but note this is a full-text search, not a precise geo filter.
 - Condition should be "Non-Small Cell Lung Cancer" (or "NSCLC") — the study indication
 - One search per site/location to avoid redundant API calls
-- If prior results show empty data for a location, try a broader location term (e.g., state instead of city)
+- If prior results show empty data for a location, try a broader search (larger distance or state-level terms)
+- Use trial_detail tool to deep-dive on specific competing trials found in search results (get protocol, locations, or outcomes)
 - You may also use site_summary or enrollment_velocity tools if additional context is needed
 
 Produce a JSON investigation plan:
@@ -32,7 +34,7 @@ Produce a JSON investigation plan:
       "tool_args": {{
         "condition": "Non-Small Cell Lung Cancer",
         "location_terms": "City, State",
-        "distance": "100mi"
+        "distance": 100
       }},
       "purpose": "Search for competing NSCLC trials near [site]",
       "hypothesis_ids": ["H1"],
