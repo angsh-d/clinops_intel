@@ -4,17 +4,28 @@ import json
 import logging
 import re
 
-from biomcp.trials.search import (
-    search_trials,
-    TrialQuery,
-    RecruitingStatus,
-    TrialPhase,
-)
-from biomcp.trials.getter import get_trial, Module
-
 from backend.tools.base import BaseTool, ToolResult
 
 logger = logging.getLogger(__name__)
+
+BIOMCP_AVAILABLE = False
+try:
+    from biomcp.trials.search import (
+        search_trials,
+        TrialQuery,
+        RecruitingStatus,
+        TrialPhase,
+    )
+    from biomcp.trials.getter import get_trial, Module
+    BIOMCP_AVAILABLE = True
+except ImportError:
+    logger.warning("biomcp.trials not available - ClinicalTrials.gov tools disabled")
+    search_trials = None
+    TrialQuery = None
+    RecruitingStatus = None
+    TrialPhase = None
+    get_trial = None
+    Module = None
 
 # Our own trial — filter from results to avoid self-matches
 OWN_TRIAL_NCT = "NCT02264990"

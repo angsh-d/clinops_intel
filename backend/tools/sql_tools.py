@@ -1756,8 +1756,12 @@ def build_tool_registry() -> "ToolRegistry":
     registry.register(BurnRateProjectionTool())
     registry.register(ChangeOrderImpactTool())
     registry.register(FinancialImpactOfDelaysTool())
-    # Competitive intelligence tools (BioMCP-powered)
-    from backend.tools.ctgov_tools import CompetingTrialSearchTool, TrialDetailTool
-    registry.register(CompetingTrialSearchTool())
-    registry.register(TrialDetailTool())
+    # Competitive intelligence tools (BioMCP-powered) - optional
+    try:
+        from backend.tools.ctgov_tools import CompetingTrialSearchTool, TrialDetailTool, BIOMCP_AVAILABLE
+        if BIOMCP_AVAILABLE:
+            registry.register(CompetingTrialSearchTool())
+            registry.register(TrialDetailTool())
+    except ImportError:
+        pass  # ClinicalTrials.gov tools not available
     return registry
