@@ -77,8 +77,16 @@ export function SiteDossier() {
 
   const detail = siteDetail || {}
   const enrollmentPct = detail.enrollment_percent || 0
-  const dqScore = detail.dq_score ?? null
+  
+  const getDqMetric = (label) => {
+    const metric = detail.data_quality_metrics?.find(m => m.label === label)
+    return metric?.value
+  }
+  
+  const dqScore = detail.data_quality_score ?? detail.dq_score ?? null
   const healthScore = dqScore != null ? Math.round(dqScore) : null
+  const openQueries = getDqMetric('Open Queries') || '0'
+  const entryLag = getDqMetric('Entry Lag') || '--'
 
   const healthColor = healthScore == null ? 'text-neutral-400'
     : healthScore >= 70 ? 'text-green-600'
@@ -218,9 +226,9 @@ export function SiteDossier() {
             <h3 className="text-xs font-medium text-apple-secondary uppercase tracking-wide mb-3">Performance Metrics</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <MetricCard label="Enrollment" value={`${enrollmentPct.toFixed(0)}%`} trend={enrollmentPct >= 80 ? 'good' : enrollmentPct >= 50 ? 'neutral' : 'warn'} />
-              <MetricCard label="DQ Score" value={healthScore != null ? `${healthScore}` : '--'} trend={healthScore >= 70 ? 'good' : healthScore >= 40 ? 'neutral' : 'warn'} />
-              <MetricCard label="Open Queries" value={detail.open_queries || '0'} trend={detail.open_queries <= 5 ? 'good' : detail.open_queries <= 15 ? 'neutral' : 'warn'} />
-              <MetricCard label="Entry Lag" value={detail.mean_entry_lag ? `${detail.mean_entry_lag.toFixed(1)}d` : '--'} trend={detail.mean_entry_lag <= 3 ? 'good' : detail.mean_entry_lag <= 7 ? 'neutral' : 'warn'} />
+              <MetricCard label="DQ Score" value={healthScore != null ? `${healthScore}` : '--'} trend={healthScore == null ? 'neutral' : healthScore >= 70 ? 'good' : healthScore >= 40 ? 'neutral' : 'warn'} />
+              <MetricCard label="Open Queries" value={openQueries} trend={parseInt(openQueries) <= 5 ? 'good' : parseInt(openQueries) <= 15 ? 'neutral' : 'warn'} />
+              <MetricCard label="Entry Lag" value={entryLag} trend={entryLag === '--' ? 'neutral' : parseFloat(entryLag) <= 3 ? 'good' : parseFloat(entryLag) <= 7 ? 'neutral' : 'warn'} />
             </div>
           </motion.section>
         )}
