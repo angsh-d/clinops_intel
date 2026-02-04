@@ -275,12 +275,9 @@ export function SiteDossier() {
                     alert.severity === 'warning' ? 'bg-apple-warning' : 'bg-apple-grey-400'
                   }`} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-body text-apple-text font-medium">{alert.title}</p>
-                    {alert.description && (
-                      <p className="text-caption text-apple-secondary mt-1 line-clamp-2">{alert.description}</p>
-                    )}
-                    <p className="text-[11px] text-apple-muted font-mono mt-2">
-                      {alert.agent_id} · {alert.created_at ? new Date(alert.created_at).toLocaleDateString() : ''}
+                    <p className="text-body text-apple-text font-medium">{alert.message}</p>
+                    <p className="text-[11px] text-apple-tertiary font-mono mt-2">
+                      {alert.time}
                     </p>
                   </div>
                 </div>
