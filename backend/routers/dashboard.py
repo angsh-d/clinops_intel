@@ -889,22 +889,24 @@ def site_detail(
         ),
     ]
 
-    # Build enrollment metrics
+    # Build enrollment metrics with provenance
     enrollment_metrics = [
         SiteMetricDetail(
             label="Screened",
             value=str(screened),
-            trend="stable"
+            trend="stable",
+            note=f"Source: screening_log table | Count of subjects screened"
         ),
         SiteMetricDetail(
             label="Randomized",
             value=str(randomized),
-            note=f"Target: {site_target}"
+            note=f"Target: {site_target} | Source: enrollment_progress table"
         ),
         SiteMetricDetail(
             label="Enrollment %",
             value=f"{enrollment_pct}%",
-            trend="up" if enrollment_pct > settings.site_enrollment_trend_up_pct else "down"
+            trend="up" if enrollment_pct > settings.site_enrollment_trend_up_pct else "down",
+            note=f"Formula: {randomized}/{site_target} × 100 = {enrollment_pct}% | Source: enrollment_progress"
         ),
     ]
     
