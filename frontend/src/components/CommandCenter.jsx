@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Send, AlertTriangle, TrendingDown, Clock, ChevronRight, 
@@ -42,6 +42,7 @@ const PHASE_LABELS = {
 export function CommandCenter() {
   const navigate = useNavigate()
   const { studyId } = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { setStudyData, siteNameMap, setSiteNameMap } = useStore()
   
   const [studySummary, setStudySummary] = useState(null)
@@ -58,6 +59,7 @@ export function CommandCenter() {
   
   const [conversationHistory, setConversationHistory] = useState([])
   const [showExplore, setShowExplore] = useState(false)
+  const [autoSubmitHandled, setAutoSubmitHandled] = useState(false)
   
   const inputRef = useRef(null)
   const resultsRef = useRef(null)
@@ -131,6 +133,50 @@ export function CommandCenter() {
     }
     loadData()
   }, [studyId])
+
+  useEffect(() => {
+    const urlQuery = searchParams.get('q')
+    if (urlQuery && !autoSubmitHandled && !loading) {
+      setAutoSubmitHandled(true)
+      setSearchParams({})
+      setQuery(urlQuery)
+      setTimeout(() => {
+        setConversationHistory(prev => [...prev, { role: 'user', content: urlQuery }])
+        setQuery('')
+        setIsInvestigating(true)
+        setCurrentPhase('routing')
+        setPhases([])
+        setResult(null)
+        setError(null)
+        
+        startInvestigation(urlQuery).then(({ query_id }) => {
+          wsRef.current = connectInvestigationStream(query_id, {
+            onPhase: (phase) => {
+              setCurrentPhase(phase.phase)
+              setPhases(prev => [...prev, phase])
+            },
+            onComplete: (data) => {
+              setResult(data)
+              setCurrentPhase('complete')
+              setIsInvestigating(false)
+              setConversationHistory(prev => [...prev, { 
+                role: 'assistant', 
+                content: data,
+                query: urlQuery 
+              }])
+            },
+            onError: (err) => {
+              setError(err.message || 'Investigation failed')
+              setIsInvestigating(false)
+            },
+          })
+        }).catch(err => {
+          setError(err.message || 'Failed to start investigation')
+          setIsInvestigating(false)
+        })
+      }, 100)
+    }
+  }, [searchParams, loading, autoSubmitHandled])
 
   const handleSubmit = async (e) => {
     e?.preventDefault()

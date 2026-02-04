@@ -45,9 +45,9 @@ export function SiteDossier() {
 
   const handleAsk = () => {
     if (!askInput.trim()) return
-    const siteName = siteNameMap[siteId] || siteId
-    setInvestigation({ question: askInput.trim(), site: { id: siteId, name: siteName }, status: 'routing' })
-    setAskInput('')
+    const siteName = siteNameMap[siteId] || siteDetail?.site_name || siteId
+    const contextualQuery = `About ${siteName}: ${askInput.trim()}`
+    navigate(`/study/${effectiveStudyId}?q=${encodeURIComponent(contextualQuery)}`)
   }
 
   const siteName = siteNameMap[siteId] || siteDetail?.site_name || siteId
