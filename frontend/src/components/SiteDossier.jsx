@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, TrendingUp, TrendingDown, Minus, MessageSquare, MapPin, AlertTriangle, Shield, DollarSign, Send, Loader2, Calendar, UserCheck } from 'lucide-react'
+import { ArrowLeft, TrendingUp, TrendingDown, Minus, MapPin, AlertTriangle, Send, Loader2, Calendar, UserCheck, Clock, Activity, ChevronRight } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { getSiteDetail, getSiteBriefs, getSiteJourney } from '../lib/api'
 
 const TREND_MAP = {
-  improving: { icon: TrendingUp, color: 'text-green-600', label: 'improving' },
-  stable: { icon: Minus, color: 'text-neutral-400', label: 'stable' },
-  deteriorating: { icon: TrendingDown, color: 'text-red-500', label: 'deteriorating' },
+  improving: { icon: TrendingUp, color: 'text-apple-success', bgColor: 'bg-apple-success/10', label: 'Improving' },
+  stable: { icon: Minus, color: 'text-apple-grey-500', bgColor: 'bg-apple-grey-100', label: 'Stable' },
+  deteriorating: { icon: TrendingDown, color: 'text-apple-critical', bgColor: 'bg-apple-critical/10', label: 'At Risk' },
 }
 
 export function SiteDossier() {
@@ -57,21 +57,20 @@ export function SiteDossier() {
   if (loading) {
     return (
       <div className="min-h-screen bg-apple-bg">
-        <header className="sticky top-0 z-50 glass border-b border-apple-border">
-          <div className="px-6 py-4 flex items-center gap-4">
+        <header className="sticky top-0 z-50 bg-apple-surface/80 backdrop-blur-xl border-b border-apple-divider">
+          <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-4">
             <button 
               onClick={() => navigate(`/study/${effectiveStudyId}`)}
-              className="flex items-center gap-2 text-apple-secondary hover:text-apple-text transition-colors"
+              className="button-icon"
             >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Back</span>
+              <ArrowLeft className="w-5 h-5" />
             </button>
           </div>
         </header>
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center gap-3 text-apple-secondary">
             <Loader2 className="w-5 h-5 animate-spin" />
-            <span className="text-body">Loading Site Dossier...</span>
+            <span className="text-body">Loading...</span>
           </div>
         </div>
       </div>
@@ -98,181 +97,194 @@ export function SiteDossier() {
   const entryLagMetric = getDqMetric('Entry Lag')
   const enrollmentMetric = getEnrollMetric('Enrollment %') || getEnrollMetric('Randomized')
 
-  const healthColor = healthScore == null ? 'text-neutral-400'
-    : healthScore >= 70 ? 'text-green-600'
-    : healthScore >= 40 ? 'text-amber-600'
-    : 'text-red-500'
-
-  const healthBg = healthScore == null ? 'bg-neutral-100'
-    : healthScore >= 70 ? 'bg-green-50 border-green-200'
-    : healthScore >= 40 ? 'bg-amber-50 border-amber-200'
-    : 'bg-red-50 border-red-200'
-
   return (
     <div className="min-h-screen bg-apple-bg">
-      <header className="sticky top-0 z-50 glass border-b border-apple-border">
-        <div className="px-6 py-4 flex items-center justify-between">
+      {/* Minimal Header */}
+      <header className="sticky top-0 z-50 bg-apple-surface/80 backdrop-blur-xl border-b border-apple-divider">
+        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => navigate(`/study/${effectiveStudyId}`)}
-              className="flex items-center gap-2 text-apple-secondary hover:text-apple-text transition-colors"
+              className="button-icon"
             >
-              <ArrowLeft className="w-4 h-4" />
-              <img src="/saama_logo.svg" alt="Saama" className="h-6" />
+              <ArrowLeft className="w-5 h-5" />
             </button>
-            <div className="w-px h-5 bg-apple-border" />
-            <span className="text-body font-medium text-apple-text">{siteName}</span>
-            <span className="text-caption text-apple-secondary">{detail.country || ''}{detail.city ? ` · ${detail.city}` : ''}</span>
+            <div className="h-5 w-px bg-apple-divider" />
+            <div className="flex items-center gap-3">
+              <span className="text-body font-semibold text-apple-text">{siteName}</span>
+              <span className="text-caption text-apple-tertiary">
+                {detail.country || ''}{detail.city ? ` · ${detail.city}` : ''}
+              </span>
+            </div>
           </div>
-          <div className={`px-3 py-1.5 rounded-lg ${healthBg}`}>
-            <span className={`text-sm font-semibold ${healthColor}`}>
-              DQ Score: {healthScore != null ? healthScore : '--'}
-            </span>
+          
+          {/* Status Pill */}
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${trend.bgColor}`}>
+            <trend.icon className={`w-3.5 h-3.5 ${trend.color}`} />
+            <span className={`text-caption font-medium ${trend.color}`}>{trend.label}</span>
           </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8">
-        {/* Site Hero Card */}
+      <main className="max-w-5xl mx-auto px-6 py-8">
+        {/* Hero Section */}
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="p-6 bg-apple-surface border border-apple-border rounded-2xl mb-8"
+          transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className="mb-10"
         >
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-medium text-apple-text">{siteName}</h1>
-              <div className="flex items-center gap-3 mt-2 text-caption text-apple-secondary">
-                <span className="flex items-center gap-1">
+              <h1 className="text-[32px] font-semibold text-apple-text tracking-tight">{siteName}</h1>
+              <div className="flex items-center gap-4 mt-2">
+                <span className="flex items-center gap-1.5 text-caption text-apple-secondary">
                   <MapPin className="w-3.5 h-3.5" />
                   {detail.country || 'Unknown'}{detail.city ? ` · ${detail.city}` : ''}
-                </span>
-                <span className="text-apple-secondary/30">|</span>
-                <span>Enrollment: {enrollmentPct.toFixed(0)}%</span>
-                <span className="text-apple-secondary/30">|</span>
-                <span className={`flex items-center gap-1 ${trend.color}`}>
-                  <trend.icon className="w-3 h-3" /> {trend.label}
                 </span>
               </div>
             </div>
           </div>
         </motion.div>
 
+        {/* Key Metrics Grid */}
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.05, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className="mb-10"
+        >
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <MetricCard 
+              label="Enrollment" 
+              value={`${enrollmentPct.toFixed(0)}%`}
+              status={enrollmentPct >= 80 ? 'success' : enrollmentPct >= 50 ? 'neutral' : 'warning'}
+              note={enrollmentMetric?.note}
+            />
+            <MetricCard 
+              label="DQ Score" 
+              value={healthScore != null ? `${healthScore}` : '--'}
+              status={healthScore == null ? 'neutral' : healthScore >= 70 ? 'success' : healthScore >= 40 ? 'neutral' : 'warning'}
+              note={dqMetric?.note}
+            />
+            <MetricCard 
+              label="Open Queries" 
+              value={openQueriesMetric?.value || '0'}
+              status={parseInt(openQueriesMetric?.value || '0') <= 5 ? 'success' : parseInt(openQueriesMetric?.value || '0') <= 15 ? 'neutral' : 'warning'}
+              note={openQueriesMetric?.note}
+            />
+            <MetricCard 
+              label="Entry Lag" 
+              value={entryLagMetric?.value || '--'}
+              suffix={entryLagMetric?.value && entryLagMetric?.value !== '--' ? 'd' : ''}
+              status={(entryLagMetric?.value || '--') === '--' ? 'neutral' : parseFloat(entryLagMetric?.value) <= 3 ? 'success' : parseFloat(entryLagMetric?.value) <= 7 ? 'neutral' : 'warning'}
+              note={entryLagMetric?.note}
+            />
+          </div>
+        </motion.section>
+
         {/* Intelligence Brief */}
         {latestBrief && (
           <motion.section
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-8"
+            transition={{ duration: 0.4, delay: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="mb-10"
           >
-            <h3 className="text-[12px] font-medium text-neutral-400 uppercase tracking-wide mb-3">Intelligence Brief</h3>
-            <div className="p-5 bg-purple-50/30 border border-purple-200/40 rounded-2xl">
-              <p className="text-[15px] text-neutral-800 leading-relaxed">
+            <h2 className="section-header mb-4">Intelligence Brief</h2>
+            <div className="card-elevated p-6">
+              <p className="text-body text-apple-text leading-relaxed">
                 {typeof latestBrief.risk_summary === 'string' 
                   ? latestBrief.risk_summary 
                   : latestBrief.risk_summary?.headline || 'No summary available'}
               </p>
+              
               {latestBrief.risk_summary?.key_risks?.length > 0 && (
-                <div className="mt-3 space-y-2">
+                <div className="mt-4 space-y-2">
                   {latestBrief.risk_summary.key_risks.map((risk, i) => (
-                    <div key={i} className={`text-[13px] p-2 rounded ${risk.severity === 'critical' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
-                      <span className="font-medium">{risk.risk}:</span> {risk.evidence}
+                    <div key={i} className={`flex items-start gap-3 p-3 rounded-apple ${
+                      risk.severity === 'critical' ? 'bg-apple-critical/5' : 'bg-apple-warning/5'
+                    }`}>
+                      <div className={`w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0 ${
+                        risk.severity === 'critical' ? 'bg-apple-critical' : 'bg-apple-warning'
+                      }`} />
+                      <div>
+                        <span className="text-caption font-medium text-apple-text">{risk.risk}</span>
+                        <p className="text-caption text-apple-secondary mt-0.5">{risk.evidence}</p>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
+
               {latestBrief.vendor_accountability?.cro_issues?.length > 0 && (
-                <div className="text-[13px] text-neutral-500 mt-3 leading-relaxed">
-                  <span className="font-medium text-neutral-700">Vendor Issues:</span>
-                  <ul className="list-disc list-inside mt-1">
+                <div className="mt-5 pt-4 border-t border-apple-divider">
+                  <p className="text-caption font-medium text-apple-text mb-2">Vendor Issues</p>
+                  <ul className="space-y-1">
                     {latestBrief.vendor_accountability.cro_issues.map((issue, i) => (
-                      <li key={i}>{issue}</li>
+                      <li key={i} className="text-caption text-apple-secondary flex items-start gap-2">
+                        <span className="text-apple-grey-400 mt-0.5">•</span>
+                        <span>{issue}</span>
+                      </li>
                     ))}
                   </ul>
                 </div>
               )}
-              {latestBrief.cross_domain_correlations?.length > 0 && (
-                <div className="mt-3 space-y-2">
-                  {latestBrief.cross_domain_correlations.map((corr, i) => (
-                    <div key={i} className="text-[12px] text-neutral-600">
-                      <span className="font-medium">{corr.agents_involved?.join(', ')}:</span> {corr.finding}
-                      {corr.causal_chain && (
-                        <div className="flex flex-wrap items-center gap-1 mt-1">
-                          {corr.causal_chain.split(/\s*(?:\u2192|->)\s*/).filter(Boolean).map((node, j, arr) => (
-                            <span key={j} className="flex items-center gap-1">
-                              <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-medium rounded-full">{node.trim()}</span>
-                              {j < arr.length - 1 && <span className="text-purple-300">\u2192</span>}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+
               {latestBrief.recommended_actions?.length > 0 && (
-                <div className="mt-4 pt-3 border-t border-purple-200/30">
-                  <p className="text-[11px] font-medium text-neutral-500 mb-1.5">Recommended Actions</p>
-                  {latestBrief.recommended_actions.map((a, i) => (
-                    <div key={i} className="text-[12px] text-neutral-600 mb-2">
-                      <span className="font-medium">{i + 1}. {typeof a === 'string' ? a : a.action}</span>
-                      {a.owner && <span className="text-neutral-400 ml-2">({a.owner})</span>}
-                    </div>
-                  ))}
+                <div className="mt-5 pt-4 border-t border-apple-divider">
+                  <p className="text-caption font-medium text-apple-text mb-3">Recommended Actions</p>
+                  <div className="space-y-2">
+                    {latestBrief.recommended_actions.map((a, i) => (
+                      <div key={i} className="flex items-start gap-3">
+                        <span className="text-caption text-apple-tertiary font-medium w-5 flex-shrink-0">{i + 1}.</span>
+                        <div>
+                          <span className="text-caption text-apple-text">{typeof a === 'string' ? a : a.action}</span>
+                          {a.owner && <span className="text-caption text-apple-tertiary ml-2">({a.owner})</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
               
-              {/* Data Provenance for Intelligence Brief */}
-              <div className="mt-4 pt-3 border-t border-purple-200/30">
-                <p className="text-[10px] font-mono text-neutral-400 flex items-center gap-2">
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>
-                    Generated by: {latestBrief.agent || 'proactive_briefing_agent'} | 
-                    Sources: site_financial_metrics, queries, enrollment_progress, ecrf_entries | 
-                    Updated: {latestBrief.created_at ? new Date(latestBrief.created_at).toLocaleString() : 'Recently'}
-                  </span>
+              {/* Provenance */}
+              <div className="mt-5 pt-4 border-t border-apple-divider">
+                <p className="text-[11px] font-mono text-apple-muted">
+                  Generated by {latestBrief.agent || 'proactive_briefing_agent'} · Updated {latestBrief.created_at ? new Date(latestBrief.created_at).toLocaleString() : 'recently'}
                 </p>
               </div>
             </div>
           </motion.section>
         )}
 
-        {/* Performance Metrics */}
-        {(detail.enrollment_percent !== undefined || detail.dq_score !== undefined) && (
+        {/* Active Alerts */}
+        {detail.alerts?.length > 0 && (
           <motion.section
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="mb-8"
+            transition={{ duration: 0.4, delay: 0.15, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="mb-10"
           >
-            <h3 className="text-xs font-medium text-apple-secondary uppercase tracking-wide mb-3">Performance Metrics</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <MetricCard 
-                label="Enrollment" 
-                value={`${enrollmentPct.toFixed(0)}%`} 
-                trend={enrollmentPct >= 80 ? 'good' : enrollmentPct >= 50 ? 'neutral' : 'warn'} 
-                provenance={enrollmentMetric?.note || `Target: ${detail.enrollment_metrics?.find(m => m.label === 'Randomized')?.note || 'N/A'}`}
-              />
-              <MetricCard 
-                label="DQ Score" 
-                value={healthScore != null ? `${healthScore}` : '--'} 
-                trend={healthScore == null ? 'neutral' : healthScore >= 70 ? 'good' : healthScore >= 40 ? 'neutral' : 'warn'} 
-                provenance={dqMetric?.note || 'Formula: 100 - (open_queries × 5)'}
-              />
-              <MetricCard 
-                label="Open Queries" 
-                value={openQueriesMetric?.value || '0'} 
-                trend={parseInt(openQueriesMetric?.value || '0') <= 5 ? 'good' : parseInt(openQueriesMetric?.value || '0') <= 15 ? 'neutral' : 'warn'} 
-                provenance={openQueriesMetric?.note || 'Source: queries table'}
-              />
-              <MetricCard 
-                label="Entry Lag" 
-                value={entryLagMetric?.value || '--'} 
-                trend={(entryLagMetric?.value || '--') === '--' ? 'neutral' : parseFloat(entryLagMetric?.value) <= 3 ? 'good' : parseFloat(entryLagMetric?.value) <= 7 ? 'neutral' : 'warn'} 
-                provenance={entryLagMetric?.note || 'Source: ecrf_entries table'}
-              />
+            <h2 className="section-header mb-4">Active Alerts</h2>
+            <div className="space-y-3">
+              {detail.alerts.slice(0, 3).map((alert, i) => (
+                <div key={i} className="card p-4 flex items-start gap-4">
+                  <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                    alert.severity === 'critical' ? 'bg-apple-critical' : 
+                    alert.severity === 'warning' ? 'bg-apple-warning' : 'bg-apple-grey-400'
+                  }`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-body text-apple-text font-medium">{alert.title}</p>
+                    {alert.description && (
+                      <p className="text-caption text-apple-secondary mt-1 line-clamp-2">{alert.description}</p>
+                    )}
+                    <p className="text-[11px] text-apple-muted font-mono mt-2">
+                      {alert.agent_id} · {alert.created_at ? new Date(alert.created_at).toLocaleDateString() : ''}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
           </motion.section>
         )}
@@ -280,49 +292,33 @@ export function SiteDossier() {
         {/* Site Journey Timeline */}
         <SiteJourneyTimeline journey={journey} />
 
-        {/* AI Summary */}
-        {detail.ai_summary && (
-          <motion.section
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="mb-8"
-          >
-            <h3 className="text-[12px] font-medium text-neutral-400 uppercase tracking-wide mb-3">AI Assessment</h3>
-            <div className="p-4 bg-apple-surface border border-apple-border rounded-xl">
-              <p className="text-caption text-apple-text leading-relaxed">{detail.ai_summary}</p>
-            </div>
-          </motion.section>
-        )}
-
-        {/* Ask About This Site */}
+        {/* Ask AI */}
         <motion.section
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="mt-10 border-t border-neutral-100 pt-6"
+          transition={{ duration: 0.4, delay: 0.25, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className="mt-10"
         >
-          <div className="flex items-center gap-2 mb-3">
-            <MessageSquare className="w-4 h-4 text-neutral-400" />
-            <span className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Ask About This Site</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <input
-              type="text"
-              value={askInput}
-              onChange={(e) => setAskInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAsk()}
-              placeholder={`Ask a question about ${siteName}...`}
-              className="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-[14px] text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-400 transition-colors"
-            />
-            {askInput.trim() && (
+          <h2 className="section-header mb-4">Ask About This Site</h2>
+          <div className="card p-4">
+            <div className="flex items-center gap-3">
+              <input
+                type="text"
+                value={askInput}
+                onChange={(e) => setAskInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAsk()}
+                placeholder="e.g., What's causing the high screen failure rate?"
+                className="input-primary flex-1"
+              />
               <button
                 onClick={handleAsk}
-                className="px-4 py-3 bg-neutral-900 text-white rounded-xl text-[14px] font-medium hover:bg-neutral-800 transition-colors"
+                disabled={!askInput.trim()}
+                className="button-primary flex items-center gap-2 disabled:opacity-40"
               >
-                Investigate
+                <Send className="w-4 h-4" />
+                <span>Investigate</span>
               </button>
-            )}
+            </div>
           </div>
         </motion.section>
       </main>
@@ -330,26 +326,21 @@ export function SiteDossier() {
   )
 }
 
-function MetricCard({ label, value, trend, provenance }) {
-  const trendStyles = {
-    good: { text: 'text-emerald-600', bg: 'bg-emerald-50', dot: 'bg-emerald-500' },
-    neutral: { text: 'text-amber-600', bg: 'bg-amber-50', dot: 'bg-amber-500' },
-    warn: { text: 'text-red-600', bg: 'bg-red-50', dot: 'bg-red-500' },
+function MetricCard({ label, value, suffix = '', status = 'neutral', note }) {
+  const statusStyles = {
+    success: 'border-l-apple-success',
+    warning: 'border-l-apple-warning', 
+    neutral: 'border-l-apple-grey-300'
   }
-  const style = trendStyles[trend] || { text: 'text-apple-text', bg: 'bg-apple-surface', dot: 'bg-apple-secondary' }
   
   return (
-    <div className={`p-4 ${style.bg} border border-apple-border rounded-xl relative overflow-hidden`}>
-      <div className={`absolute top-3 right-3 w-2 h-2 rounded-full ${style.dot}`} />
-      <p className="text-caption text-apple-secondary mb-1">{label}</p>
-      <span className={`text-xl font-semibold ${style.text}`}>
+    <div className={`metric-card border-l-[3px] ${statusStyles[status]}`}>
+      <p className="metric-label mb-2">{label}</p>
+      <p className="metric-value">
         {value}
-      </span>
-      {provenance && (
-        <p className="text-[11px] text-neutral-500 mt-2 font-mono leading-relaxed border-t border-neutral-200/50 pt-2">
-          {provenance}
-        </p>
-      )}
+        {suffix && <span className="text-lg text-apple-secondary font-normal ml-0.5">{suffix}</span>}
+      </p>
+      {note && <p className="metric-note">{note}</p>}
     </div>
   )
 }
@@ -359,89 +350,75 @@ function SiteJourneyTimeline({ journey }) {
 
   const formatDate = (dateStr) => {
     const date = new Date(dateStr)
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
-  const getSeverityStyle = (severity) => {
+  const getSeverityDot = (severity) => {
     switch (severity) {
-      case 'critical': return { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', dot: 'bg-red-500' }
-      case 'warning': return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500' }
-      case 'success': return { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', dot: 'bg-green-500' }
-      default: return { bg: 'bg-neutral-50', text: 'text-neutral-700', border: 'border-neutral-200', dot: 'bg-neutral-400' }
+      case 'critical': return 'bg-apple-critical'
+      case 'warning': return 'bg-apple-warning'
+      case 'success': return 'bg-apple-success'
+      default: return 'bg-apple-grey-400'
     }
   }
 
   const getEventIcon = (eventType) => {
     switch (eventType) {
-      case 'cra_transition': return <UserCheck className="w-3 h-3" />
-      case 'monitoring_visit': return <Calendar className="w-3 h-3" />
-      case 'screening': return <span className="text-[10px] font-bold">S</span>
-      case 'randomization': return <span className="text-[10px] font-bold">R</span>
-      case 'alert': return <AlertTriangle className="w-3 h-3" />
-      case 'query': return <span className="text-[10px] font-bold">Q</span>
-      default: return <span className="text-[10px]">•</span>
+      case 'cra_transition': return UserCheck
+      case 'monitoring_visit': return Calendar
+      case 'alert': return AlertTriangle
+      default: return Activity
     }
-  }
-
-  const eventTypeLabels = {
-    cra_transition: 'CRA',
-    monitoring_visit: 'Visit',
-    screening: 'Screening',
-    randomization: 'Randomized',
-    alert: 'Alert',
-    query: 'Queries'
   }
 
   return (
     <motion.section
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.15 }}
-      className="mb-8"
+      transition={{ duration: 0.4, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+      className="mb-10"
     >
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-neutral-400" />
-          <h3 className="text-xs font-medium text-apple-secondary uppercase tracking-wide">Site Journey</h3>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          {Object.entries(journey.event_counts || {}).map(([type, count]) => (
-            <div key={type} className="flex items-center gap-1">
-              <span className="text-[10px] text-neutral-500">{eventTypeLabels[type] || type}:</span>
-              <span className="text-[10px] font-medium text-neutral-700">{count}</span>
-            </div>
+        <h2 className="section-header">Site Journey</h2>
+        <div className="flex items-center gap-3">
+          {Object.entries(journey.event_counts || {}).slice(0, 4).map(([type, count]) => (
+            <span key={type} className="text-[11px] text-apple-tertiary">
+              {type.replace('_', ' ')}: <span className="font-medium text-apple-secondary">{count}</span>
+            </span>
           ))}
         </div>
       </div>
       
-      <div className="bg-neutral-50 rounded-xl p-4 space-y-2 max-h-[300px] overflow-y-auto">
-        {journey.events.slice(0, 15).map((event, i) => {
-          const style = getSeverityStyle(event.severity)
-          return (
-            <div
-              key={i}
-              className={`flex items-start gap-3 p-2 rounded-lg ${style.bg} border ${style.border}`}
-            >
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center ${style.dot} text-white flex-shrink-0 mt-0.5`}>
-                {getEventIcon(event.event_type)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <p className={`text-[12px] font-medium ${style.text} truncate`}>{event.title}</p>
-                  <span className="text-[10px] text-neutral-400 flex-shrink-0">{formatDate(event.date)}</span>
+      <div className="card-elevated p-6 max-h-[400px] overflow-y-auto scrollbar-minimal">
+        <div className="space-y-0">
+          {journey.events.slice(0, 15).map((event, i) => {
+            const Icon = getEventIcon(event.event_type)
+            return (
+              <div key={i} className="timeline-event">
+                <div className={`timeline-dot ${getSeverityDot(event.severity)}`} />
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Icon className="w-3.5 h-3.5 text-apple-tertiary flex-shrink-0" />
+                      <p className="text-body text-apple-text font-medium truncate">{event.title}</p>
+                    </div>
+                    {event.description && (
+                      <p className="text-caption text-apple-secondary mt-1 ml-5">{event.description}</p>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-apple-muted font-mono flex-shrink-0">{formatDate(event.date)}</span>
                 </div>
-                {event.description && (
-                  <p className="text-[11px] text-neutral-500 mt-0.5">{event.description}</p>
-                )}
               </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
       
-      <p className="text-[9px] text-neutral-400 mt-2 font-mono text-center">
+      <p className="text-[10px] text-apple-muted font-mono mt-3 text-center">
         Sources: {journey.data_sources?.join(', ') || 'N/A'}
       </p>
     </motion.section>
   )
 }
+
+export default SiteDossier

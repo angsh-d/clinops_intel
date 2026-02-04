@@ -8,19 +8,35 @@ export default {
     extend: {
       colors: {
         apple: {
-          bg: '#FAFAFA',
+          bg: '#F5F5F7',
           surface: '#FFFFFF',
-          border: '#E5E5E5',
+          elevated: '#FBFBFD',
+          border: '#D2D2D7',
+          divider: '#E8E8ED',
           text: '#1D1D1F',
-          secondary: '#86868B',
+          secondary: '#6E6E73',
+          tertiary: '#86868B',
+          muted: '#AEAEB2',
           accent: '#0071E3',
           critical: '#FF3B30',
           warning: '#FF9500',
-          success: '#34C759',
+          success: '#30D158',
           info: '#007AFF',
           ai: {
             start: '#5856D6',
             end: '#AF52DE'
+          },
+          grey: {
+            50: '#FAFAFA',
+            100: '#F5F5F7',
+            200: '#E8E8ED',
+            300: '#D2D2D7',
+            400: '#AEAEB2',
+            500: '#8E8E93',
+            600: '#636366',
+            700: '#48484A',
+            800: '#3A3A3C',
+            900: '#1D1D1F'
           }
         }
       },
@@ -67,9 +83,20 @@ export default {
         }
       },
       boxShadow: {
-        'apple': '0 4px 20px rgba(0, 0, 0, 0.08)',
-        'apple-lg': '0 8px 40px rgba(0, 0, 0, 0.12)',
-        'apple-glow': '0 0 20px rgba(88, 86, 214, 0.3)'
+        'apple': '0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.04)',
+        'apple-sm': '0 1px 2px rgba(0, 0, 0, 0.03), 0 2px 6px rgba(0, 0, 0, 0.03)',
+        'apple-md': '0 2px 8px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.06)',
+        'apple-lg': '0 4px 16px rgba(0, 0, 0, 0.08), 0 16px 48px rgba(0, 0, 0, 0.08)',
+        'apple-inset': 'inset 0 1px 2px rgba(0, 0, 0, 0.04)',
+        'apple-glow': '0 0 20px rgba(88, 86, 214, 0.3)',
+        'apple-ring': '0 0 0 4px rgba(0, 113, 227, 0.15)'
+      },
+      borderRadius: {
+        'apple-sm': '8px',
+        'apple': '12px',
+        'apple-lg': '16px',
+        'apple-xl': '20px',
+        'apple-2xl': '24px'
       }
     },
   },

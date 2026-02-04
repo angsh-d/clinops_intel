@@ -22,30 +22,160 @@
 }
 
 @layer components {
+  /* Glass morphism */
+  .glass {
+    @apply bg-white/80 backdrop-blur-xl;
+  }
+  
+  .glass-subtle {
+    @apply bg-white/60 backdrop-blur-lg;
+  }
+  
+  /* Card variants */
+  .card {
+    @apply bg-apple-surface border border-apple-divider rounded-apple-lg shadow-apple;
+  }
+  
+  .card-elevated {
+    @apply bg-apple-surface rounded-apple-lg shadow-apple-md border-0;
+  }
+  
+  .card-inset {
+    @apply bg-apple-grey-100 rounded-apple border border-apple-divider/50;
+  }
+  
+  .card-interactive {
+    @apply bg-apple-surface border border-apple-divider rounded-apple-lg shadow-apple
+           transition-all duration-200 ease-out
+           hover:shadow-apple-md hover:border-apple-border hover:-translate-y-0.5;
+  }
+  
+  /* Premium buttons */
+  .button-primary {
+    @apply px-5 py-2.5 bg-apple-grey-900 text-white rounded-full font-medium text-body
+           transition-all duration-200 hover:bg-apple-grey-800 active:scale-[0.98];
+  }
+  
+  .button-secondary {
+    @apply px-5 py-2.5 bg-apple-surface text-apple-text border border-apple-border rounded-full font-medium text-body
+           transition-all duration-200 hover:bg-apple-grey-100 active:scale-[0.98];
+  }
+  
+  .button-ghost {
+    @apply px-4 py-2 text-apple-secondary rounded-apple-sm font-medium text-body
+           transition-all duration-150 hover:bg-apple-grey-100 active:bg-apple-grey-200;
+  }
+  
+  .button-icon {
+    @apply p-2 rounded-full text-apple-secondary
+           transition-all duration-150 hover:bg-apple-grey-100 active:bg-apple-grey-200;
+  }
+  
+  /* Input styles */
+  .input-primary {
+    @apply w-full px-4 py-3 bg-apple-grey-100 border-0 rounded-apple-lg text-apple-text
+           placeholder:text-apple-muted
+           transition-all duration-200
+           focus:outline-none focus:ring-2 focus:ring-apple-grey-300 focus:bg-white;
+  }
+  
+  .input-search {
+    @apply w-full pl-10 pr-4 py-2.5 bg-apple-grey-100/80 border-0 rounded-full text-body text-apple-text
+           placeholder:text-apple-muted
+           transition-all duration-200
+           focus:outline-none focus:ring-2 focus:ring-apple-grey-300 focus:bg-white;
+  }
+  
+  /* Premium metric card */
+  .metric-card {
+    @apply bg-apple-surface rounded-apple-lg p-5 border border-apple-divider/60;
+  }
+  
+  .metric-value {
+    @apply text-[32px] font-semibold text-apple-text tracking-tight leading-none;
+  }
+  
+  .metric-label {
+    @apply text-caption text-apple-secondary font-medium uppercase tracking-wide;
+  }
+  
+  .metric-note {
+    @apply text-[11px] text-apple-muted font-mono mt-1;
+  }
+  
+  /* Status indicators */
+  .status-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+  
+  .status-critical {
+    @apply bg-apple-critical;
+  }
+  
+  .status-warning {
+    @apply bg-apple-warning;
+  }
+  
+  .status-success {
+    @apply bg-apple-success;
+  }
+  
+  .status-neutral {
+    @apply bg-apple-grey-400;
+  }
+  
+  /* Section headers */
+  .section-header {
+    @apply text-[11px] font-semibold text-apple-tertiary uppercase tracking-widest;
+  }
+  
+  /* Dividers */
+  .divider {
+    @apply h-px bg-apple-divider;
+  }
+  
+  .divider-vertical {
+    @apply w-px bg-apple-divider;
+  }
+  
+  /* AI accent gradients */
   .ai-gradient-border {
     background: linear-gradient(135deg, #5856D6 0%, #AF52DE 100%);
+  }
+  
+  .ai-gradient-text {
+    @apply bg-gradient-to-r from-apple-ai-start to-apple-ai-end bg-clip-text text-transparent;
   }
   
   .ai-glow {
     box-shadow: 0 0 20px rgba(88, 86, 214, 0.3);
   }
   
-  .glass {
-    @apply bg-white/80 backdrop-blur-xl;
+  /* Timeline events */
+  .timeline-event {
+    @apply relative pl-6 pb-4 border-l border-apple-divider last:pb-0;
   }
   
-  .card {
-    @apply bg-apple-surface border border-apple-border rounded-2xl shadow-apple;
+  .timeline-dot {
+    @apply absolute left-0 top-1 w-2.5 h-2.5 rounded-full -translate-x-1/2 bg-apple-grey-300 ring-4 ring-apple-bg;
   }
   
-  .button-primary {
-    @apply px-5 py-2.5 bg-apple-accent text-white rounded-full font-medium text-body
-           transition-all duration-200 hover:opacity-90 active:scale-95;
+  /* Scrollbar styling */
+  .scrollbar-minimal::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
   }
   
-  .button-secondary {
-    @apply px-5 py-2.5 bg-apple-bg text-apple-text border border-apple-border rounded-full font-medium text-body
-           transition-all duration-200 hover:bg-apple-border/50 active:scale-95;
+  .scrollbar-minimal::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  
+  .scrollbar-minimal::-webkit-scrollbar-thumb {
+    @apply bg-apple-grey-300 rounded-full;
+  }
+  
+  .scrollbar-minimal::-webkit-scrollbar-thumb:hover {
+    @apply bg-apple-grey-400;
   }
 }
 
