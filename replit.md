@@ -72,6 +72,12 @@ The Data Integrity Agent (phantom_compliance) detects sophisticated fraud signal
 - **Cross-domain inconsistency**: Perfect metrics in one domain but gaps in another
 
 ## Recent Changes
+- 2026-02-04: Complete UX overhaul - replaced fragmented tab navigation with unified CommandCenter
+- 2026-02-04: New conversational-first interface with AI investigation as primary interaction
+- 2026-02-04: Added KPI summary cards (Enrolled, Sites at Risk, DQ Score, Screen Fail Rate)
+- 2026-02-04: Added Attention Panel auto-surfacing top priority sites
+- 2026-02-04: Added "Explore more" section for vendor, financial, data quality queries
+- 2026-02-04: Simplified routing - removed 8 separate tabs, now just CommandCenter + SiteDossier + InvestigationTheater
 - 2026-02-03: Added 7 fraud detection tools (weekday_entry_pattern, cra_oversight_gap, cra_portfolio_analysis, correction_provenance, entry_date_clustering, screening_narrative_duplication, cross_domain_consistency)
 - 2026-02-03: Enhanced Data Integrity Agent to detect CRA oversight gaps and rubber-stamp patterns
 - 2026-02-03: All agent details collapsed by default for cleaner UX
