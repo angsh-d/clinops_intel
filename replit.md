@@ -82,6 +82,26 @@ The Site Dossier includes a unified timeline aggregating events from multiple da
 
 API endpoint: `GET /api/dashboard/site/{site_id}/journey?limit=N`
 
+## Design System
+Apple-inspired aesthetic with greyscale-forward design, using color sparingly only for status indicators.
+
+### Color Palette
+- **Greyscale**: 50-900 scale (50 = #fafafa, 900 = #171717)
+- **Status Colors**: Success (emerald), Warning (amber), Critical (red) - used only for borders and indicators
+- **Backgrounds**: Light grey (#f5f5f4 bg, #ffffff surface)
+
+### Typography
+- Font: Inter/SF Pro-like stack with -apple-system fallbacks
+- Scales: hero (3xl), title (2xl), section (lg), body (base), caption (sm), data (xs mono)
+
+### Components
+- **card**: Clean surface with subtle border and soft shadow
+- **card-elevated**: Enhanced shadow for floating elements
+- **metric-card**: Greyscale with colored left border for status
+- **button-primary**: Dark grey fill, white text
+- **button-ghost**: Minimal styling for secondary actions
+- **input-primary**: Clean input with subtle focus states
+
 ## Recent Changes
 - 2026-02-04: Added unified Site Journey Timeline with events from 6+ data sources
 - 2026-02-04: Complete UX overhaul - replaced fragmented tab navigation with unified CommandCenter
