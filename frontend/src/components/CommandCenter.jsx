@@ -166,7 +166,7 @@ export function CommandCenter() {
               }])
             },
             onError: (err) => {
-              setError(err.message || 'Investigation failed')
+              setError(typeof err === 'string' ? err : (err.message || 'Investigation failed'))
               setIsInvestigating(false)
             },
           })
@@ -210,12 +210,12 @@ export function CommandCenter() {
           }])
         },
         onError: (err) => {
-          setError(err.message || 'Investigation failed')
+          setError(typeof err === 'string' ? err : (err.message || 'Investigation failed'))
           setIsInvestigating(false)
         },
       })
     } catch (err) {
-      setError(err.message || 'Failed to start investigation')
+      setError(typeof err === 'string' ? err : (err.message || 'Failed to start investigation'))
       setIsInvestigating(false)
     }
   }
