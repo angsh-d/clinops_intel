@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, TrendingUp, TrendingDown, Minus, MessageSquare, MapPin, AlertTriangle, Shield, DollarSign, Send, Loader2 } from 'lucide-react'
+import { ArrowLeft, TrendingUp, TrendingDown, Minus, MessageSquare, MapPin, AlertTriangle, Shield, DollarSign, Send, Loader2, Calendar, UserCheck } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { getSiteDetail, getSiteBriefs } from '../lib/api'
 
@@ -274,6 +274,12 @@ export function SiteDossier() {
           </motion.section>
         )}
 
+        {/* Site Journey Timeline */}
+        <SiteJourneyTimeline 
+          visits={detail.monitoring_visits} 
+          craAssignments={detail.cra_assignments} 
+        />
+
         {/* AI Summary */}
         {detail.ai_summary && (
           <motion.section
@@ -345,5 +351,150 @@ function MetricCard({ label, value, trend, provenance }) {
         </p>
       )}
     </div>
+  )
+}
+
+function SiteJourneyTimeline({ visits, craAssignments }) {
+  const events = []
+  
+  if (craAssignments && Array.isArray(craAssignments)) {
+    craAssignments.forEach(cra => {
+      if (cra.start_date) {
+        events.push({
+          type: 'cra_start',
+          date: cra.start_date,
+          label: cra.cra_id,
+          isCurrent: cra.is_current,
+          details: cra.is_current ? 'Current' : 'Previous'
+        })
+      }
+    })
+  }
+  
+  if (visits && Array.isArray(visits)) {
+    visits.forEach(visit => {
+      const isMissed = visit.status === 'Missed'
+      const eventDate = visit.visit_date || visit.planned_date
+      if (eventDate) {
+        events.push({
+          type: isMissed ? 'missed_visit' : 'visit',
+          date: eventDate,
+          label: isMissed ? 'Missed' : (visit.visit_type || 'Visit'),
+          visitType: visit.visit_type,
+          findings: visit.findings_count || 0,
+          critical: visit.critical_findings || 0,
+          daysOverdue: visit.days_overdue || 0,
+          isMissed
+        })
+      }
+    })
+  }
+  
+  const sortedEvents = events.sort((a, b) => new Date(a.date) - new Date(b.date))
+  const missedEvents = sortedEvents.filter(e => e.type === 'missed_visit')
+  const otherEvents = sortedEvents.filter(e => e.type !== 'missed_visit')
+  const recentOthers = otherEvents.slice(-(6 - missedEvents.length))
+  const allEvents = [...missedEvents, ...recentOthers].sort((a, b) => new Date(a.date) - new Date(b.date))
+
+  if (allEvents.length === 0) return null
+
+  const formatDate = (dateStr) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  }
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.15 }}
+      className="mb-8"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-neutral-400" />
+          <h3 className="text-xs font-medium text-apple-secondary uppercase tracking-wide">Site Journey</h3>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-neutral-900" />
+            <span className="text-[10px] text-neutral-400">CRA</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-neutral-400" />
+            <span className="text-[10px] text-neutral-400">Visit</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full border-2 border-red-500 border-dashed" />
+            <span className="text-[10px] text-neutral-400">Missed</span>
+          </div>
+        </div>
+      </div>
+      
+      <div className="relative px-4 py-2 bg-neutral-50 rounded-xl">
+        <div className="absolute left-4 right-4 top-[26px] h-px bg-neutral-200" />
+        
+        <div className="flex justify-between items-start relative">
+          {allEvents.map((event, i) => {
+            const isCRA = event.type === 'cra_start'
+            const isMissedVisit = event.type === 'missed_visit'
+            const hasCritical = event.critical > 0
+            const hasFindings = event.findings > 0
+            
+            let markerStyle = 'bg-neutral-300 border-neutral-200'
+            let useDashed = false
+            
+            if (isCRA) {
+              markerStyle = event.isCurrent ? 'bg-neutral-900 border-neutral-900' : 'bg-neutral-500 border-neutral-500'
+            } else if (isMissedVisit) {
+              markerStyle = 'bg-white border-red-500'
+              useDashed = true
+            } else {
+              markerStyle = 'bg-white border-neutral-300'
+            }
+            
+            return (
+              <div
+                key={i}
+                className="flex flex-col items-center group"
+                style={{ flex: 1 }}
+              >
+                <div className="relative mb-2">
+                  <div 
+                    className={`w-3 h-3 rounded-full border-2 ${markerStyle}`}
+                    style={useDashed ? { borderStyle: 'dashed' } : {}}
+                  >
+                    {isCRA && <UserCheck className="w-1.5 h-1.5 text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />}
+                  </div>
+                  {hasCritical && <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-red-500" />}
+                  {!hasCritical && hasFindings && <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500" />}
+                </div>
+                
+                <div className="text-center max-w-[80px]">
+                  <p className={`text-[10px] font-medium leading-tight truncate ${isMissedVisit ? 'text-red-600' : 'text-neutral-700'}`}>
+                    {isCRA ? event.label : event.label}
+                  </p>
+                  <p className="text-[9px] text-neutral-400 mt-0.5">{formatDate(event.date)}</p>
+                  {isCRA && event.details && (
+                    <span className={`inline-block mt-0.5 text-[8px] px-1 py-0.5 rounded-full ${event.isCurrent ? 'bg-neutral-100 text-neutral-600' : 'bg-neutral-50 text-neutral-400'}`}>
+                      {event.details}
+                    </span>
+                  )}
+                  {isMissedVisit && (
+                    <span className="inline-block mt-0.5 text-[8px] px-1 py-0.5 rounded-full bg-red-50 text-red-600">
+                      {event.daysOverdue}d late
+                    </span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        
+        <p className="text-[9px] text-neutral-400 mt-3 font-mono text-center border-t border-neutral-200 pt-2">
+          Source: cra_assignments, monitoring_visits tables
+        </p>
+      </div>
+    </motion.section>
   )
 }

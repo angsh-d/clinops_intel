@@ -935,6 +935,33 @@ def site_detail(
             time=time_str,
         ))
     
+    # Get CRA assignments for timeline
+    cra_rows = db.query(CRAAssignment).filter(CRAAssignment.site_id == site_id).order_by(CRAAssignment.start_date.desc()).all()
+    cra_list = [
+        CRAAssignmentSchema(
+            cra_id=c.cra_id,
+            start_date=str(c.start_date) if c.start_date else None,
+            end_date=str(c.end_date) if c.end_date else None,
+            is_current=c.is_current or False
+        )
+        for c in cra_rows
+    ]
+    
+    # Get monitoring visits for timeline
+    visit_rows = db.query(MonitoringVisit).filter(MonitoringVisit.site_id == site_id).order_by(MonitoringVisit.planned_date.desc()).limit(10).all()
+    visit_list = [
+        MonitoringVisitSchema(
+            visit_date=str(v.actual_date) if v.actual_date else None,
+            planned_date=str(v.planned_date) if v.planned_date else None,
+            visit_type=v.visit_type,
+            status=v.status,
+            findings_count=v.findings_count or 0,
+            critical_findings=v.critical_findings or 0,
+            days_overdue=v.days_overdue or 0
+        )
+        for v in visit_rows
+    ]
+    
     result = SiteDetailResponse(
         site_id=site_id,
         site_name=site.name,
@@ -947,6 +974,8 @@ def site_detail(
         alerts=alerts,
         enrollment_percent=enrollment_pct,
         data_quality_score=float(dq_score),
+        cra_assignments=cra_list,
+        monitoring_visits=visit_list,
     )
     dashboard_cache.set(ck, result)
     return result

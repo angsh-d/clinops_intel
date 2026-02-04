@@ -315,6 +315,21 @@ class SiteAlertDetail(BaseModel):
     time: str
 
 
+class CRAAssignmentSchema(BaseModel):
+    cra_id: str
+    start_date: str | None
+    end_date: str | None
+    is_current: bool
+
+class MonitoringVisitSchema(BaseModel):
+    visit_date: str | None
+    planned_date: str | None
+    visit_type: str | None
+    status: str | None
+    findings_count: int
+    critical_findings: int
+    days_overdue: int
+
 class SiteDetailResponse(BaseModel):
     site_id: str
     site_name: str | None
@@ -327,6 +342,8 @@ class SiteDetailResponse(BaseModel):
     alerts: list[SiteAlertDetail]
     enrollment_percent: float
     data_quality_score: float
+    cra_assignments: list[CRAAssignmentSchema] = []
+    monitoring_visits: list[MonitoringVisitSchema] = []
 
 
 # ── Vendor Dashboard ────────────────────────────────────────────────────────
