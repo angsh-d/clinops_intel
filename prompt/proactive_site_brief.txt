@@ -20,7 +20,12 @@ Produce a JSON response with these 5 sections:
         "risk": "Specific risk description",
         "severity": "low / moderate / high / critical",
         "source_agents": ["agent_ids that flagged this"],
-        "evidence": "Specific data points supporting this risk"
+        "evidence": "Specific data points supporting this risk",
+        "causal_chain_explained": [
+          {{ "step": "Step 1 Title", "explanation": "Plain English explanation of what happened first" }},
+          {{ "step": "Step 2 Title", "explanation": "Plain English explanation of what happened next" }},
+          {{ "step": "Outcome", "explanation": "Plain English explanation of the final observable problem" }}
+        ]
       }}
     ]
   }},
@@ -54,3 +59,9 @@ IMPORTANT:
 - Every risk must cite specific evidence from the findings
 - Recommended actions must be realistic clinical operations steps a CRO can execute
 - trend_indicator reflects whether the site's overall operational health is improving, stable, or deteriorating based on the findings
+- causal_chain_explained MUST be in plain English that a non-technical person can understand. Example:
+  [
+    {{ "step": "Staffing Gap", "explanation": "The CRA assigned to this site left in July and wasn't replaced for 6 weeks." }},
+    {{ "step": "Missed Visits", "explanation": "Without a CRA, three scheduled monitoring visits were skipped." }},
+    {{ "step": "Query Backlog", "explanation": "Data discrepancies piled up with no one to catch them, creating 45 open queries." }}
+  ]

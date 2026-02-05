@@ -534,6 +534,27 @@ export function SiteDossier() {
                                 </div>
                               )}
                               
+                              {/* How This Happens - causal chain explanations */}
+                              {risk.causal_chain_explained?.length > 0 && (
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <ArrowRight className="w-3.5 h-3.5 text-apple-tertiary" />
+                                    <span className="text-[10px] font-medium text-apple-muted uppercase tracking-wider">How This Happens</span>
+                                  </div>
+                                  <div className="ml-5 space-y-2">
+                                    {risk.causal_chain_explained.map((item, j) => (
+                                      <div key={j} className="flex items-start gap-2">
+                                        <span className="w-5 h-5 rounded-full bg-apple-grey-100 text-[10px] font-semibold text-apple-tertiary flex items-center justify-center flex-shrink-0 mt-0.5">{j + 1}</span>
+                                        <div>
+                                          <span className="text-[11px] font-semibold text-apple-text">{item.step}</span>
+                                          <p className="text-[11px] text-apple-secondary leading-relaxed">{item.explanation}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              
                               {/* Evidence Sources - only show if data exists */}
                               {risk.data_sources?.length > 0 && (
                                 <div className="flex items-start gap-2">
