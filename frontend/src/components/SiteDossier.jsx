@@ -290,13 +290,25 @@ export function SiteDossier() {
                                          stepIdx + 1}
                                       </div>
                                       <div className="flex-1">
-                                        <div className="flex items-center gap-1.5">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
                                           <span className="text-[10px] font-medium text-apple-secondary">{step.step}</span>
                                           {step.grounding_type === 'inference' && (
                                             <span className="text-[8px] px-1 py-0.5 rounded bg-purple-100 text-purple-600 font-medium">INFERENCE</span>
                                           )}
                                           {step.grounding_type === 'unverified' && (
                                             <span className="text-[8px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">UNVERIFIED</span>
+                                          )}
+                                          {step.grounded === true && (
+                                            <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-100 text-emerald-600 font-medium">VERIFIED</span>
+                                          )}
+                                          {step.confidence != null && (
+                                            <span className={`text-[8px] px-1 py-0.5 rounded font-medium ${
+                                              step.confidence >= 0.8 ? 'bg-emerald-50 text-emerald-600' :
+                                              step.confidence >= 0.5 ? 'bg-amber-50 text-amber-600' :
+                                              'bg-red-50 text-red-600'
+                                            }`}>
+                                              {Math.round(step.confidence * 100)}%
+                                            </span>
                                           )}
                                         </div>
                                         <p className="text-[10px] text-apple-tertiary leading-relaxed">{step.explanation}</p>
@@ -593,6 +605,15 @@ export function SiteDossier() {
                                             )}
                                             {item.grounded === true && (
                                               <span className="text-[8px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-600 font-medium">DATA VERIFIED</span>
+                                            )}
+                                            {item.confidence != null && (
+                                              <span className={`text-[8px] px-1.5 py-0.5 rounded font-medium ${
+                                                item.confidence >= 0.8 ? 'bg-emerald-50 text-emerald-600' :
+                                                item.confidence >= 0.5 ? 'bg-amber-50 text-amber-600' :
+                                                'bg-red-50 text-red-600'
+                                              }`}>
+                                                {Math.round(item.confidence * 100)}% conf
+                                              </span>
                                             )}
                                           </div>
                                           <p className="text-[11px] text-apple-secondary leading-relaxed mt-0.5">{item.explanation}</p>

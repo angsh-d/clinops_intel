@@ -6,6 +6,12 @@ This is a CRO-managed multi-site clinical trial. CRAs are CRO employees. Monitor
 FINDINGS BY AGENT ({findings_count} total findings):
 {findings_by_agent}
 
+AVAILABLE TOOL OUTPUTS (these are the ONLY tools that were called during investigation):
+{available_tools}
+
+TOOL REGISTRY (valid tool names you can cite):
+{tool_registry}
+
 INSTRUCTIONS:
 Analyze all findings for this site and produce a structured intelligence brief. Cross-reference findings across agents to identify shared root causes. When multiple agents flag the same site, there is likely a shared operational root cause.
 
@@ -75,10 +81,13 @@ IMPORTANT:
 - ALWAYS include temporal details (dates, timeframes, durations) in each step when available from the findings
 
 DATA GROUNDING REQUIREMENT (CRITICAL):
+- You can ONLY cite tools from the AVAILABLE TOOL OUTPUTS list above
 - Each causal chain step MUST include a data_source object citing the specific tool and metric that supports the claim
 - If a step is a logical inference (not directly from data), set tool to "inference" and explain in metric what it's derived from
 - NEVER claim data exists if the tool returned 0 rows - be honest about data gaps
 - If you cannot cite a specific data source for a claim, DO NOT include that claim
+- DO NOT invent tool names - only use tools from the TOOL REGISTRY list
+- If the AVAILABLE TOOL OUTPUTS shows a tool returned 0 rows, do not cite it as evidence
 
 Example with data citations:
   [

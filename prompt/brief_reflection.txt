@@ -1,0 +1,52 @@
+You are reviewing a draft intelligence brief for data grounding and factual accuracy.
+
+DRAFT BRIEF:
+{draft_brief}
+
+ACTUAL TOOL OUTPUTS (what was really called during investigation):
+{available_tools}
+
+TASK:
+Review each causal chain step in the key_risks. For each step:
+1. Check if the cited tool actually appears in ACTUAL TOOL OUTPUTS
+2. Check if the row count is plausible (within 20% of actual)
+3. Flag any claims that cite non-existent tools or fabricated data
+
+For each step, assign a confidence score:
+- high (0.8-1.0): Tool was called, returned data, claim matches the data
+- medium (0.5-0.79): Tool was called but claim is a reasonable inference from limited data
+- low (0.0-0.49): Tool not called, or 0 rows returned, or claim is speculative
+
+RESPOND WITH JSON:
+{{
+  "validation_summary": {{
+    "total_claims": N,
+    "verified_claims": N,
+    "unverified_claims": N,
+    "issues_found": ["list of specific grounding issues"]
+  }},
+  "revised_key_risks": [
+    {{
+      "risk": "original or revised risk description",
+      "severity": "low/moderate/high/critical",
+      "source_agents": ["agent_ids"],
+      "evidence": "specific evidence with data citations",
+      "causal_chain_explained": [
+        {{
+          "step": "Step title",
+          "explanation": "Plain English explanation",
+          "data_source": {{ "tool": "actual_tool_name", "metric": "specific_metric", "row_count": N }},
+          "confidence": 0.0-1.0,
+          "confidence_reason": "Why this confidence level"
+        }}
+      ]
+    }}
+  ]
+}}
+
+RULES:
+- Remove claims that cannot be grounded in actual tool outputs
+- Revise claims to match what the data actually shows
+- Mark speculative claims with low confidence
+- Be honest about data gaps - it's better to have fewer verified claims than many unverified ones
+- If a tool was never called, DO NOT cite it - use "inference" instead and explain what it's derived from

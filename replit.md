@@ -125,7 +125,43 @@ Progressive disclosure pattern for AI transparency - reasoning is hidden by defa
 
 **Design Principle**: All reasoning sections only display data when it actually exists in the database - no synthetic/fabricated fallbacks. Shows explicit "not available" messages when data is missing.
 
+## Proactive Hallucination Prevention System
+Three-layer validation to prevent LLM hallucinations in intelligence briefs:
+
+### Layer 1: Tool Context Injection
+- Available tool outputs passed to generation prompt with tool names and row counts
+- Tool registry with valid tool names provided to LLM
+- LLM instructed to only cite tools from the provided list
+
+### Layer 2: Deterministic Pre-Validation
+- Checks if cited tool exists in tool registry
+- Verifies tool was actually called during investigation
+- Validates row count plausibility (within 20% variance)
+- Issues trigger reflection pass for revision
+
+### Layer 3: LLM Reflection Pass
+- Second LLM call reviews draft against actual tool outputs
+- Revises ungrounded claims or marks them as inferences
+- Assigns confidence scores to each claim
+
+### Confidence Scoring
+Each causal chain step gets a confidence score:
+- **90%** (High): Tool called, returned data, claim matches
+- **70%** (Medium-High): Verified but row count variance detected
+- **60%** (Medium): Logical inference from available data
+- **30%** (Low): Tool returned 0 rows
+- **20%** (Very Low): Tool never called
+- **10%** (Minimal): No data source citation
+
+Frontend displays confidence badges with color coding (green/amber/red).
+
 ## Recent Changes
+- 2026-02-05: Implemented proactive hallucination prevention with three-layer validation
+  - Tool context injection into generation prompt
+  - Deterministic pre-validation with tool registry
+  - LLM reflection pass to revise ungrounded claims
+  - Confidence scoring for each causal chain step (90%/60%/30% etc)
+  - Frontend displays confidence badges alongside grounding status
 - 2026-02-05: Implemented data grounding validation for causal chain claims
   - Each causal chain step now requires data_source citation (tool, metric, row_count)
   - Post-processing validates cited tools against actual investigation steps
