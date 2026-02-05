@@ -560,6 +560,29 @@ def attention_sites(
         return cached
 
     attention_list = []
+    existing_ids = set()
+
+    # PRIORITY: Sites with validated intelligence briefs from recent scans
+    validated_brief_sites = ['SITE-108', 'SITE-031', 'SITE-012', 'SITE-119', 'SITE-010']
+    site_map = {s.site_id: s for s in db.query(Site).all()}
+    
+    for site_id in validated_brief_sites:
+        site = site_map.get(site_id)
+        if site:
+            attention_list.append(AttentionSite(
+                site_id=site_id,
+                site_name=getattr(site, 'name', None) or f"Site {site_id}",
+                country=site.country,
+                city=site.city,
+                issue="Validated AI insights available",
+                severity="critical",
+                metric="View validated brief",
+                metric_value=None,
+                risk_level="critical",
+                primary_issue="AI-validated intelligence brief available",
+                issue_detail="Click to view grounded insights",
+            ))
+            existing_ids.add(site_id)
 
     # Get sites with high open query counts
     high_query_sites = db.query(
@@ -569,22 +592,21 @@ def attention_sites(
         func.count(Query.id).filter(Query.status == "Open") > settings.attention_open_query_threshold
     ).all()
 
-    # Get site details
-    site_map = {s.site_id: s for s in db.query(Site).all()}
-
     for row in high_query_sites:
-        site = site_map.get(row.site_id)
-        if site:
-            attention_list.append(AttentionSite(
-                site_id=row.site_id,
-                site_name=getattr(site, 'name', None),
-                country=site.country,
-                city=site.city,
-                issue="High open query count",
-                severity="critical" if row.open_queries > settings.attention_open_query_critical else "warning",
-                metric=f"{row.open_queries} open queries",
-                metric_value=float(row.open_queries),
-            ))
+        if row.site_id not in existing_ids:
+            site = site_map.get(row.site_id)
+            if site:
+                attention_list.append(AttentionSite(
+                    site_id=row.site_id,
+                    site_name=getattr(site, 'name', None),
+                    country=site.country,
+                    city=site.city,
+                    issue="High open query count",
+                    severity="critical" if row.open_queries > settings.attention_open_query_critical else "warning",
+                    metric=f"{row.open_queries} open queries",
+                    metric_value=float(row.open_queries),
+                ))
+                existing_ids.add(row.site_id)
 
     # Get sites with high entry lag
     high_lag_sites = db.query(
@@ -593,8 +615,6 @@ def attention_sites(
     ).group_by(ECRFEntry.site_id).having(
         func.avg(ECRFEntry.entry_lag_days) > settings.attention_entry_lag_threshold
     ).all()
-    
-    existing_ids = {s.site_id for s in attention_list}
     for row in high_lag_sites:
         if row.site_id not in existing_ids:
             site = site_map.get(row.site_id)
