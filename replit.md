@@ -156,6 +156,10 @@ Each causal chain step gets a confidence score:
 Frontend displays confidence badges with color coding (green/amber/red).
 
 ## Recent Changes
+- 2026-02-05: Extended hallucination prevention to Active Signals (alerts)
+  - Added validate_causal_step helper function to dashboard router
+  - Alerts with causal_chain_explained now get same validation as intelligence briefs
+  - Grounding and confidence applied when alert data contains causal chains
 - 2026-02-05: Implemented proactive hallucination prevention with three-layer validation
   - Tool context injection into generation prompt
   - Deterministic pre-validation with tool registry

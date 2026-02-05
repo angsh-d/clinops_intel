@@ -324,6 +324,8 @@ class CausalStepExplained(BaseModel):
     grounded: bool | None = None
     grounding_type: str | None = None  # "data", "inference", "unverified", "missing"
     grounding_issue: str | None = None  # Description of any grounding problem
+    confidence: float | None = None  # 0.0-1.0 confidence score
+    confidence_reason: str | None = None  # Explanation for confidence level
 
 
 class SiteAlertDetail(BaseModel):

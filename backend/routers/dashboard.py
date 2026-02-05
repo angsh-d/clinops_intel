@@ -32,6 +32,7 @@ from backend.schemas.dashboard import (
     ThemeCluster, SiteBriefBadge, IntelligenceSummaryResponse,
     ThemeFindingDetail, ThemeFindingsResponse,
     CrossDomainCorrelation, StudyHypothesis, StudySynthesis,
+    DataSourceCitation,
 )
 from data_generators.models import (
     ECRFEntry, Query, DataCorrection, ScreeningLog,
@@ -46,6 +47,97 @@ from backend.models.governance import AgentFinding, AlertLog, ProactiveScan, Sit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+
+# Valid tool names from registry (for grounding validation)
+VALID_TOOLS = {
+    "screening_funnel", "enrollment_trajectory", "site_performance_summary",
+    "burn_rate_projection", "budget_variance_analysis", "cost_per_patient_analysis",
+    "change_order_impact", "financial_impact_of_delays", "query_burden",
+    "data_completeness", "edit_check_violations", "cra_assignment_history",
+    "monitoring_visit_history", "weekday_entry_pattern", "entry_date_clustering",
+    "cra_oversight_gap", "cra_portfolio_analysis", "correction_provenance",
+    "screening_narrative_duplication", "cross_domain_consistency",
+    "vendor_kpi_analysis", "vendor_performance_summary",
+    "inference", "derived",
+}
+
+
+def validate_causal_step(step: dict, investigation_steps: list[dict] | None = None) -> CausalStepExplained:
+    """Validate a causal chain step and apply grounding + confidence scoring."""
+    step_text = step.get("step", "")
+    explanation = step.get("explanation", "")
+    raw_data_source = step.get("data_source", {})
+    
+    # Build data source citation
+    data_source = None
+    if isinstance(raw_data_source, dict) and raw_data_source:
+        data_source = DataSourceCitation(
+            tool=raw_data_source.get("tool", ""),
+            metric=raw_data_source.get("metric"),
+            row_count=raw_data_source.get("row_count"),
+        )
+    
+    # Default grounding values
+    grounded = None
+    grounding_type = None
+    grounding_issue = None
+    confidence = None
+    confidence_reason = None
+    
+    if data_source and data_source.tool:
+        cited_tool = data_source.tool.strip().lower()
+        
+        if cited_tool in ("inference", "derived", ""):
+            grounded = False
+            grounding_type = "inference"
+            confidence = 0.6
+            confidence_reason = "Derived from available data"
+        elif cited_tool not in VALID_TOOLS:
+            grounded = False
+            grounding_type = "unverified"
+            grounding_issue = f"Tool '{cited_tool}' not in registry"
+            confidence = 0.2
+            confidence_reason = "Unknown tool name"
+        elif investigation_steps:
+            # Check if tool was actually called
+            called_tools = {s.get("tool", "").strip().lower() for s in investigation_steps if s.get("tool")}
+            if cited_tool in called_tools:
+                grounded = True
+                grounding_type = "data"
+                confidence = 0.9
+                confidence_reason = "Verified against tool output"
+            else:
+                grounded = False
+                grounding_type = "unverified"
+                grounding_issue = f"Tool '{cited_tool}' was not called"
+                confidence = 0.2
+                confidence_reason = "Tool not called during investigation"
+        else:
+            # No investigation steps to validate against - mark as unverified
+            grounded = False
+            grounding_type = "unverified"
+            confidence = 0.3
+            confidence_reason = "Cannot verify against investigation"
+    else:
+        # No data source provided
+        grounded = False
+        grounding_type = "missing"
+        grounding_issue = "No data source citation"
+        confidence = 0.1
+        confidence_reason = "No data source"
+    
+    return CausalStepExplained(
+        step=step_text,
+        explanation=explanation,
+        data_source=data_source,
+        grounded=grounded,
+        grounding_type=grounding_type,
+        grounding_issue=grounding_issue,
+        confidence=confidence,
+        confidence_reason=confidence_reason,
+    )
+
 
 # Agent ID → display name mapping (used across multiple endpoints)
 AGENT_DISPLAY_NAMES = {
@@ -963,11 +1055,14 @@ def site_detail(
                                     reasoning = causal
                     
                     if raw_explained and isinstance(raw_explained, list):
+                        # Extract investigation steps from finding's reasoning_trace for validation
+                        investigation_steps = None
+                        if finding.reasoning_trace and isinstance(finding.reasoning_trace, dict):
+                            investigation_steps = finding.reasoning_trace.get("steps", [])
+                        
+                        # Apply grounding validation to each step
                         causal_chain_explained = [
-                            CausalStepExplained(
-                                step=item.get("step", ""),
-                                explanation=item.get("explanation", "")
-                            )
+                            validate_causal_step(item, investigation_steps)
                             for item in raw_explained
                             if isinstance(item, dict) and item.get("step")
                         ]
