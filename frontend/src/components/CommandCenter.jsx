@@ -339,56 +339,6 @@ export function CommandCenter() {
               </motion.div>
             )}
 
-            {/* Map and Attention Panel Section */}
-            <motion.section
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="w-full max-w-5xl mx-auto"
-            >
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {attentionItems.length > 0 && (
-                  <div>
-                    <h2 className="text-xs font-medium text-apple-secondary uppercase tracking-wide mb-4">
-                      Needs Attention
-                    </h2>
-                    <div className="grid gap-2">
-                      {attentionItems.slice(0, 4).map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => handleSiteClick(item.id)}
-                          className="w-full flex items-center justify-between p-3 bg-apple-surface border border-apple-border rounded-lg hover:border-apple-text/20 transition-all text-left group"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`w-2 h-2 rounded-full ${
-                              item.type === 'critical' ? 'bg-red-500' : 'bg-amber-500'
-                            }`} />
-                            <span className="text-sm font-medium text-apple-text truncate max-w-[200px]">{item.name}</span>
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-apple-secondary opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {allSites.length > 0 && (
-                  <div>
-                    <h2 className="text-xs font-medium text-apple-secondary uppercase tracking-wide mb-4">
-                      Site Locations
-                    </h2>
-                    <div className="relative h-[220px]">
-                      <SiteMap 
-                        sites={allSites} 
-                        attentionSites={attentionItems}
-                        onSiteClick={handleSiteClick}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </motion.section>
-
             <div className="text-center pt-4">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -498,6 +448,27 @@ export function CommandCenter() {
                 )}
               </AnimatePresence>
             </motion.div>
+
+            {/* Full-width Map Section at Bottom */}
+            {allSites.length > 0 && (
+              <motion.section
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className="w-full mt-8"
+              >
+                <h2 className="text-xs font-medium text-apple-secondary uppercase tracking-wide mb-4">
+                  Site Locations
+                </h2>
+                <div className="relative h-[400px] bg-apple-surface border border-apple-border rounded-xl overflow-hidden">
+                  <SiteMap 
+                    sites={allSites} 
+                    attentionSites={attentionItems}
+                    onSiteClick={handleSiteClick}
+                  />
+                </div>
+              </motion.section>
+            )}
           </div>
         ) : (
           <div className="space-y-6" ref={resultsRef}>
