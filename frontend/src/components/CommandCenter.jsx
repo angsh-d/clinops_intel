@@ -123,9 +123,11 @@ export function CommandCenter() {
           ? Math.round(siteDqScores.reduce((a, b) => a + b, 0) / siteDqScores.length)
           : null
 
+        const criticalCount = sitesData?.sites?.filter(s => s.status === 'critical').length || 0
+
         setKpis({
           dqScore: avgDqScore,
-          criticalSites: attention?.sites?.filter(s => s.risk_level === 'critical').length || 0,
+          criticalSites: criticalCount,
           screenFailRate,
           pctOfTarget: enrollData?.study_pct_of_target || null,
         })
