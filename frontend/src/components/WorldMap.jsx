@@ -45,7 +45,7 @@ function getCoordinatesForCountry(country, index = 0) {
 
 export const WorldMap = memo(function WorldMap({ sites, onSiteClick, onSiteHover, hoveredSite, height, needsAttentionSiteIds }) {
   const needsAttention = needsAttentionSiteIds || new Set()
-  const [position, setPosition] = useState({ coordinates: [0, 0], zoom: 1 })
+  const [position, setPosition] = useState({ coordinates: [10, 35], zoom: 1.4 })
 
   const countryGroups = {}
   sites.forEach((site, idx) => {
