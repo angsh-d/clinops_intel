@@ -366,144 +366,121 @@ export function CommandCenter() {
               </motion.div>
             )}
 
-            <div className="text-center pt-4">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-apple-surface border border-apple-border rounded-full mb-6"
-              >
-                <Sparkles className="w-4 h-4 text-[#5856D6]" />
-                <span className="text-caption text-apple-secondary">AI-Powered Investigation</span>
-              </motion.div>
-              
-              <motion.h1 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="text-3xl font-light text-apple-text mb-3"
-              >
-                What would you like to investigate?
-              </motion.h1>
-              
-              <motion.p 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.2 }}
-                className="text-body text-apple-secondary max-w-lg mx-auto"
-              >
-                Ask about enrollment, data quality, sites, vendors, or financials. 
-                I'll analyze across multiple data sources and surface insights.
-              </motion.p>
-            </div>
-
-            <motion.form 
-              onSubmit={handleSubmit}
+            {/* Search Section */}
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="relative"
+              transition={{ delay: 0.15 }}
+              className="bg-white rounded-3xl p-8 shadow-sm border border-apple-grey-100"
             >
-              <input
-                ref={inputRef}
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="e.g., Why is SITE-074 underperforming?"
-                className="w-full px-5 py-4 pr-14 bg-apple-surface border border-apple-border rounded-2xl text-body text-apple-text placeholder:text-apple-secondary/50 focus:outline-none focus:border-apple-text/30 focus:ring-4 focus:ring-apple-text/5 transition-all"
-              />
-              <button
-                type="submit"
-                disabled={!query.trim()}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-xl bg-apple-text text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-apple-text/90 transition-all"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </motion.form>
+              <div className="text-center mb-6">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-apple-grey-50 rounded-full mb-4">
+                  <Sparkles className="w-3.5 h-3.5 text-apple-grey-500" />
+                  <span className="text-[11px] font-medium text-apple-tertiary uppercase tracking-wider">AI-Powered Investigation</span>
+                </div>
+                
+                <h1 className="text-2xl font-semibold text-apple-text mb-2">
+                  What would you like to investigate?
+                </h1>
+                
+                <p className="text-[13px] text-apple-secondary max-w-md mx-auto">
+                  Ask about enrollment, data quality, sites, vendors, or financials.
+                </p>
+              </div>
 
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4 }}
-              className="flex flex-wrap justify-center gap-2"
-            >
-              {QUICK_ACTIONS.map((action) => (
+              <form onSubmit={handleSubmit} className="relative mb-5">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="e.g., Why is SITE-074 underperforming?"
+                  className="w-full px-5 py-4 pr-14 bg-apple-grey-50 border border-apple-grey-200 rounded-2xl text-[14px] text-apple-text placeholder:text-apple-tertiary focus:outline-none focus:border-apple-grey-400 focus:bg-white transition-all"
+                />
                 <button
-                  key={action.label}
-                  onClick={() => handleQuickAction(action.label)}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-apple-surface border border-apple-border rounded-full text-caption text-apple-secondary hover:text-apple-text hover:border-apple-text/20 transition-all"
+                  type="submit"
+                  disabled={!query.trim()}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-xl bg-apple-grey-800 text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-apple-grey-700 transition-all"
                 >
-                  <action.icon className="w-3.5 h-3.5" />
-                  {action.label}
+                  <Send className="w-4 h-4" />
                 </button>
-              ))}
-            </motion.div>
+              </form>
 
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.45 }}
-              className="text-center"
-            >
-              <button
-                onClick={() => setShowExplore(!showExplore)}
-                className="inline-flex items-center gap-1 text-caption text-apple-secondary hover:text-apple-text transition-colors"
-              >
-                <span>Explore more</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showExplore ? 'rotate-180' : ''}`} />
-              </button>
-              <AnimatePresence>
-                {showExplore && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="overflow-hidden"
+              <div className="flex flex-wrap justify-center gap-2">
+                {QUICK_ACTIONS.map((action) => (
+                  <button
+                    key={action.label}
+                    onClick={() => handleQuickAction(action.label)}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 bg-apple-grey-50 border border-apple-grey-100 rounded-xl text-[12px] text-apple-secondary hover:text-apple-text hover:bg-apple-grey-100 hover:border-apple-grey-200 transition-all"
                   >
-                    <div className="flex flex-wrap justify-center gap-2 pt-4">
-                      {EXPLORE_ACTIONS.map((action) => (
-                        <button
-                          key={action.label}
-                          onClick={() => handleQuickAction(action.query)}
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-apple-surface border border-apple-border rounded-full text-caption text-apple-secondary hover:text-apple-text hover:border-apple-text/20 transition-all"
-                        >
-                          <action.icon className="w-3.5 h-3.5" />
-                          {action.label}
-                        </button>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                    <action.icon className="w-3.5 h-3.5" />
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="text-center mt-4">
+                <button
+                  onClick={() => setShowExplore(!showExplore)}
+                  className="inline-flex items-center gap-1 text-[11px] text-apple-muted hover:text-apple-secondary transition-colors"
+                >
+                  <span>Explore more</span>
+                  <ChevronDown className={`w-3 h-3 transition-transform ${showExplore ? 'rotate-180' : ''}`} />
+                </button>
+                <AnimatePresence>
+                  {showExplore && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="flex flex-wrap justify-center gap-2 pt-3">
+                        {EXPLORE_ACTIONS.map((action) => (
+                          <button
+                            key={action.label}
+                            onClick={() => handleQuickAction(action.query)}
+                            className="inline-flex items-center gap-2 px-3.5 py-2 bg-apple-grey-50 border border-apple-grey-100 rounded-xl text-[12px] text-apple-secondary hover:text-apple-text hover:bg-apple-grey-100 hover:border-apple-grey-200 transition-all"
+                          >
+                            <action.icon className="w-3.5 h-3.5" />
+                            {action.label}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </motion.div>
 
             {attentionItems.length > 0 && (
               <motion.section
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
+                transition={{ delay: 0.2 }}
               >
-                <h2 className="text-xs font-medium text-apple-secondary uppercase tracking-wide mb-4 text-center">
+                <h2 className="text-[11px] font-semibold text-apple-tertiary uppercase tracking-wider mb-4 text-center">
                   Needs Attention
                 </h2>
-                <div className="grid gap-3">
+                <div className="bg-white rounded-2xl shadow-sm border border-apple-grey-100 overflow-hidden divide-y divide-apple-grey-100">
                   {attentionItems.map((item) => (
                     <button
                       key={item.id}
                       onClick={() => handleSiteClick(item.id)}
-                      className="w-full flex items-center justify-between p-4 bg-apple-surface border border-apple-border rounded-xl hover:border-apple-text/20 transition-all text-left group"
+                      className="w-full flex items-center justify-between p-4 hover:bg-apple-grey-50 transition-all text-left group"
                     >
                       <div className="flex items-center gap-3">
                         <div className={`w-2 h-2 rounded-full ${
                           item.type === 'critical' ? 'bg-red-500' : 'bg-amber-500'
                         }`} />
                         <div>
-                          <span className="text-body font-medium text-apple-text">{item.name}</span>
-                          <p className="text-caption text-apple-secondary">{item.metric}</p>
+                          <span className="text-[14px] font-medium text-apple-text">{item.name}</span>
+                          {item.metric && <p className="text-[11px] text-apple-muted mt-0.5">{item.metric}</p>}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-caption font-mono text-apple-text">{item.value}</span>
-                        <ChevronRight className="w-4 h-4 text-apple-secondary opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="flex items-center gap-3">
+                        {item.value && <span className="text-[12px] font-mono text-apple-secondary">{item.value}</span>}
+                        <ChevronRight className="w-4 h-4 text-apple-grey-300 group-hover:text-apple-grey-500 transition-colors" />
                       </div>
                     </button>
                   ))}
@@ -571,20 +548,23 @@ export function CommandCenter() {
 }
 
 function KPICard({ label, value, subvalue, trend }) {
-  const borderStyles = {
-    good: 'border-l-apple-success',
-    neutral: 'border-l-apple-warning',
-    warn: 'border-l-apple-critical',
+  const dotStyles = {
+    good: 'from-emerald-500 to-emerald-400',
+    neutral: 'from-amber-500 to-amber-400',
+    warn: 'from-red-500 to-red-400',
   }
-  const borderStyle = borderStyles[trend] || 'border-l-apple-grey-300'
+  const dotStyle = dotStyles[trend] || 'from-apple-grey-400 to-apple-grey-300'
   
   return (
-    <div className={`metric-card border-l-[3px] ${borderStyle}`}>
-      <p className="metric-label mb-2">{label}</p>
-      <div className="flex items-baseline gap-1.5">
-        <span className="metric-value">{value}</span>
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-apple-grey-100 hover:shadow-md transition-shadow duration-200">
+      <div className="flex items-start justify-between mb-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-apple-tertiary">{label}</p>
+        <div className={`w-2 h-2 rounded-full bg-gradient-to-br ${dotStyle}`} />
+      </div>
+      <div className="flex items-baseline gap-2">
+        <span className="text-[36px] font-light text-apple-text tracking-tight leading-none">{value}</span>
         {subvalue && (
-          <span className="text-caption text-apple-tertiary">{subvalue}</span>
+          <span className="text-[14px] text-apple-muted">{subvalue}</span>
         )}
       </div>
     </div>
