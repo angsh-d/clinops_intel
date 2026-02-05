@@ -126,6 +126,10 @@ Progressive disclosure pattern for AI transparency - reasoning is hidden by defa
 **Design Principle**: All reasoning sections only display data when it actually exists in the database - no synthetic/fabricated fallbacks. Shows explicit "not available" messages when data is missing.
 
 ## Recent Changes
+- 2026-02-05: Implemented full investigation step capture in PRPA agent loop
+- 2026-02-05: BaseAgent now records detailed tool invocations with icon, step description, tool name, success status, and row count
+- 2026-02-05: Brief generator aggregates investigation_steps from agent reasoning_trace.steps
+- 2026-02-05: Frontend renders investigation steps with Lucide icons in expandable timeline
 - 2026-02-05: Enhanced brief generator to capture contributing_agents and investigation_steps from findings
 - 2026-02-05: Added agent, contributing_agents, investigation_steps fields to SiteIntelligenceBrief model and schema
 - 2026-02-05: Added expandable agentic reasoning to Key Risks, Active Signals, and Intelligence Brief

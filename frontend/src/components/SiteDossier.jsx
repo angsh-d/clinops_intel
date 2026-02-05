@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, TrendingUp, TrendingDown, Minus, MapPin, AlertTriangle, Loader2, Calendar, UserCheck, Clock, Activity, ChevronRight, ChevronDown, Bot, Sparkles, Database, GitBranch, Gauge } from 'lucide-react'
+import { ArrowLeft, TrendingUp, TrendingDown, Minus, MapPin, AlertTriangle, Loader2, Calendar, UserCheck, Clock, Activity, ChevronRight, ChevronDown, Bot, Sparkles, Database, GitBranch, Gauge, Search, HelpCircle, Users, Edit3, Filter, DollarSign, PieChart, BarChart2, AlertCircle, Flag, BarChart, Grid, Briefcase, EyeOff, GitCommit, RotateCw, Globe } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { getSiteDetail, getSiteBriefs, getSiteJourney } from '../lib/api'
 import FloatingAssistant from './FloatingAssistant'
@@ -10,6 +10,33 @@ const TREND_MAP = {
   improving: { icon: TrendingUp, color: 'text-apple-success', bgColor: 'bg-apple-success/10', label: 'Improving' },
   stable: { icon: Minus, color: 'text-apple-grey-500', bgColor: 'bg-apple-grey-100', label: 'Stable' },
   deteriorating: { icon: TrendingDown, color: 'text-apple-critical', bgColor: 'bg-apple-critical/10', label: 'At Risk' },
+}
+
+const STEP_ICON_MAP = {
+  'clock': Clock,
+  'help-circle': HelpCircle,
+  'calendar': Calendar,
+  'users': Users,
+  'edit-3': Edit3,
+  'filter': Filter,
+  'trending-up': TrendingUp,
+  'alert-triangle': AlertTriangle,
+  'map-pin': MapPin,
+  'globe': Globe,
+  'dollar-sign': DollarSign,
+  'pie-chart': PieChart,
+  'activity': Activity,
+  'bar-chart-2': BarChart2,
+  'alert-circle': AlertCircle,
+  'flag': Flag,
+  'bar-chart': BarChart,
+  'grid': Grid,
+  'briefcase': Briefcase,
+  'eye-off': EyeOff,
+  'git-commit': GitCommit,
+  'rotate-cw': RotateCw,
+  'search': Search,
+  'database': Database,
 }
 
 export function SiteDossier() {
@@ -387,20 +414,23 @@ export function SiteDossier() {
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-apple-muted">Investigation Steps</span>
                       {latestBrief.investigation_steps?.length > 0 ? (
                         <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-2">
-                          {latestBrief.investigation_steps.map((step, i, arr) => (
-                            <div key={i} className="flex items-center gap-2 flex-shrink-0">
-                              <div className="flex flex-col items-center">
-                                <div className="w-8 h-8 rounded-lg bg-apple-grey-100 flex items-center justify-center text-sm">
-                                  {step.icon ? step.icon : <span className="text-[9px] font-semibold text-apple-tertiary">{i + 1}</span>}
+                          {latestBrief.investigation_steps.map((step, i, arr) => {
+                            const IconComponent = STEP_ICON_MAP[step.icon] || Search
+                            return (
+                              <div key={i} className="flex items-center gap-2 flex-shrink-0">
+                                <div className="flex flex-col items-center">
+                                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${step.success === false ? 'bg-amber-50' : 'bg-apple-grey-100'}`}>
+                                    <IconComponent className={`w-4 h-4 ${step.success === false ? 'text-amber-500' : 'text-apple-secondary'}`} />
+                                  </div>
+                                  <span className="text-[9px] text-apple-secondary mt-1 text-center max-w-[80px] leading-tight line-clamp-2">{step.step}</span>
+                                  {step.tool && <code className="text-[8px] text-apple-muted mt-0.5">{step.tool}</code>}
                                 </div>
-                                <span className="text-[9px] text-apple-secondary mt-1 text-center max-w-[70px] leading-tight">{step.step}</span>
-                                {step.tool && <code className="text-[8px] text-apple-muted mt-0.5">{step.tool}</code>}
+                                {i < arr.length - 1 && (
+                                  <ChevronRight className="w-3 h-3 text-apple-grey-300" />
+                                )}
                               </div>
-                              {i < arr.length - 1 && (
-                                <ChevronRight className="w-3 h-3 text-apple-grey-300" />
-                              )}
-                            </div>
-                          ))}
+                            )
+                          })}
                         </div>
                       ) : (
                         <p className="mt-2 text-[10px] text-apple-muted italic">Detailed investigation steps not available for this brief.</p>

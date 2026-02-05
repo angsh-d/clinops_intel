@@ -32,6 +32,7 @@ class AgentContext:
     iteration: int = 0
     max_iterations: int = 3
     reasoning_trace: list = field(default_factory=list)
+    investigation_steps: list = field(default_factory=list)  # Detailed tool invocations for UI display
 
 
 @dataclass
@@ -43,7 +44,7 @@ class AgentOutput:
     summary: str
     detail: dict
     data_signals: dict
-    reasoning_trace: list
+    reasoning_trace: dict  # Changed to dict with "phases" and "steps" keys
     confidence: float
     findings: list = field(default_factory=list)
     investigation_complete: bool = True
@@ -295,6 +296,7 @@ class BaseAgent(ABC):
             tool_name = step.get("tool_name", "")
             tool_args = step.get("tool_args", {})
             purpose = step.get("purpose", "")
+            hypothesis_ids = step.get("hypothesis_ids", [])
             logger.info("[%s] ACT: invoking %s for: %s", self.agent_id, tool_name, purpose)
 
             result = await self.tools.invoke(tool_name, self.db, **tool_args)
@@ -308,7 +310,48 @@ class BaseAgent(ABC):
                 "error": result.error,
             })
 
+            # Capture detailed investigation step for UI display
+            ctx.investigation_steps.append({
+                "icon": self._get_tool_icon(tool_name),
+                "step": purpose if purpose else f"Analyzed data using {tool_name}",
+                "tool": tool_name,
+                "success": result.success,
+                "row_count": result.row_count,
+                "iteration": ctx.iteration,
+                "hypothesis_ids": hypothesis_ids,
+            })
+
         return results
+
+    def _get_tool_icon(self, tool_name: str) -> str:
+        """Get an icon for a tool based on its name."""
+        icons = {
+            "entry_lag_analysis": "clock",
+            "query_burden": "help-circle",
+            "monitoring_visit_history": "calendar",
+            "cra_assignment_history": "users",
+            "data_correction_analysis": "edit-3",
+            "screening_funnel": "filter",
+            "enrollment_velocity": "trending-up",
+            "screen_failure_root_cause": "alert-triangle",
+            "site_summary": "map-pin",
+            "regional_comparison": "globe",
+            "budget_variance_analysis": "dollar-sign",
+            "cost_per_patient_analysis": "pie-chart",
+            "burn_rate_projection": "activity",
+            "vendor_kpi_analysis": "bar-chart-2",
+            "vendor_issue_log": "alert-circle",
+            "vendor_milestone_tracker": "flag",
+            "data_variance_analysis": "bar-chart",
+            "weekday_entry_pattern": "calendar",
+            "entry_date_clustering": "grid",
+            "cra_portfolio_analysis": "briefcase",
+            "cra_oversight_gap": "eye-off",
+            "correction_provenance": "git-commit",
+            "query_lifecycle_anomaly": "rotate-cw",
+            "context_search": "search",
+        }
+        return icons.get(tool_name, "search")
 
     # ── REFLECT (concrete default — uses prompt_prefix + system_prompt_reflect) ──
 
@@ -345,6 +388,14 @@ class BaseAgent(ABC):
         """Build structured output from the completed PRPA context."""
         findings = ctx.reflection.get("findings_summary", [])
 
+        # Build structured reasoning trace with phases and detailed steps
+        reasoning_trace = {
+            "phases": ctx.reasoning_trace,  # High-level phase summaries
+            "steps": ctx.investigation_steps,  # Detailed tool invocations
+            "iterations": ctx.iteration,
+            "goal_satisfied": ctx.is_goal_satisfied,
+        }
+
         confidences = [f.get("confidence", 0) for f in findings]
         if not confidences:
             # No findings is a legitimate outcome — agent found nothing wrong.
@@ -360,7 +411,7 @@ class BaseAgent(ABC):
                     "cross_domain_followup": ctx.reflection.get("cross_domain_followup", []),
                 },
                 data_signals=ctx.perceptions,
-                reasoning_trace=ctx.reasoning_trace,
+                reasoning_trace=reasoning_trace,
                 confidence=0.0,
                 findings=[],
             )
@@ -386,7 +437,7 @@ class BaseAgent(ABC):
                 "cross_domain_followup": ctx.reflection.get("cross_domain_followup", []),
             },
             data_signals=ctx.perceptions,
-            reasoning_trace=ctx.reasoning_trace,
+            reasoning_trace=reasoning_trace,
             confidence=avg_confidence,
             findings=findings,
         )

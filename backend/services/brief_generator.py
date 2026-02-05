@@ -112,16 +112,26 @@ class SiteIntelligenceBriefGenerator:
 
         # Build investigation steps from findings reasoning traces
         investigation_steps = []
+        seen_steps = set()  # Deduplicate steps
         for f in findings:
             if f.reasoning_trace and isinstance(f.reasoning_trace, dict):
                 steps = f.reasoning_trace.get("steps", [])
-                for step in steps[:2]:  # Take first 2 steps from each finding
-                    investigation_steps.append({
-                        "icon": step.get("icon", "🔍"),
-                        "step": step.get("description", step.get("step", "Analyzed data")),
-                        "tool": step.get("tool"),
-                    })
-        if not investigation_steps:
+                for step in steps:
+                    # Create a unique key to deduplicate
+                    step_key = (step.get("tool", ""), step.get("step", "")[:50])
+                    if step_key not in seen_steps:
+                        seen_steps.add(step_key)
+                        investigation_steps.append({
+                            "icon": step.get("icon", "search"),
+                            "step": step.get("step", "Analyzed data"),
+                            "tool": step.get("tool"),
+                            "success": step.get("success", True),
+                            "row_count": step.get("row_count"),
+                        })
+        # Limit to 10 most relevant steps for display
+        if investigation_steps:
+            investigation_steps = investigation_steps[:10]
+        else:
             investigation_steps = None
 
         brief = SiteIntelligenceBrief(
