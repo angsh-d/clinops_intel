@@ -932,15 +932,34 @@ def site_detail(
         
         reasoning = None
         data_source = None
+        confidence = None
         if alert.finding_id:
             finding = db.query(AgentFinding).filter(AgentFinding.id == alert.finding_id).first()
             if finding:
-                if finding.reasoning_trace:
-                    reasoning = finding.reasoning_trace.get("summary") if isinstance(finding.reasoning_trace, dict) else str(finding.reasoning_trace)
-                if finding.data_signals:
-                    sources = finding.data_signals.get("sources") if isinstance(finding.data_signals, dict) else None
-                    if sources and isinstance(sources, list):
-                        data_source = ", ".join(sources[:3])
+                reasoning_trace = finding.reasoning_trace or []
+                if isinstance(reasoning_trace, list) and reasoning_trace:
+                    phases = []
+                    for item in reasoning_trace:
+                        if isinstance(item, dict):
+                            phase = item.get("phase", "")
+                            summary = item.get("summary", "")
+                            if phase and summary:
+                                phases.append(f"{phase.title()}: {summary[:50]}")
+                            elif phase:
+                                phases.append(phase.title())
+                    if phases:
+                        reasoning = " → ".join(phases[:3])
+                elif isinstance(reasoning_trace, dict):
+                    phases = reasoning_trace.get("phases", [])
+                    if phases:
+                        reasoning = " → ".join(str(p) for p in phases[:3])
+                
+                if finding.data_signals and isinstance(finding.data_signals, dict):
+                    sources = list(finding.data_signals.keys())[:2]
+                    if sources:
+                        data_source = ", ".join(sources)
+                
+                confidence = finding.confidence
         
         alerts.append(SiteAlertDetail(
             severity=alert.severity or "info",
@@ -949,6 +968,7 @@ def site_detail(
             agent=alert.agent_id,
             reasoning=reasoning,
             data_source=data_source,
+            confidence=confidence,
         ))
     
     # Get CRA assignments for timeline

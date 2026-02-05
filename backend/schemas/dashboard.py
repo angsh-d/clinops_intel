@@ -316,6 +316,7 @@ class SiteAlertDetail(BaseModel):
     agent: str | None = None
     reasoning: str | None = None
     data_source: str | None = None
+    confidence: float | None = None
 
 
 class CRAAssignmentSchema(BaseModel):
