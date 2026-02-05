@@ -71,6 +71,22 @@ class FindingDeduplicator:
         """
         agent_id = finding_data.get("agent_id", "")
         raw_site_id = finding_data.get("site_id")
+        
+        # Fallback: extract site_id from detail if not at top level
+        if not raw_site_id:
+            detail = finding_data.get("detail", {})
+            if isinstance(detail, dict):
+                raw_site_id = detail.get("site_id")
+        
+        # Fallback: extract site_id from summary if it starts with "SITE-XXX:"
+        if not raw_site_id:
+            summary = finding_data.get("summary", "") or finding_data.get("finding", "")
+            if summary and summary.startswith("SITE-"):
+                import re
+                match = re.match(r"(SITE-\d+)", summary)
+                if match:
+                    raw_site_id = match.group(1)
+        
         # LLM sometimes returns comma-separated site IDs; take the first one
         # and truncate to fit VARCHAR(20) column
         if raw_site_id and "," in str(raw_site_id):

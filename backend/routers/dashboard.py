@@ -911,9 +911,15 @@ def site_detail(
         ),
     ]
     
-    # Get alerts from database
+    # Get alerts from database - match by site_id or by title starting with site_id
+    # (fallback for legacy alerts with NULL site_id)
+    from sqlalchemy import or_
     alerts_db = db.query(AlertLog).filter(
-        AlertLog.site_id == site_id,
+        or_(
+            AlertLog.site_id == site_id,
+            AlertLog.title.like(f"{site_id}:%"),
+            AlertLog.title.like(f"{site_id}: %")
+        ),
         AlertLog.status.in_(["open", "active"])
     ).order_by(AlertLog.created_at.desc()).limit(5).all()
     

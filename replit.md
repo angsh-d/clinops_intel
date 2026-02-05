@@ -126,6 +126,8 @@ Progressive disclosure pattern for AI transparency - reasoning is hidden by defa
 **Design Principle**: All reasoning sections only display data when it actually exists in the database - no synthetic/fabricated fallbacks. Shows explicit "not available" messages when data is missing.
 
 ## Recent Changes
+- 2026-02-05: Fixed alert site_id extraction - added fallbacks to extract from detail and summary title
+- 2026-02-05: Fixed dashboard query to match alerts by site_id OR title prefix (for legacy alerts with NULL site_id)
 - 2026-02-05: Added causal_chain_explained field - LLM generates step-by-step plain-English explanations for each causal chain step
 - 2026-02-05: Updated enrollment_funnel_reflect prompt with examples to guide LLM output format
 - 2026-02-05: Dashboard extracts causal_chain_explained from nested findings structure
