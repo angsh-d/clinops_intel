@@ -11,9 +11,8 @@ import { useStore } from '../lib/store'
 import { 
   getStudySummary, getAttentionSites, startInvestigation, 
   connectInvestigationStream, getQueryStatus, getDataQualityDashboard,
-  getEnrollmentDashboard, getSiteMetadata
+  getEnrollmentDashboard
 } from '../lib/api'
-import SiteMap from './SiteMap'
 
 const QUICK_ACTIONS = [
   { label: 'Which sites need attention this week?', icon: AlertTriangle },
@@ -48,7 +47,6 @@ export function CommandCenter() {
   
   const [studySummary, setStudySummary] = useState(null)
   const [attentionItems, setAttentionItems] = useState([])
-  const [allSites, setAllSites] = useState([])
   const [kpis, setKpis] = useState(null)
   const [loading, setLoading] = useState(true)
   
@@ -71,12 +69,11 @@ export function CommandCenter() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [summary, attention, dqData, enrollData, siteMetadata] = await Promise.all([
+        const [summary, attention, dqData, enrollData] = await Promise.all([
           getStudySummary(),
           getAttentionSites(),
           getDataQualityDashboard().catch(() => null),
-          getEnrollmentDashboard().catch(() => null),
-          getSiteMetadata().catch(() => ({ sites: [] }))
+          getEnrollmentDashboard().catch(() => null)
         ])
         
         setStudySummary(summary)
@@ -101,14 +98,12 @@ export function CommandCenter() {
         const items = (attention?.sites || []).slice(0, 5).map(site => ({
           id: site.site_id,
           name: site.site_name,
-          type: site.severity === 'critical' ? 'critical' : 'watch',
-          metric: site.issue || site.primary_issue,
-          value: site.metric || site.issue_detail,
+          type: site.risk_level === 'critical' ? 'critical' : 'watch',
+          metric: site.primary_issue,
+          value: site.issue_detail,
           trend: site.trend,
         }))
         setAttentionItems(items)
-        
-        setAllSites(siteMetadata?.sites || [])
 
         const totalScreened = enrollData?.study_total_screened || 0
         const totalRandomized = enrollData?.study_total_randomized || 0
@@ -449,23 +444,37 @@ export function CommandCenter() {
               </AnimatePresence>
             </motion.div>
 
-            {/* Full-width Map Section at Bottom */}
-            {allSites.length > 0 && (
+            {attentionItems.length > 0 && (
               <motion.section
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
-                className="w-full mt-8"
               >
-                <h2 className="text-xs font-medium text-apple-secondary uppercase tracking-wide mb-4">
-                  Site Locations
+                <h2 className="text-xs font-medium text-apple-secondary uppercase tracking-wide mb-4 text-center">
+                  Needs Attention
                 </h2>
-                <div className="relative h-[400px] bg-apple-surface border border-apple-border rounded-xl overflow-hidden">
-                  <SiteMap 
-                    sites={allSites} 
-                    attentionSites={attentionItems}
-                    onSiteClick={handleSiteClick}
-                  />
+                <div className="grid gap-3">
+                  {attentionItems.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => handleSiteClick(item.id)}
+                      className="w-full flex items-center justify-between p-4 bg-apple-surface border border-apple-border rounded-xl hover:border-apple-text/20 transition-all text-left group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2 h-2 rounded-full ${
+                          item.type === 'critical' ? 'bg-red-500' : 'bg-amber-500'
+                        }`} />
+                        <div>
+                          <span className="text-body font-medium text-apple-text">{item.name}</span>
+                          <p className="text-caption text-apple-secondary">{item.metric}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-caption font-mono text-apple-text">{item.value}</span>
+                        <ChevronRight className="w-4 h-4 text-apple-secondary opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </motion.section>
             )}
