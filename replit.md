@@ -126,6 +126,8 @@ Progressive disclosure pattern for AI transparency - reasoning is hidden by defa
 **Design Principle**: All reasoning sections only display data when it actually exists in the database - no synthetic/fabricated fallbacks. Shows explicit "not available" messages when data is missing.
 
 ## Recent Changes
+- 2026-02-05: Enhanced brief generator to capture contributing_agents and investigation_steps from findings
+- 2026-02-05: Added agent, contributing_agents, investigation_steps fields to SiteIntelligenceBrief model and schema
 - 2026-02-05: Added expandable agentic reasoning to Key Risks, Active Signals, and Intelligence Brief
 - 2026-02-05: Progressive disclosure for AI transparency - collapsed by default, expand on click
 - 2026-02-05: Removed all synthetic fallbacks - only displays data from actual database records
