@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, TrendingUp, TrendingDown, Minus, MapPin, AlertTriangle, Send, Loader2, Calendar, UserCheck, Clock, Activity, ChevronRight } from 'lucide-react'
+import { ArrowLeft, TrendingUp, TrendingDown, Minus, MapPin, AlertTriangle, Loader2, Calendar, UserCheck, Clock, Activity, ChevronRight } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { getSiteDetail, getSiteBriefs, getSiteJourney } from '../lib/api'
+import FloatingAssistant from './FloatingAssistant'
 
 const TREND_MAP = {
   improving: { icon: TrendingUp, color: 'text-apple-success', bgColor: 'bg-apple-success/10', label: 'Improving' },
@@ -20,7 +21,6 @@ export function SiteDossier() {
   const [briefs, setBriefs] = useState([])
   const [journey, setJourney] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [askInput, setAskInput] = useState('')
 
   const effectiveStudyId = studyId || currentStudyId
 
@@ -42,13 +42,6 @@ export function SiteDossier() {
     fetchAll()
     return () => { cancelled = true }
   }, [siteId])
-
-  const handleAsk = () => {
-    if (!askInput.trim()) return
-    const siteName = siteNameMap[siteId] || siteDetail?.site_name || siteId
-    const contextualQuery = `About ${siteName}: ${askInput.trim()}`
-    navigate(`/study/${effectiveStudyId}?q=${encodeURIComponent(contextualQuery)}`)
-  }
 
   const siteName = siteNameMap[siteId] || siteDetail?.site_name || siteId
   const latestBrief = briefs[0]
@@ -288,37 +281,10 @@ export function SiteDossier() {
 
         {/* Site Journey Timeline */}
         <SiteJourneyTimeline journey={journey} />
-
-        {/* Ask AI */}
-        <motion.section
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.25, ease: [0.25, 0.46, 0.45, 0.94] }}
-          className="mt-10"
-        >
-          <h2 className="section-header mb-4">Ask About This Site</h2>
-          <div className="card p-4">
-            <div className="flex items-center gap-3">
-              <input
-                type="text"
-                value={askInput}
-                onChange={(e) => setAskInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAsk()}
-                placeholder="e.g., What's causing the high screen failure rate?"
-                className="input-primary flex-1"
-              />
-              <button
-                onClick={handleAsk}
-                disabled={!askInput.trim()}
-                className="button-primary flex items-center gap-2 disabled:opacity-40"
-              >
-                <Send className="w-4 h-4" />
-                <span>Investigate</span>
-              </button>
-            </div>
-          </div>
-        </motion.section>
       </main>
+
+      {/* Floating AI Assistant */}
+      <FloatingAssistant siteName={siteName} siteId={siteId} />
     </div>
   )
 }
