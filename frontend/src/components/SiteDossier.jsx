@@ -270,12 +270,12 @@ export function SiteDossier() {
                               </div>
                             ) : null}
                             
-                            {/* Explained Causal Chain - step-by-step plain English */}
+                            {/* Causal Reasoning Chain - step-by-step plain English */}
                             {alert.causal_chain_explained && alert.causal_chain_explained.length > 0 && (
                               <div className="mt-2 pt-2 border-t border-apple-grey-100">
                                 <span className="text-[9px] font-medium text-apple-muted uppercase flex items-center gap-1 mb-2">
                                   <ArrowRight className="w-3 h-3" />
-                                  How This Happens
+                                  Causal Reasoning Chain
                                 </span>
                                 <div className="space-y-2">
                                   {alert.causal_chain_explained.map((step, stepIdx) => (
@@ -534,12 +534,12 @@ export function SiteDossier() {
                                 </div>
                               )}
                               
-                              {/* How This Happens - causal chain explanations */}
+                              {/* Causal Reasoning Chain */}
                               {risk.causal_chain_explained?.length > 0 && (
                                 <div className="space-y-2">
                                   <div className="flex items-center gap-2">
                                     <ArrowRight className="w-3.5 h-3.5 text-apple-tertiary" />
-                                    <span className="text-[10px] font-medium text-apple-muted uppercase tracking-wider">How This Happens</span>
+                                    <span className="text-[10px] font-medium text-apple-muted uppercase tracking-wider">Causal Reasoning Chain</span>
                                   </div>
                                   <div className="ml-5 space-y-2">
                                     {risk.causal_chain_explained.map((item, j) => (

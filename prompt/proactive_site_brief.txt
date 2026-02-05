@@ -59,9 +59,11 @@ IMPORTANT:
 - Every risk must cite specific evidence from the findings
 - Recommended actions must be realistic clinical operations steps a CRO can execute
 - trend_indicator reflects whether the site's overall operational health is improving, stable, or deteriorating based on the findings
-- causal_chain_explained MUST be in plain English that a non-technical person can understand. Example:
+- causal_chain_explained MUST be in plain English that a non-technical person can understand
+- ALWAYS include temporal details (dates, timeframes, durations) in each step when available from the findings
+- Example with temporal context:
   [
-    {{ "step": "Staffing Gap", "explanation": "The CRA assigned to this site left in July and wasn't replaced for 6 weeks." }},
-    {{ "step": "Missed Visits", "explanation": "Without a CRA, three scheduled monitoring visits were skipped." }},
-    {{ "step": "Query Backlog", "explanation": "Data discrepancies piled up with no one to catch them, creating 45 open queries." }}
+    {{ "step": "Staffing Gap (July 2024)", "explanation": "The CRA assigned to this site left on July 15th and wasn't replaced until August 28th - a 6-week gap." }},
+    {{ "step": "Missed Visits (Aug 2024)", "explanation": "During the staffing gap, three scheduled monitoring visits on Aug 5, 12, and 19 were skipped." }},
+    {{ "step": "Query Backlog (Current)", "explanation": "As of today, 45 queries remain open, with the oldest dating back 30+ days to late July." }}
   ]

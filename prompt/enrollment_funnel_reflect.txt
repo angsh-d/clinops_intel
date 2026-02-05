@@ -11,19 +11,21 @@ CRITICAL REFLECTION INSTRUCTIONS:
 REQUIRED - CAUSAL CHAIN EXPLANATION:
 For each finding, you MUST provide a "causal_chain_explained" array that breaks down the causal chain into plain English steps that a non-technical person can understand. Do NOT use jargon or abbreviations.
 
-EXAMPLE 1 - If causal_chain is "Broad referral acceptance -> Screening for diagnosis -> High screen failure -> Budget overrun":
+IMPORTANT: Always include temporal details (dates, timeframes, durations) in each step when available from the data.
+
+EXAMPLE 1 - With temporal context:
 "causal_chain_explained": [
-  {{"step": "Broad referral acceptance", "explanation": "The site is accepting many patient referrals from doctors without checking if patients are likely to qualify for the study"}},
-  {{"step": "Screening for diagnosis", "explanation": "The site appears to be using the study's free medical tests (like biopsies and scans) to diagnose patients, rather than to enroll qualified candidates"}},
-  {{"step": "High screen failure", "explanation": "Most referred patients fail the eligibility screening because they were never likely to qualify in the first place"}},
-  {{"step": "Budget overrun", "explanation": "The sponsor pays for each screening procedure, so screening unqualified patients wastes money and causes costs to exceed the planned budget"}}
+  {{"step": "Broad referral acceptance (Jan-Mar 2026)", "explanation": "Starting in January, the site accepted 44 patient referrals from local oncologists without pre-screening for basic eligibility criteria"}},
+  {{"step": "Screening for diagnosis (ongoing)", "explanation": "The site appears to be using the study's free biopsies and scans to diagnose patients, with 38 of 44 referrals failing on histology or ECOG criteria"}},
+  {{"step": "High screen failure (current)", "explanation": "As of today, 86% of referred patients have failed screening because they were never likely to qualify"}},
+  {{"step": "Budget overrun ($181k over plan)", "explanation": "At $4,200 per screening procedure, the 38 failed screens have cost $160k in wasted spend, pushing the site 51% over budget"}}
 ]
 
-EXAMPLE 2 - If causal_chain is "Kit stockout -> Randomization delay -> Enrollment velocity drop":
+EXAMPLE 2 - With temporal context:
 "causal_chain_explained": [
-  {{"step": "Kit stockout", "explanation": "The site ran out of study drug kits needed to start patients on treatment"}},
-  {{"step": "Randomization delay", "explanation": "Patients who passed screening could not be assigned to treatment groups because there were no kits available"}},
-  {{"step": "Enrollment velocity drop", "explanation": "The rate of successfully enrolling new patients dropped sharply while waiting for kit resupply"}}
+  {{"step": "Kit stockout (Week 12)", "explanation": "On March 15th, the site's last 3 drug kits were used and resupply didn't arrive until April 2nd - an 18-day gap"}},
+  {{"step": "Randomization delay (Weeks 12-14)", "explanation": "During the stockout, 4 patients who passed screening on March 18, 22, 25, and 28 could not be randomized"}},
+  {{"step": "Enrollment velocity drop (current)", "explanation": "Monthly randomizations dropped from 6/month to 2/month in Q1, and 2 of the 4 delayed patients have since withdrawn"}}
 ]
 
 ORIGINAL QUERY: {query}
