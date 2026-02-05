@@ -20,7 +20,7 @@ from backend.schemas.dashboard import (
     SiteOverview, SitesOverviewResponse,
     AgentInsight, AgentInsightsResponse,
     AgentActivityStatus, AgentActivityResponse,
-    SiteMetricDetail, SiteAlertDetail, SiteDetailResponse,
+    SiteMetricDetail, SiteAlertDetail, SiteDetailResponse, CausalStepExplained,
     SiteJourneyEvent, SiteJourneyResponse,
     VendorScorecard, VendorScorecardsResponse, VendorMilestoneSchema,
     VendorDetailResponse, VendorKPITrend, VendorSiteBreakdown,
@@ -931,6 +931,7 @@ def site_detail(
             time_str = "Recently"
         
         reasoning = None
+        causal_chain_explained = None
         data_source = None
         confidence = None
         if alert.finding_id:
@@ -943,6 +944,17 @@ def site_detail(
                         reasoning = causal
                     elif detail.get("recommended_action"):
                         reasoning = detail.get("recommended_action")
+                    
+                    raw_explained = detail.get("causal_chain_explained")
+                    if raw_explained and isinstance(raw_explained, list):
+                        causal_chain_explained = [
+                            CausalStepExplained(
+                                step=item.get("step", ""),
+                                explanation=item.get("explanation", "")
+                            )
+                            for item in raw_explained
+                            if isinstance(item, dict) and item.get("step")
+                        ]
                 
                 if not reasoning and finding.summary:
                     reasoning = finding.summary
@@ -960,6 +972,7 @@ def site_detail(
             time=time_str,
             agent=alert.agent_id,
             reasoning=reasoning,
+            causal_chain_explained=causal_chain_explained if causal_chain_explained else None,
             data_source=data_source,
             confidence=confidence,
         ))

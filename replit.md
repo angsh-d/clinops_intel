@@ -126,6 +126,9 @@ Progressive disclosure pattern for AI transparency - reasoning is hidden by defa
 **Design Principle**: All reasoning sections only display data when it actually exists in the database - no synthetic/fabricated fallbacks. Shows explicit "not available" messages when data is missing.
 
 ## Recent Changes
+- 2026-02-05: Added causal_chain_explained field - LLM generates step-by-step plain-English explanations for each causal chain step
+- 2026-02-05: Updated enrollment_funnel_reflect prompt to include causal_chain_explained array with step/explanation pairs
+- 2026-02-05: Frontend displays "How This Happens" section with numbered steps and explanations when available
 - 2026-02-05: Fixed alert reasoning to show meaningful causal chains (root_cause, causal_chain) instead of technical phase names
 - 2026-02-05: Alert reasoning now extracts from finding.detail fields (causal_chain, root_cause, actual_interpretation)
 - 2026-02-05: Added confidence scores to alert display

@@ -22,6 +22,11 @@ Produce a JSON reflection:
       "finding": "Clear finding statement",
       "root_cause": "Underlying cause",
       "causal_chain": "A -> B -> C",
+      "causal_chain_explained": [
+        {{"step": "A", "explanation": "Plain-English explanation of what A means and why it happens"}},
+        {{"step": "B", "explanation": "Plain-English explanation of what B means and how it follows from A"}},
+        {{"step": "C", "explanation": "Plain-English explanation of the outcome C and its impact"}}
+      ],
       "funnel_stage": "volume/conversion/retention/randomization",
       "confidence": 0.0-1.0,
       "evidence_quality": "strong/moderate/weak",

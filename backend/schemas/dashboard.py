@@ -309,12 +309,18 @@ class SiteMetricDetail(BaseModel):
     note: str | None = None
 
 
+class CausalStepExplained(BaseModel):
+    step: str
+    explanation: str
+
+
 class SiteAlertDetail(BaseModel):
     severity: str
     message: str
     time: str
     agent: str | None = None
     reasoning: str | None = None
+    causal_chain_explained: list[CausalStepExplained] | None = None
     data_source: str | None = None
     confidence: float | None = None
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, TrendingUp, TrendingDown, Minus, MapPin, AlertTriangle, Loader2, Calendar, UserCheck, Clock, Activity, ChevronRight, ChevronDown, Bot, Sparkles, Database, GitBranch, Gauge, Search, HelpCircle, Users, Edit3, Filter, DollarSign, PieChart, BarChart2, AlertCircle, Flag, BarChart, Grid, Briefcase, EyeOff, GitCommit, RotateCw, Globe } from 'lucide-react'
+import { ArrowLeft, ArrowRight, TrendingUp, TrendingDown, Minus, MapPin, AlertTriangle, Loader2, Calendar, UserCheck, Clock, Activity, ChevronRight, ChevronDown, Bot, Sparkles, Database, GitBranch, Gauge, Search, HelpCircle, Users, Edit3, Filter, DollarSign, PieChart, BarChart2, AlertCircle, Flag, BarChart, Grid, Briefcase, EyeOff, GitCommit, RotateCw, Globe } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { getSiteDetail, getSiteBriefs, getSiteJourney } from '../lib/api'
 import FloatingAssistant from './FloatingAssistant'
@@ -269,6 +269,29 @@ export function SiteDossier() {
                                 </div>
                               </div>
                             ) : null}
+                            
+                            {/* Explained Causal Chain - step-by-step plain English */}
+                            {alert.causal_chain_explained && alert.causal_chain_explained.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-apple-grey-100">
+                                <span className="text-[9px] font-medium text-apple-muted uppercase flex items-center gap-1 mb-2">
+                                  <ArrowRight className="w-3 h-3" />
+                                  How This Happens
+                                </span>
+                                <div className="space-y-2">
+                                  {alert.causal_chain_explained.map((step, stepIdx) => (
+                                    <div key={stepIdx} className="flex items-start gap-2">
+                                      <div className="flex-shrink-0 w-4 h-4 rounded-full bg-apple-grey-100 flex items-center justify-center text-[8px] font-medium text-apple-tertiary mt-0.5">
+                                        {stepIdx + 1}
+                                      </div>
+                                      <div className="flex-1">
+                                        <span className="text-[10px] font-medium text-apple-secondary">{step.step}</span>
+                                        <p className="text-[10px] text-apple-tertiary leading-relaxed">{step.explanation}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                             
                             {/* Data Source - only show if data exists */}
                             {alert.data_source && (
