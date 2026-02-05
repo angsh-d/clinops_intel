@@ -173,6 +173,7 @@ class SiteIntelligenceBrief(Base):
     scan_id = Column(String(50), nullable=False)
     site_id = Column(String(20), nullable=False)
     risk_summary = Column(JSONB)
+    key_risks = Column(JSONB)  # [{risk, evidence, causal_chain_explained: [{step, explanation}]}]
     vendor_accountability = Column(JSONB)
     cross_domain_correlations = Column(JSONB)
     recommended_actions = Column(JSONB)

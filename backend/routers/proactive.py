@@ -178,6 +178,7 @@ def _brief_to_response(b: SiteIntelligenceBrief) -> SiteBriefResponse:
         scan_id=b.scan_id,
         site_id=b.site_id,
         risk_summary=b.risk_summary,
+        key_risks=b.key_risks,
         vendor_accountability=b.vendor_accountability,
         cross_domain_correlations=b.cross_domain_correlations,
         recommended_actions=b.recommended_actions,

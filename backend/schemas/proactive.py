@@ -50,6 +50,7 @@ class SiteBriefResponse(BaseModel):
     scan_id: str
     site_id: str
     risk_summary: dict | None = None
+    key_risks: list[dict] | None = None
     vendor_accountability: dict | None = None
     cross_domain_correlations: list[dict] | None = None
     recommended_actions: list[dict] | None = None

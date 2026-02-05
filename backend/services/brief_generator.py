@@ -134,10 +134,15 @@ class SiteIntelligenceBriefGenerator:
         else:
             investigation_steps = None
 
+        # Extract key_risks from nested risk_summary structure
+        risk_summary = parsed.get("risk_summary", {})
+        key_risks = risk_summary.get("key_risks") if isinstance(risk_summary, dict) else None
+
         brief = SiteIntelligenceBrief(
             scan_id=scan_id,
             site_id=site_id,
-            risk_summary=parsed.get("risk_summary"),
+            risk_summary=risk_summary,
+            key_risks=key_risks,
             vendor_accountability=parsed.get("vendor_accountability"),
             cross_domain_correlations=parsed.get("cross_domain_correlations"),
             recommended_actions=parsed.get("recommended_actions"),
