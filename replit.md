@@ -102,7 +102,33 @@ Apple-inspired aesthetic with greyscale-forward design, using color sparingly on
 - **button-ghost**: Minimal styling for secondary actions
 - **input-primary**: Clean input with subtle focus states
 
+## Agentic Reasoning Visibility
+Progressive disclosure pattern for AI transparency - reasoning is hidden by default, revealed on click:
+
+### Key Risk Cards (Intelligence Brief)
+- Click to expand reasoning section showing:
+  - **Agent Attribution**: Which agent detected this risk (only shown when data exists)
+  - **Investigation Steps**: Sequence of tools/queries used (only when recorded)
+  - **Data Sources**: Tables/databases queried (only when provided)
+  - **Confidence Score**: Visual bar indicator (only when confidence value exists)
+
+### Active Signals
+- Click to expand reasoning for each alert:
+  - Agent that generated the alert
+  - Reasoning explanation
+  - Data source reference
+
+### Investigation Trail (Intelligence Brief Header)
+- "View Investigation Trail" button reveals:
+  - Contributing Agents with their roles
+  - Investigation timeline with step-by-step flow
+
+**Design Principle**: All reasoning sections only display data when it actually exists in the database - no synthetic/fabricated fallbacks. Shows explicit "not available" messages when data is missing.
+
 ## Recent Changes
+- 2026-02-05: Added expandable agentic reasoning to Key Risks, Active Signals, and Intelligence Brief
+- 2026-02-05: Progressive disclosure for AI transparency - collapsed by default, expand on click
+- 2026-02-05: Removed all synthetic fallbacks - only displays data from actual database records
 - 2026-02-04: Added unified Site Journey Timeline with events from 6+ data sources
 - 2026-02-04: Complete UX overhaul - replaced fragmented tab navigation with unified CommandCenter
 - 2026-02-04: New conversational-first interface with AI investigation as primary interaction
