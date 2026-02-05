@@ -103,6 +103,8 @@ Apple-inspired aesthetic with greyscale-forward design, using color sparingly on
 - **input-primary**: Clean input with subtle focus states
 
 ## Recent Changes
+- 2026-02-05: Added interactive site location map to study landing page with attention indicators
+- 2026-02-05: Implemented two-column layout with "Needs Attention" panel + US map visualization
 - 2026-02-04: Added unified Site Journey Timeline with events from 6+ data sources
 - 2026-02-04: Complete UX overhaul - replaced fragmented tab navigation with unified CommandCenter
 - 2026-02-04: New conversational-first interface with AI investigation as primary interaction
