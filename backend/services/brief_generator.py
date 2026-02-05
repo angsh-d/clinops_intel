@@ -100,6 +100,30 @@ class SiteIntelligenceBriefGenerator:
             logger.error("Brief LLM parse failed for site %s: %s", site_id, e)
             return None
 
+        # Extract contributing agents from findings
+        agent_map = {}
+        for f in findings:
+            if f.agent_id and f.agent_id not in agent_map:
+                agent_map[f.agent_id] = {
+                    "name": f.agent_id,
+                    "role": self._get_agent_role(f.agent_id),
+                }
+        contributing_agents = list(agent_map.values()) if agent_map else None
+
+        # Build investigation steps from findings reasoning traces
+        investigation_steps = []
+        for f in findings:
+            if f.reasoning_trace and isinstance(f.reasoning_trace, dict):
+                steps = f.reasoning_trace.get("steps", [])
+                for step in steps[:2]:  # Take first 2 steps from each finding
+                    investigation_steps.append({
+                        "icon": step.get("icon", "🔍"),
+                        "step": step.get("description", step.get("step", "Analyzed data")),
+                        "tool": step.get("tool"),
+                    })
+        if not investigation_steps:
+            investigation_steps = None
+
         brief = SiteIntelligenceBrief(
             scan_id=scan_id,
             site_id=site_id,
@@ -108,12 +132,28 @@ class SiteIntelligenceBriefGenerator:
             cross_domain_correlations=parsed.get("cross_domain_correlations"),
             recommended_actions=parsed.get("recommended_actions"),
             trend_indicator=parsed.get("trend_indicator", "stable"),
+            agent="proactive_briefing_agent",
+            contributing_agents=contributing_agents,
+            investigation_steps=investigation_steps,
         )
         db.add(brief)
         db.commit()
         db.refresh(brief)
         logger.info("Created brief id=%d for site %s (scan %s)", brief.id, site_id, scan_id)
         return brief
+
+    def _get_agent_role(self, agent_id: str) -> str:
+        """Get human-readable role description for an agent."""
+        roles = {
+            "enrollment_agent": "Enrollment & Recruitment Analysis",
+            "data_quality_agent": "Data Quality Monitoring",
+            "financial_agent": "Financial & Budget Analysis",
+            "data_integrity_agent": "Data Integrity & Fraud Detection",
+            "vendor_agent": "Vendor Performance Tracking",
+            "site_health_agent": "Site Health Assessment",
+            "phantom_compliance": "Compliance & Fraud Detection",
+        }
+        return roles.get(agent_id, "Analysis & Investigation")
 
     async def generate_study_synthesis(
         self,

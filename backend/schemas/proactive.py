@@ -54,6 +54,9 @@ class SiteBriefResponse(BaseModel):
     cross_domain_correlations: list[dict] | None = None
     recommended_actions: list[dict] | None = None
     trend_indicator: str | None = None
+    agent: str | None = None
+    contributing_agents: list[dict] | None = None
+    investigation_steps: list[dict] | None = None
     created_at: datetime | None = None
 
 

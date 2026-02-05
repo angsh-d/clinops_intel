@@ -182,6 +182,9 @@ def _brief_to_response(b: SiteIntelligenceBrief) -> SiteBriefResponse:
         cross_domain_correlations=b.cross_domain_correlations,
         recommended_actions=b.recommended_actions,
         trend_indicator=b.trend_indicator,
+        agent=b.agent,
+        contributing_agents=b.contributing_agents,
+        investigation_steps=b.investigation_steps,
         created_at=b.created_at,
     )
 

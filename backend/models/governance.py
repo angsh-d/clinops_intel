@@ -177,6 +177,9 @@ class SiteIntelligenceBrief(Base):
     cross_domain_correlations = Column(JSONB)
     recommended_actions = Column(JSONB)
     trend_indicator = Column(String(20))  # improving/stable/deteriorating
+    agent = Column(String(50))  # Primary agent that generated the brief
+    contributing_agents = Column(JSONB)  # List of agents: [{name, role}]
+    investigation_steps = Column(JSONB)  # Chain of thought: [{icon, step, tool}]
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     __table_args__ = (
         Index("ix_brief_scan", "scan_id"),
