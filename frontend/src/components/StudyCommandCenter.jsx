@@ -209,7 +209,6 @@ export function StudyCommandCenter() {
             hoveredSite={hoveredSite}
             onSiteHover={setHoveredSite}
             onSiteClick={handleSiteClick}
-            highlightedSiteNames={highlightedSiteNames}
             needsAttentionSiteIds={needsAttentionSiteIds}
           />
         </div>
@@ -368,7 +367,7 @@ function SiteTableToggle({ sites, expanded, onToggle, sort, onSort, onClick }) {
 
 /* ── MapPanel ────────────────────────────────────────────────────────────── */
 
-function MapPanel({ sites, hoveredSite, onSiteHover, onSiteClick, highlightedSiteNames, needsAttentionSiteIds }) {
+function MapPanel({ sites, hoveredSite, onSiteHover, onSiteClick, needsAttentionSiteIds }) {
   return (
     <WorldMap
       sites={sites}
@@ -376,7 +375,6 @@ function MapPanel({ sites, hoveredSite, onSiteHover, onSiteClick, highlightedSit
       onSiteHover={onSiteHover}
       hoveredSite={hoveredSite}
       height="h-full"
-      highlightedSiteNames={highlightedSiteNames}
       needsAttentionSiteIds={needsAttentionSiteIds}
     />
   )

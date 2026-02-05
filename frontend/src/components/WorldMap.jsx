@@ -43,8 +43,7 @@ function getCoordinatesForCountry(country, index = 0) {
   ]
 }
 
-export const WorldMap = memo(function WorldMap({ sites, onSiteClick, onSiteHover, hoveredSite, height, highlightedSiteNames, needsAttentionSiteIds }) {
-  const highlighted = highlightedSiteNames || new Set()
+export const WorldMap = memo(function WorldMap({ sites, onSiteClick, onSiteHover, hoveredSite, height, needsAttentionSiteIds }) {
   const needsAttention = needsAttentionSiteIds || new Set()
   const [position, setPosition] = useState({ coordinates: [0, 0], zoom: 1 })
 
@@ -100,20 +99,18 @@ export const WorldMap = memo(function WorldMap({ sites, onSiteClick, onSiteHover
             }
           </Geographies>
 
-          {/* Render non-highlighted sites first, then needs attention, then active signals on top */}
+          {/* Render normal sites first, then needs attention on top */}
           {siteMarkers
             .slice()
             .sort((a, b) => {
-              const aPriority = highlighted.has(a.name) ? 2 : needsAttention.has(a.site_id) ? 1 : 0
-              const bPriority = highlighted.has(b.name) ? 2 : needsAttention.has(b.site_id) ? 1 : 0
+              const aPriority = needsAttention.has(a.site_id) ? 1 : 0
+              const bPriority = needsAttention.has(b.site_id) ? 1 : 0
               return aPriority - bPriority
             })
             .map((site) => {
-            const isSignal = highlighted.has(site.name)
             const isNeedsAttention = needsAttention.has(site.site_id)
             const isHovered = hoveredSite?.id === site.id
-            const baseRadius = isSignal ? 7 : isNeedsAttention ? 6 : 5
-            const pulseColor = isSignal ? '#5856D6' : '#007AFF'
+            const baseRadius = isNeedsAttention ? 6 : 5
             return (
               <Marker
                 key={site.id}
@@ -122,18 +119,18 @@ export const WorldMap = memo(function WorldMap({ sites, onSiteClick, onSiteHover
                 onMouseLeave={() => onSiteHover?.(null)}
                 onClick={() => onSiteClick?.(site)}
               >
-                {/* Animated radar rings — for intelligence signal sites and needs attention sites */}
-                {(isSignal || isNeedsAttention) && (
+                {/* Animated radar rings — for sites that need attention */}
+                {isNeedsAttention && (
                   <>
-                    <circle r={baseRadius} fill={pulseColor} opacity={0.12}>
+                    <circle r={baseRadius} fill="#5856D6" opacity={0.12}>
                       <animate attributeName="r" from={baseRadius} to={baseRadius + 20} dur="2.5s" repeatCount="indefinite" />
                       <animate attributeName="opacity" from="0.25" to="0" dur="2.5s" repeatCount="indefinite" />
                     </circle>
-                    <circle r={baseRadius} fill={pulseColor} opacity={0.12}>
+                    <circle r={baseRadius} fill="#5856D6" opacity={0.12}>
                       <animate attributeName="r" from={baseRadius} to={baseRadius + 20} dur="2.5s" begin="0.8s" repeatCount="indefinite" />
                       <animate attributeName="opacity" from="0.2" to="0" dur="2.5s" begin="0.8s" repeatCount="indefinite" />
                     </circle>
-                    <circle r={baseRadius} fill={pulseColor} opacity={0.12}>
+                    <circle r={baseRadius} fill="#5856D6" opacity={0.12}>
                       <animate attributeName="r" from={baseRadius} to={baseRadius + 20} dur="2.5s" begin="1.6s" repeatCount="indefinite" />
                       <animate attributeName="opacity" from="0.15" to="0" dur="2.5s" begin="1.6s" repeatCount="indefinite" />
                     </circle>
@@ -145,14 +142,13 @@ export const WorldMap = memo(function WorldMap({ sites, onSiteClick, onSiteHover
                   animate={{ r: isHovered ? baseRadius + 3 : baseRadius }}
                   transition={{ type: 'spring', stiffness: 300 }}
                   fill={
-                    isSignal ? '#5856D6' :
-                    isNeedsAttention ? '#007AFF' :
+                    isNeedsAttention ? '#5856D6' :
                     site.status === 'critical' ? '#FF3B30' :
                     site.status === 'warning' ? '#FF9500' :
                     '#1D1D1F'
                   }
                   stroke="#FFFFFF"
-                  strokeWidth={(isSignal || isNeedsAttention) ? 2 : 1}
+                  strokeWidth={isNeedsAttention ? 2 : 1}
                   style={{ cursor: 'pointer' }}
                 />
               </Marker>
@@ -177,19 +173,10 @@ export const WorldMap = memo(function WorldMap({ sites, onSiteClick, onSiteHover
         {needsAttention.size > 0 && (
           <div className="flex items-center gap-1.5">
             <div className="relative w-4 h-4 flex items-center justify-center">
-              <div className="absolute w-4 h-4 rounded-full bg-[#007AFF]/20 animate-ping" />
-              <div className="w-2.5 h-2.5 rounded-full bg-[#007AFF]" />
-            </div>
-            <span>Needs Attention</span>
-          </div>
-        )}
-        {highlighted.size > 0 && (
-          <div className="flex items-center gap-1.5">
-            <div className="relative w-4 h-4 flex items-center justify-center">
               <div className="absolute w-4 h-4 rounded-full bg-[#5856D6]/20 animate-ping" />
               <div className="w-2.5 h-2.5 rounded-full bg-[#5856D6]" />
             </div>
-            <span>Active Signal</span>
+            <span>Needs Attention</span>
           </div>
         )}
       </div>
