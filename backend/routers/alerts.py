@@ -9,10 +9,70 @@ from sqlalchemy.orm import Session
 from backend.dependencies import get_db
 from backend.schemas.alert import AlertActionResponse, AlertDetail, AlertResponse, SuppressRequest, AcknowledgeRequest
 from backend.schemas.errors import ErrorResponse
-from backend.models.governance import AlertLog, SuppressionRule
+from backend.models.governance import AlertLog, SuppressionRule, AgentFinding
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/alerts", tags=["alerts"])
+
+AGENT_DISPLAY_NAMES = {
+    "enrollment_funnel": "Enrollment Funnel Agent",
+    "data_quality": "Data Quality Agent",
+    "financial": "Financial Agent",
+    "phantom_compliance": "Data Integrity Agent",
+    "site_risk": "Site Risk Agent",
+    "vendor_ops": "Vendor Ops Agent",
+}
+
+
+def _enrich_alert_with_finding(alert: AlertLog, db: Session) -> dict:
+    """Enrich alert with reasoning data from linked finding."""
+    alert_dict = {
+        "id": alert.id,
+        "finding_id": alert.finding_id,
+        "agent_id": alert.agent_id,
+        "severity": alert.severity,
+        "site_id": alert.site_id,
+        "title": alert.title,
+        "description": alert.description,
+        "status": alert.status,
+        "suppressed": alert.suppressed,
+        "created_at": alert.created_at,
+        "agent": AGENT_DISPLAY_NAMES.get(alert.agent_id, alert.agent_id),
+        "reasoning": None,
+        "data_source": None,
+        "confidence": None,
+    }
+    
+    if alert.finding_id:
+        finding = db.query(AgentFinding).filter_by(id=alert.finding_id).first()
+        if finding:
+            reasoning_trace = finding.reasoning_trace or []
+            if isinstance(reasoning_trace, list) and reasoning_trace:
+                phases = []
+                for item in reasoning_trace:
+                    if isinstance(item, dict):
+                        phase = item.get("phase", "")
+                        summary = item.get("summary", "")
+                        if phase and summary:
+                            phases.append(f"{phase.title()}: {summary[:60]}")
+                        elif phase:
+                            phases.append(phase.title())
+                if phases:
+                    alert_dict["reasoning"] = " → ".join(phases[:3])
+            elif isinstance(reasoning_trace, dict):
+                phases = reasoning_trace.get("phases", [])
+                if phases:
+                    alert_dict["reasoning"] = " → ".join(str(p) for p in phases[:3])
+            
+            data_signals = finding.data_signals or {}
+            if isinstance(data_signals, dict):
+                sources = list(data_signals.keys())[:2]
+                if sources:
+                    alert_dict["data_source"] = ", ".join(sources)
+            
+            alert_dict["confidence"] = finding.confidence
+    
+    return alert_dict
 
 
 @router.get(
@@ -40,7 +100,9 @@ def list_alerts(
 
     total = q.count()
     alerts = q.order_by(AlertLog.created_at.desc()).limit(limit).all()
-    return AlertResponse(alerts=alerts, total=total)
+    
+    enriched = [_enrich_alert_with_finding(a, db) for a in alerts]
+    return AlertResponse(alerts=enriched, total=total)
 
 
 @router.get(

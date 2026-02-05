@@ -24,6 +24,11 @@ class AlertDetail(BaseModel):
     status: str
     suppressed: bool
     created_at: datetime | None
+    # Reasoning fields from linked finding
+    agent: str | None = None
+    reasoning: str | None = None
+    data_source: str | None = None
+    confidence: float | None = None
 
     model_config = {
         "from_attributes": True,
@@ -40,6 +45,10 @@ class AlertDetail(BaseModel):
                     "status": "open",
                     "suppressed": False,
                     "created_at": "2025-01-15T10:30:00Z",
+                    "agent": "Data Quality Agent",
+                    "reasoning": "Analysis detected entry lag exceeding threshold",
+                    "data_source": "ecrf_entry_metrics",
+                    "confidence": 0.92,
                 }
             ]
         },
