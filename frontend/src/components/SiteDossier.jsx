@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, TrendingUp, TrendingDown, Minus, MapPin, AlertTriangle, Loader2, Calendar, UserCheck, Clock, Activity, ChevronRight } from 'lucide-react'
+import { ArrowLeft, TrendingUp, TrendingDown, Minus, MapPin, AlertTriangle, Loader2, Calendar, UserCheck, Clock, Activity, ChevronRight, ChevronDown, Bot, Sparkles, Database, GitBranch, Gauge } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { getSiteDetail, getSiteBriefs, getSiteJourney } from '../lib/api'
 import FloatingAssistant from './FloatingAssistant'
@@ -21,6 +21,9 @@ export function SiteDossier() {
   const [briefs, setBriefs] = useState([])
   const [journey, setJourney] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [expandedRisks, setExpandedRisks] = useState({})
+  const [expandedSignals, setExpandedSignals] = useState({})
+  const [showInvestigationTrail, setShowInvestigationTrail] = useState(false)
 
   const effectiveStudyId = studyId || currentStudyId
 
@@ -190,15 +193,74 @@ export function SiteDossier() {
               {detail.alerts?.length > 0 ? (
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
                   {detail.alerts.slice(0, 5).map((alert, i) => (
-                    <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-apple-grey-50/50">
-                      <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
-                        alert.severity === 'critical' ? 'bg-red-500' : 
-                        alert.severity === 'warning' ? 'bg-amber-500' : 'bg-apple-grey-400'
-                      }`} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] text-apple-text font-medium leading-relaxed">{alert.message}</p>
-                        <p className="text-[10px] text-apple-muted font-mono mt-1.5">{alert.time}</p>
-                      </div>
+                    <div key={i} className="rounded-xl bg-apple-grey-50/50 overflow-hidden">
+                      <button
+                        onClick={() => setExpandedSignals(prev => ({ ...prev, [i]: !prev[i] }))}
+                        className="w-full p-3 text-left"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                            alert.severity === 'critical' ? 'bg-red-500' : 
+                            alert.severity === 'warning' ? 'bg-amber-500' : 'bg-apple-grey-400'
+                          }`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] text-apple-text font-medium leading-relaxed">{alert.message}</p>
+                            <p className="text-[10px] text-apple-muted font-mono mt-1.5">{alert.time}</p>
+                          </div>
+                          <ChevronDown className={`w-4 h-4 text-apple-tertiary transition-transform flex-shrink-0 ${expandedSignals[i] ? 'rotate-180' : ''}`} />
+                        </div>
+                      </button>
+                      
+                      {/* Expandable Reasoning */}
+                      {expandedSignals[i] && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          className="px-3 pb-3 border-t border-apple-grey-100/50"
+                        >
+                          <div className="pt-3 space-y-2.5">
+                            {/* Agent - only show if data exists */}
+                            {alert.agent && (
+                              <div className="flex items-center gap-2">
+                                <Bot className="w-3 h-3 text-apple-tertiary" />
+                                <span className="text-[9px] font-medium text-apple-muted uppercase">Agent</span>
+                                <span className="text-[10px] font-mono text-apple-text bg-white px-1.5 py-0.5 rounded border border-apple-grey-100">
+                                  {alert.agent}
+                                </span>
+                              </div>
+                            )}
+                            
+                            {/* Reasoning - only show if data exists */}
+                            {alert.reasoning ? (
+                              <div className="flex items-start gap-2">
+                                <Sparkles className="w-3 h-3 text-apple-tertiary mt-0.5" />
+                                <div className="flex-1">
+                                  <span className="text-[9px] font-medium text-apple-muted uppercase">Reasoning</span>
+                                  <p className="text-[10px] text-apple-secondary mt-0.5 leading-relaxed">
+                                    {alert.reasoning}
+                                  </p>
+                                </div>
+                              </div>
+                            ) : null}
+                            
+                            {/* Data Source - only show if data exists */}
+                            {alert.data_source && (
+                              <div className="flex items-center gap-2">
+                                <Database className="w-3 h-3 text-apple-tertiary" />
+                                <span className="text-[9px] font-medium text-apple-muted uppercase">Source</span>
+                                <span className="text-[10px] font-mono text-apple-tertiary bg-white px-1.5 py-0.5 rounded border border-apple-grey-100">
+                                  {alert.data_source}
+                                </span>
+                              </div>
+                            )}
+                            
+                            {/* Empty state if no reasoning data */}
+                            {!alert.agent && !alert.reasoning && !alert.data_source && (
+                              <p className="text-[10px] text-apple-muted italic">Detailed reasoning not available for this signal.</p>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -278,6 +340,74 @@ export function SiteDossier() {
                     ? latestBrief.risk_summary 
                     : latestBrief.risk_summary?.headline || 'No summary available'}
                 </p>
+                
+                {/* Expandable Investigation Trail */}
+                <button
+                  onClick={() => setShowInvestigationTrail(!showInvestigationTrail)}
+                  className="mt-4 flex items-center gap-2 text-[11px] text-apple-tertiary hover:text-apple-text transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span className="font-medium">View Investigation Trail</span>
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showInvestigationTrail ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {showInvestigationTrail && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    className="mt-4 pt-4 border-t border-apple-grey-100"
+                  >
+                    {/* Multi-Agent Collaboration */}
+                    <div className="mb-4">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-apple-muted">Contributing Agents</span>
+                      {latestBrief.contributing_agents?.length > 0 ? (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {latestBrief.contributing_agents.map((agent, i) => (
+                            <div key={i} className="flex items-center gap-2 bg-apple-grey-50 px-3 py-1.5 rounded-lg border border-apple-grey-100">
+                              <Bot className="w-3.5 h-3.5 text-apple-tertiary" />
+                              <div>
+                                <span className="text-[10px] font-mono text-apple-text">{agent.name}</span>
+                                {agent.role && <span className="text-[9px] text-apple-muted ml-2">{agent.role}</span>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : latestBrief.agent ? (
+                        <div className="mt-2 flex items-center gap-2 bg-apple-grey-50 px-3 py-1.5 rounded-lg border border-apple-grey-100">
+                          <Bot className="w-3.5 h-3.5 text-apple-tertiary" />
+                          <span className="text-[10px] font-mono text-apple-text">{latestBrief.agent}</span>
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-[10px] text-apple-muted italic">Agent attribution not available.</p>
+                      )}
+                    </div>
+                    
+                    {/* Investigation Timeline */}
+                    <div>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-apple-muted">Investigation Steps</span>
+                      {latestBrief.investigation_steps?.length > 0 ? (
+                        <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-2">
+                          {latestBrief.investigation_steps.map((step, i, arr) => (
+                            <div key={i} className="flex items-center gap-2 flex-shrink-0">
+                              <div className="flex flex-col items-center">
+                                <div className="w-8 h-8 rounded-lg bg-apple-grey-100 flex items-center justify-center text-sm">
+                                  {step.icon ? step.icon : <span className="text-[9px] font-semibold text-apple-tertiary">{i + 1}</span>}
+                                </div>
+                                <span className="text-[9px] text-apple-secondary mt-1 text-center max-w-[70px] leading-tight">{step.step}</span>
+                                {step.tool && <code className="text-[8px] text-apple-muted mt-0.5">{step.tool}</code>}
+                              </div>
+                              {i < arr.length - 1 && (
+                                <ChevronRight className="w-3 h-3 text-apple-grey-300" />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-[10px] text-apple-muted italic">Detailed investigation steps not available for this brief.</p>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
               </div>
 
               {/* Key Risks */}
@@ -286,20 +416,115 @@ export function SiteDossier() {
                   <h3 className="text-[10px] font-semibold uppercase tracking-wider text-apple-muted mb-4">Key Risks</h3>
                   <div className="space-y-3">
                     {latestBrief.risk_summary.key_risks.map((risk, i) => (
-                      <div key={i} className={`p-4 rounded-xl ${
+                      <div key={i} className={`rounded-xl overflow-hidden ${
                         risk.severity === 'critical' 
                           ? 'bg-gradient-to-r from-red-50 to-red-50/30 border border-red-100' 
                           : 'bg-gradient-to-r from-amber-50 to-amber-50/30 border border-amber-100'
                       }`}>
-                        <div className="flex items-start gap-3">
-                          <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${
-                            risk.severity === 'critical' ? 'bg-red-500' : 'bg-amber-500'
-                          }`} />
-                          <div>
-                            <span className="text-[13px] font-semibold text-apple-text">{risk.risk}</span>
-                            <p className="text-[12px] text-apple-secondary mt-1 leading-relaxed">{risk.evidence}</p>
+                        <button
+                          onClick={() => setExpandedRisks(prev => ({ ...prev, [i]: !prev[i] }))}
+                          className="w-full p-4 text-left"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${
+                              risk.severity === 'critical' ? 'bg-red-500' : 'bg-amber-500'
+                            }`} />
+                            <div className="flex-1">
+                              <span className="text-[13px] font-semibold text-apple-text">{risk.risk}</span>
+                              <p className="text-[12px] text-apple-secondary mt-1 leading-relaxed">{risk.evidence}</p>
+                            </div>
+                            <ChevronDown className={`w-4 h-4 text-apple-tertiary transition-transform ${expandedRisks[i] ? 'rotate-180' : ''}`} />
                           </div>
-                        </div>
+                        </button>
+                        
+                        {/* Expandable Reasoning Section */}
+                        {expandedRisks[i] && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="px-4 pb-4 border-t border-apple-grey-100/50"
+                          >
+                            <div className="pt-4 space-y-3">
+                              {/* Agent Attribution - only show if data exists */}
+                              {(risk.agent || latestBrief.agent) && (
+                                <div className="flex items-center gap-2">
+                                  <Bot className="w-3.5 h-3.5 text-apple-tertiary" />
+                                  <span className="text-[10px] font-medium text-apple-muted uppercase tracking-wider">Detected by</span>
+                                  <span className="text-[11px] font-mono text-apple-text bg-apple-grey-100 px-2 py-0.5 rounded">
+                                    {risk.agent || latestBrief.agent}
+                                  </span>
+                                </div>
+                              )}
+                              
+                              {/* Investigation Steps - only show if data exists */}
+                              {risk.reasoning_steps?.length > 0 ? (
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <GitBranch className="w-3.5 h-3.5 text-apple-tertiary" />
+                                    <span className="text-[10px] font-medium text-apple-muted uppercase tracking-wider">Investigation Steps</span>
+                                  </div>
+                                  <div className="ml-5 space-y-1.5">
+                                    {risk.reasoning_steps.map((step, j) => (
+                                      <div key={j} className="flex items-center gap-2 text-[11px]">
+                                        <span className="w-4 h-4 rounded bg-apple-grey-100 text-[9px] font-semibold text-apple-tertiary flex items-center justify-center">{j + 1}</span>
+                                        <span className="text-apple-secondary">{step.step}</span>
+                                        {step.tool && <code className="text-[9px] text-apple-muted bg-apple-grey-50 px-1.5 py-0.5 rounded">{step.tool}</code>}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <GitBranch className="w-3.5 h-3.5 text-apple-tertiary" />
+                                  <span className="text-[10px] text-apple-muted italic">Investigation steps not recorded for this finding.</span>
+                                </div>
+                              )}
+                              
+                              {/* Evidence Sources - only show if data exists */}
+                              {risk.data_sources?.length > 0 && (
+                                <div className="flex items-start gap-2">
+                                  <Database className="w-3.5 h-3.5 text-apple-tertiary mt-0.5" />
+                                  <div>
+                                    <span className="text-[10px] font-medium text-apple-muted uppercase tracking-wider">Data Sources</span>
+                                    <div className="flex flex-wrap gap-1.5 mt-1">
+                                      {risk.data_sources.map((src, j) => (
+                                        <span key={j} className="text-[10px] font-mono text-apple-tertiary bg-apple-grey-50 px-2 py-0.5 rounded border border-apple-grey-100">
+                                          {src}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Confidence - only show if data exists */}
+                              {risk.confidence != null && (
+                                <div className="flex items-center gap-2">
+                                  <Gauge className="w-3.5 h-3.5 text-apple-tertiary" />
+                                  <span className="text-[10px] font-medium text-apple-muted uppercase tracking-wider">Confidence</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="w-16 h-1.5 bg-apple-grey-100 rounded-full overflow-hidden">
+                                      <div 
+                                        className={`h-full rounded-full ${
+                                          risk.confidence >= 0.8 ? 'bg-emerald-500' : 
+                                          risk.confidence >= 0.6 ? 'bg-amber-500' : 'bg-red-500'
+                                        }`}
+                                        style={{ width: `${risk.confidence * 100}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-[10px] font-semibold text-apple-text">{Math.round(risk.confidence * 100)}%</span>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Show message if no reasoning data available */}
+                              {!risk.agent && !latestBrief.agent && !risk.reasoning_steps?.length && !risk.data_sources?.length && risk.confidence == null && (
+                                <p className="text-[10px] text-apple-muted italic">Detailed reasoning not available for this finding.</p>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -355,7 +580,7 @@ export function SiteDossier() {
               {/* Provenance Footer */}
               <div className="px-6 py-3 bg-apple-grey-50/50 border-t border-apple-grey-100">
                 <p className="text-[10px] font-mono text-apple-muted">
-                  Generated by {latestBrief.agent || 'proactive_briefing_agent'} · Updated {latestBrief.created_at ? new Date(latestBrief.created_at).toLocaleString() : 'recently'}
+                  {latestBrief.agent && <>Generated by {latestBrief.agent} · </>}Updated {latestBrief.created_at ? new Date(latestBrief.created_at).toLocaleString() : 'recently'}
                 </p>
               </div>
             </div>
