@@ -257,11 +257,15 @@ export async function getHealthCheck() {
 
 // ── Investigation (existing) ─────────────────────────────────────────────
 
-export async function startInvestigation(query, siteId) {
+export async function startInvestigation(query, siteId, sessionId = null) {
   const response = await fetch(`${API_BASE}/agents/investigate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, site_id: siteId }),
+    body: JSON.stringify({ 
+      query, 
+      site_id: siteId,
+      session_id: sessionId,
+    }),
   })
   if (!response.ok) {
     throw new Error(`API error: ${response.status}`)

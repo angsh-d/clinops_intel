@@ -58,6 +58,7 @@ export function CommandCenter() {
   const [error, setError] = useState(null)
   
   const [conversationHistory, setConversationHistory] = useState([])
+  const [sessionId, setSessionId] = useState(null)
   const [showExplore, setShowExplore] = useState(false)
   const [autoSubmitHandled, setAutoSubmitHandled] = useState(false)
   
@@ -149,7 +150,10 @@ export function CommandCenter() {
         setResult(null)
         setError(null)
         
-        startInvestigation(urlQuery).then(({ query_id }) => {
+        startInvestigation(urlQuery, null, sessionId).then(({ query_id, session_id: returnedSessionId }) => {
+          if (returnedSessionId && !sessionId) {
+            setSessionId(returnedSessionId)
+          }
           wsRef.current = connectInvestigationStream(query_id, {
             onPhase: (phase) => {
               setCurrentPhase(phase.phase)
@@ -192,7 +196,10 @@ export function CommandCenter() {
     setError(null)
 
     try {
-      const { query_id } = await startInvestigation(userQuery)
+      const { query_id, session_id: returnedSessionId } = await startInvestigation(userQuery, null, sessionId)
+      if (returnedSessionId && !sessionId) {
+        setSessionId(returnedSessionId)
+      }
       
       wsRef.current = connectInvestigationStream(query_id, {
         onPhase: (phase) => {
@@ -245,6 +252,7 @@ export function CommandCenter() {
     setConversationHistory([])
     setResult(null)
     setError(null)
+    setSessionId(null)
   }
 
   return (

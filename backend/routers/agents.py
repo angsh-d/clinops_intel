@@ -173,6 +173,7 @@ async def investigate(
 
     return {
         "query_id": query_id,
+        "session_id": session_id,
         "status": "accepted",
         "message": "Investigation created. Connect to WebSocket for live streaming.",
     }
