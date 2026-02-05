@@ -930,10 +930,25 @@ def site_detail(
         else:
             time_str = "Recently"
         
+        reasoning = None
+        data_source = None
+        if alert.finding_id:
+            finding = db.query(AgentFinding).filter(AgentFinding.id == alert.finding_id).first()
+            if finding:
+                if finding.reasoning_trace:
+                    reasoning = finding.reasoning_trace.get("summary") if isinstance(finding.reasoning_trace, dict) else str(finding.reasoning_trace)
+                if finding.data_signals:
+                    sources = finding.data_signals.get("sources") if isinstance(finding.data_signals, dict) else None
+                    if sources and isinstance(sources, list):
+                        data_source = ", ".join(sources[:3])
+        
         alerts.append(SiteAlertDetail(
             severity=alert.severity or "info",
             message=alert.title or "Alert",
             time=time_str,
+            agent=alert.agent_id,
+            reasoning=reasoning,
+            data_source=data_source,
         ))
     
     # Get CRA assignments for timeline

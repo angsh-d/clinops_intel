@@ -313,6 +313,9 @@ class SiteAlertDetail(BaseModel):
     severity: str
     message: str
     time: str
+    agent: str | None = None
+    reasoning: str | None = None
+    data_source: str | None = None
 
 
 class CRAAssignmentSchema(BaseModel):
