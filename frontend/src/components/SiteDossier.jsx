@@ -280,7 +280,7 @@ export function SiteDossier() {
         )}
 
         {/* Site Journey Timeline */}
-        <SiteJourneyTimeline journey={journey} />
+        <SiteJourneyTimeline journey={journey} excludeAlerts={detail.alerts?.length > 0} />
       </main>
 
       {/* Floating AI Assistant */}
@@ -308,8 +308,14 @@ function MetricCard({ label, value, suffix = '', status = 'neutral', note }) {
   )
 }
 
-function SiteJourneyTimeline({ journey }) {
+function SiteJourneyTimeline({ journey, excludeAlerts = false }) {
   if (!journey || !journey.events || journey.events.length === 0) return null
+  
+  const filteredEvents = excludeAlerts 
+    ? journey.events.filter(e => e.event_type !== 'alert')
+    : journey.events
+  
+  if (filteredEvents.length === 0) return null
 
   const formatDate = (dateStr) => {
     const date = new Date(dateStr)
@@ -354,7 +360,7 @@ function SiteJourneyTimeline({ journey }) {
       
       <div className="card-elevated p-6 max-h-[400px] overflow-y-auto scrollbar-minimal">
         <div className="space-y-0">
-          {journey.events.slice(0, 15).map((event, i) => {
+          {filteredEvents.slice(0, 15).map((event, i) => {
             const Icon = getEventIcon(event.event_type)
             return (
               <div key={i} className="timeline-event">
