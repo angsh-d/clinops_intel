@@ -11,7 +11,7 @@ import { useStore } from '../lib/store'
 import { 
   getStudySummary, getAttentionSites, startInvestigation, 
   connectInvestigationStream, getQueryStatus, getDataQualityDashboard,
-  getEnrollmentDashboard, getSitesOverview
+  getEnrollmentDashboard, getSitesOverview, getKpiMetrics
 } from '../lib/api'
 import { WorldMap } from './WorldMap'
 
@@ -50,6 +50,7 @@ export function CommandCenter() {
   const [attentionItems, setAttentionItems] = useState([])
   const [allSites, setAllSites] = useState([])
   const [kpis, setKpis] = useState(null)
+  const [kpiMetrics, setKpiMetrics] = useState(null)
   const [loading, setLoading] = useState(true)
   
   const [query, setQuery] = useState('')
@@ -71,13 +72,16 @@ export function CommandCenter() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [summary, attention, dqData, enrollData, sitesData] = await Promise.all([
+        const [summary, attention, dqData, enrollData, sitesData, kpiData] = await Promise.all([
           getStudySummary(),
           getAttentionSites(),
           getDataQualityDashboard().catch(() => null),
           getEnrollmentDashboard().catch(() => null),
-          getSitesOverview().catch(() => null)
+          getSitesOverview().catch(() => null),
+          getKpiMetrics().catch(() => null)
         ])
+        
+        setKpiMetrics(kpiData)
         
         setStudySummary(summary)
         if (summary) {
@@ -332,21 +336,25 @@ export function CommandCenter() {
                   value={`${studySummary?.enrolled || 0}`}
                   subvalue={`of ${studySummary?.target || 0}`}
                   trend={progress >= 80 ? 'good' : progress >= 50 ? 'neutral' : 'warn'}
+                  metric={kpiMetrics?.enrolled}
                 />
                 <KPICard 
                   label="Sites at Risk" 
                   value={`${kpis.criticalSites}`}
                   trend={kpis.criticalSites === 0 ? 'good' : kpis.criticalSites <= 3 ? 'neutral' : 'warn'}
+                  metric={kpiMetrics?.sites_at_risk}
                 />
                 <KPICard 
                   label="DQ Score" 
                   value={kpis.dqScore ? `${Math.round(kpis.dqScore)}` : '—'}
                   trend={kpis.dqScore >= 85 ? 'good' : kpis.dqScore >= 70 ? 'neutral' : 'warn'}
+                  metric={kpiMetrics?.dq_score}
                 />
                 <KPICard 
                   label="Screen Fail" 
                   value={kpis.screenFailRate !== null ? `${kpis.screenFailRate}%` : '—'}
                   trend={kpis.screenFailRate === null ? 'neutral' : kpis.screenFailRate <= 25 ? 'good' : kpis.screenFailRate <= 40 ? 'neutral' : 'warn'}
+                  metric={kpiMetrics?.screen_fail_rate}
                 />
               </motion.div>
             )}
@@ -549,7 +557,8 @@ export function CommandCenter() {
   )
 }
 
-function KPICard({ label, value, subvalue, trend }) {
+function KPICard({ label, value, subvalue, trend, metric }) {
+  const [showTooltip, setShowTooltip] = useState(false)
   const dotStyles = {
     good: 'from-emerald-500 to-emerald-400',
     neutral: 'from-amber-500 to-amber-400',
@@ -558,7 +567,11 @@ function KPICard({ label, value, subvalue, trend }) {
   const dotStyle = dotStyles[trend] || 'from-apple-grey-400 to-apple-grey-300'
   
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-apple-grey-100 hover:shadow-md transition-shadow duration-200">
+    <div 
+      className="bg-white rounded-2xl p-5 shadow-sm border border-apple-grey-100 hover:shadow-md transition-shadow duration-200 relative cursor-help"
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
       <div className="flex items-start justify-between mb-3">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-apple-tertiary">{label}</p>
         <div className={`w-2 h-2 rounded-full bg-gradient-to-br ${dotStyle}`} />
@@ -569,6 +582,26 @@ function KPICard({ label, value, subvalue, trend }) {
           <span className="text-[14px] text-apple-muted">{subvalue}</span>
         )}
       </div>
+      
+      {showTooltip && metric && (
+        <div className="absolute left-0 right-0 top-full mt-2 z-50 p-4 bg-apple-grey-900 text-white rounded-xl shadow-xl text-xs">
+          <div className="space-y-2">
+            <div>
+              <span className="text-apple-grey-400 uppercase tracking-wider text-[10px]">Formula</span>
+              <p className="text-apple-grey-100 font-mono text-[11px] mt-0.5">{metric.formula}</p>
+            </div>
+            <div>
+              <span className="text-apple-grey-400 uppercase tracking-wider text-[10px]">Data Source</span>
+              <p className="text-apple-grey-100 mt-0.5">{metric.data_source}</p>
+            </div>
+            <div>
+              <span className="text-apple-grey-400 uppercase tracking-wider text-[10px]">Sample Size</span>
+              <p className="text-apple-grey-100 mt-0.5">{metric.sample_size?.toLocaleString() || 'N/A'} records</p>
+            </div>
+          </div>
+          <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 border-8 border-transparent border-b-apple-grey-900"></div>
+        </div>
+      )}
     </div>
   )
 }

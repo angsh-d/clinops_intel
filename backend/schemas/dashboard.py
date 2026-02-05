@@ -580,3 +580,20 @@ class ThemeFindingsResponse(BaseModel):
     affected_sites: list[str]
     findings: list[ThemeFindingDetail]
     cross_domain_hypotheses: list[CrossDomainCorrelation] = []
+
+
+class KPIMetric(BaseModel):
+    label: str
+    value: str
+    raw_value: float | int | None
+    formula: str
+    data_source: str
+    sample_size: int | None = None
+    trend: str = "neutral"
+
+
+class KPIMetricsResponse(BaseModel):
+    enrolled: KPIMetric
+    sites_at_risk: KPIMetric
+    dq_score: KPIMetric
+    screen_fail_rate: KPIMetric

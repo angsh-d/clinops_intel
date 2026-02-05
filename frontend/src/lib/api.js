@@ -129,6 +129,10 @@ export async function getAlertEnhanced(alertId) {
   return cachedFetch(`/dashboard/alert-enhanced/${alertId}`)
 }
 
+export async function getKpiMetrics() {
+  return cachedFetch('/dashboard/kpi-metrics')
+}
+
 // ── Vendor endpoints ──────────────────────────────────────────────────────
 
 export async function getVendorScorecards() {

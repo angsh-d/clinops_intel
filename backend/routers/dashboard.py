@@ -33,6 +33,7 @@ from backend.schemas.dashboard import (
     ThemeFindingDetail, ThemeFindingsResponse,
     CrossDomainCorrelation, StudyHypothesis, StudySynthesis,
     DataSourceCitation,
+    KPIMetric, KPIMetricsResponse,
 )
 from data_generators.models import (
     ECRFEntry, Query, DataCorrection, ScreeningLog,
@@ -539,6 +540,127 @@ def study_summary(db: Session = Depends(get_db)):
         countries=countries,
         last_updated=datetime.now().isoformat(),
     )
+    dashboard_cache.set(ck, result)
+    return result
+
+
+@router.get(
+    "/kpi-metrics",
+    response_model=KPIMetricsResponse,
+    summary="KPI metrics with formulas and sources",
+    description="Returns all KPI metrics with their formulas, data sources, and sample sizes for auditability.",
+)
+def kpi_metrics(
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_dep),
+):
+    """KPI metrics with full provenance for auditability."""
+    ck = cache_key("kpi_metrics")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
+    study_config = db.query(StudyConfig).first()
+    if not study_config:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail="StudyConfig not found in database")
+
+    # 1. Enrolled metric
+    enrolled = db.query(func.count(RandomizationLog.id)).scalar() or 0
+    target = study_config.target_enrollment or 0
+    enrolled_pct = round((enrolled / target * 100), 1) if target > 0 else 0
+    enrolled_trend = "good" if enrolled_pct >= 80 else "neutral" if enrolled_pct >= 50 else "warn"
+
+    # 2. Sites at Risk (critical status count)
+    sites = db.query(Site).all()
+    total_sites = len(sites)
+    critical_count = 0
+    for site in sites:
+        open_queries = db.query(func.count(Query.id)).filter(
+            Query.site_id == site.site_id,
+            Query.status == "Open"
+        ).scalar() or 0
+        alert_count = db.query(func.count(AlertLog.id)).filter(
+            AlertLog.site_id == site.site_id,
+            AlertLog.status == "active"
+        ).scalar() or 0
+        if site.anomaly_type or open_queries > settings.status_critical_open_queries or alert_count > settings.status_critical_alert_count:
+            critical_count += 1
+    
+    risk_trend = "good" if critical_count == 0 else "neutral" if critical_count <= 3 else "warn"
+
+    # 3. DQ Score (average across sites with data - aligned with data-quality endpoint)
+    # Uses ECRFEntry sites (same as data-quality endpoint) as base
+    ecrf_sites = db.query(
+        ECRFEntry.site_id,
+        func.avg(ECRFEntry.entry_lag_days).label("mean_lag")
+    ).group_by(ECRFEntry.site_id).all()
+    
+    # Get open queries per site
+    queries_data = db.query(
+        Query.site_id,
+        func.count(Query.id).filter(Query.status == "Open").label("open_queries"),
+    ).group_by(Query.site_id).all()
+    queries_by_site = {r.site_id: r.open_queries or 0 for r in queries_data}
+
+    dq_scores = []
+    for row in ecrf_sites:
+        lag = float(row.mean_lag or 0)
+        queries = queries_by_site.get(row.site_id, 0)
+        lag_penalty = min(lag * 2, 20)
+        query_penalty = min(queries, 30)
+        score = max(100 - lag_penalty - query_penalty, 0)
+        dq_scores.append(score)
+
+    avg_dq = round(sum(dq_scores) / len(dq_scores)) if dq_scores else None
+    dq_sample_size = len(dq_scores)
+    dq_trend = "good" if avg_dq and avg_dq >= 85 else "neutral" if avg_dq and avg_dq >= 70 else "warn"
+
+    # 4. Screen Fail Rate
+    total_screened = db.query(func.count(ScreeningLog.id)).scalar() or 0
+    total_randomized = db.query(func.count(RandomizationLog.id)).scalar() or 0
+    screen_fail_rate = round(((total_screened - total_randomized) / total_screened * 100)) if total_screened > 0 else None
+    sfr_trend = "good" if screen_fail_rate and screen_fail_rate <= 25 else "neutral" if screen_fail_rate and screen_fail_rate <= 40 else "warn"
+
+    result = KPIMetricsResponse(
+        enrolled=KPIMetric(
+            label="Enrolled",
+            value=f"{enrolled} of {target}",
+            raw_value=enrolled,
+            formula="COUNT(randomization_log)",
+            data_source="randomization_log table + study_config.target_enrollment",
+            sample_size=enrolled,
+            trend=enrolled_trend,
+        ),
+        sites_at_risk=KPIMetric(
+            label="Sites at Risk",
+            value=str(critical_count),
+            raw_value=critical_count,
+            formula=f"COUNT(sites WHERE anomaly_type IS NOT NULL OR open_queries > {settings.status_critical_open_queries} OR active_alerts > {settings.status_critical_alert_count})",
+            data_source="sites table + queries table + alert_log table",
+            sample_size=total_sites,
+            trend=risk_trend,
+        ),
+        dq_score=KPIMetric(
+            label="DQ Score",
+            value=str(avg_dq) if avg_dq else "—",
+            raw_value=avg_dq,
+            formula="AVG(100 - MIN(entry_lag_days × 2, 20) - MIN(open_queries, 30))",
+            data_source="ecrf_entries table (entry lag) + queries table (open queries)",
+            sample_size=dq_sample_size,
+            trend=dq_trend,
+        ),
+        screen_fail_rate=KPIMetric(
+            label="Screen Fail Rate",
+            value=f"{screen_fail_rate}%" if screen_fail_rate is not None else "—",
+            raw_value=screen_fail_rate,
+            formula="(total_screened - total_randomized) / total_screened × 100",
+            data_source="screening_log table + randomization_log table",
+            sample_size=total_screened,
+            trend=sfr_trend,
+        ),
+    )
+
     dashboard_cache.set(ck, result)
     return result
 

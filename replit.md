@@ -156,6 +156,11 @@ Each causal chain step gets a confidence score:
 Frontend displays confidence badges with color coding (green/amber/red).
 
 ## Recent Changes
+- 2026-02-05: Added KPI metrics endpoint (/api/dashboard/kpi-metrics) with formula, data source, and sample size for auditability
+- 2026-02-05: Added hover tooltips to KPI cards showing calculation formula, data source, and sample size
+- 2026-02-05: Fixed "Sites at Risk" KPI inconsistency - now uses sites-overview status='critical' count (16 sites)
+- 2026-02-05: Updated WorldMap "Needs Attention" sites to use dynamic database queries instead of hardcoded lists
+- 2026-02-05: WorldMap defaults to zoom 1.4x centered at [10, 35] for better global coverage
 - 2026-02-05: Extended hallucination prevention to Active Signals (alerts)
   - Added validate_causal_step helper function to dashboard router
   - Alerts with causal_chain_explained now get same validation as intelligence briefs
