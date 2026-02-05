@@ -22,9 +22,21 @@ Produce a JSON response with these 5 sections:
         "source_agents": ["agent_ids that flagged this"],
         "evidence": "Specific data points supporting this risk",
         "causal_chain_explained": [
-          {{ "step": "Step 1 Title", "explanation": "Plain English explanation of what happened first" }},
-          {{ "step": "Step 2 Title", "explanation": "Plain English explanation of what happened next" }},
-          {{ "step": "Outcome", "explanation": "Plain English explanation of the final observable problem" }}
+          {{ 
+            "step": "Step 1 Title", 
+            "explanation": "Plain English explanation of what happened first",
+            "data_source": {{ "tool": "tool_name_that_provided_this_data", "metric": "specific_metric_or_value", "row_count": 123 }}
+          }},
+          {{ 
+            "step": "Step 2 Title", 
+            "explanation": "Plain English explanation of what happened next",
+            "data_source": {{ "tool": "tool_name", "metric": "specific_metric_or_value", "row_count": 45 }}
+          }},
+          {{ 
+            "step": "Outcome", 
+            "explanation": "Plain English explanation of the final observable problem",
+            "data_source": {{ "tool": "tool_name or 'inference'", "metric": "metric or 'derived from above'", "row_count": 0 }}
+          }}
         ]
       }}
     ]
@@ -61,9 +73,28 @@ IMPORTANT:
 - trend_indicator reflects whether the site's overall operational health is improving, stable, or deteriorating based on the findings
 - causal_chain_explained MUST be in plain English that a non-technical person can understand
 - ALWAYS include temporal details (dates, timeframes, durations) in each step when available from the findings
-- Example with temporal context:
+
+DATA GROUNDING REQUIREMENT (CRITICAL):
+- Each causal chain step MUST include a data_source object citing the specific tool and metric that supports the claim
+- If a step is a logical inference (not directly from data), set tool to "inference" and explain in metric what it's derived from
+- NEVER claim data exists if the tool returned 0 rows - be honest about data gaps
+- If you cannot cite a specific data source for a claim, DO NOT include that claim
+
+Example with data citations:
   [
-    {{ "step": "Staffing Gap (July 2024)", "explanation": "The CRA assigned to this site left on July 15th and wasn't replaced until August 28th - a 6-week gap." }},
-    {{ "step": "Missed Visits (Aug 2024)", "explanation": "During the staffing gap, three scheduled monitoring visits on Aug 5, 12, and 19 were skipped." }},
-    {{ "step": "Query Backlog (Current)", "explanation": "As of today, 45 queries remain open, with the oldest dating back 30+ days to late July." }}
+    {{ 
+      "step": "Staffing Gap (July 2024)", 
+      "explanation": "The CRA assigned to this site left on July 15th and wasn't replaced until August 28th - a 6-week gap.",
+      "data_source": {{ "tool": "cra_assignment_history", "metric": "gap_days=44, transition from CRA-001 to CRA-002", "row_count": 3 }}
+    }},
+    {{ 
+      "step": "Missed Visits (Aug 2024)", 
+      "explanation": "During the staffing gap, three scheduled monitoring visits on Aug 5, 12, and 19 were skipped.",
+      "data_source": {{ "tool": "monitoring_visit_history", "metric": "3 visits with status=skipped in date range", "row_count": 3 }}
+    }},
+    {{ 
+      "step": "Query Backlog (Current)", 
+      "explanation": "As of today, 45 queries remain open, with the oldest dating back 30+ days to late July.",
+      "data_source": {{ "tool": "query_burden", "metric": "open_queries=45, max_age_days=30", "row_count": 45 }}
+    }}
   ]

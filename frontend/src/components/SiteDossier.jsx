@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, TrendingUp, TrendingDown, Minus, MapPin, AlertTriangle, Loader2, Calendar, UserCheck, Clock, Activity, ChevronRight, ChevronDown, Bot, Sparkles, Database, GitBranch, Gauge, Search, HelpCircle, Users, Edit3, Filter, DollarSign, PieChart, BarChart2, AlertCircle, Flag, BarChart, Grid, Briefcase, EyeOff, GitCommit, RotateCw, Globe } from 'lucide-react'
+import { ArrowLeft, ArrowRight, TrendingUp, TrendingDown, Minus, MapPin, AlertTriangle, Loader2, Calendar, UserCheck, Clock, Activity, ChevronRight, ChevronDown, Bot, Sparkles, Database, GitBranch, Gauge, Search, HelpCircle, Users, Edit3, Filter, DollarSign, PieChart, BarChart2, AlertCircle, Flag, BarChart, Grid, Briefcase, EyeOff, GitCommit, RotateCw, Globe, CheckCircle2, XCircle, Info } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { getSiteDetail, getSiteBriefs, getSiteJourney } from '../lib/api'
 import FloatingAssistant from './FloatingAssistant'
@@ -279,13 +279,42 @@ export function SiteDossier() {
                                 </span>
                                 <div className="space-y-2">
                                   {alert.causal_chain_explained.map((step, stepIdx) => (
-                                    <div key={stepIdx} className="flex items-start gap-2">
-                                      <div className="flex-shrink-0 w-4 h-4 rounded-full bg-apple-grey-100 flex items-center justify-center text-[8px] font-medium text-apple-tertiary mt-0.5">
-                                        {stepIdx + 1}
+                                    <div key={stepIdx} className={`flex items-start gap-2 p-1.5 rounded ${step.grounded === false ? 'bg-amber-50/50 border-l-2 border-amber-300' : ''}`}>
+                                      <div className={`flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-medium mt-0.5 ${
+                                        step.grounded === true ? 'bg-emerald-100 text-emerald-600' : 
+                                        step.grounded === false ? 'bg-amber-100 text-amber-600' : 
+                                        'bg-apple-grey-100 text-apple-tertiary'
+                                      }`}>
+                                        {step.grounded === true ? <CheckCircle2 className="w-3 h-3" /> : 
+                                         step.grounded === false ? <Info className="w-3 h-3" /> : 
+                                         stepIdx + 1}
                                       </div>
                                       <div className="flex-1">
-                                        <span className="text-[10px] font-medium text-apple-secondary">{step.step}</span>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-[10px] font-medium text-apple-secondary">{step.step}</span>
+                                          {step.grounding_type === 'inference' && (
+                                            <span className="text-[8px] px-1 py-0.5 rounded bg-purple-100 text-purple-600 font-medium">INFERENCE</span>
+                                          )}
+                                          {step.grounding_type === 'unverified' && (
+                                            <span className="text-[8px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">UNVERIFIED</span>
+                                          )}
+                                        </div>
                                         <p className="text-[10px] text-apple-tertiary leading-relaxed">{step.explanation}</p>
+                                        {step.data_source?.tool && (
+                                          <div className="flex items-center gap-1 mt-0.5">
+                                            <Database className="w-2.5 h-2.5 text-apple-muted" />
+                                            <span className="text-[8px] font-mono text-apple-muted">{step.data_source.tool}</span>
+                                            {step.data_source.row_count !== undefined && (
+                                              <span className="text-[8px] text-apple-muted">({step.data_source.row_count} rows)</span>
+                                            )}
+                                          </div>
+                                        )}
+                                        {step.grounding_issue && (
+                                          <p className="text-[8px] text-amber-600 mt-0.5 flex items-center gap-1">
+                                            <AlertTriangle className="w-2.5 h-2.5" />
+                                            {step.grounding_issue}
+                                          </p>
+                                        )}
                                       </div>
                                     </div>
                                   ))}
@@ -543,11 +572,48 @@ export function SiteDossier() {
                                   </div>
                                   <div className="ml-5 space-y-2">
                                     {risk.causal_chain_explained.map((item, j) => (
-                                      <div key={j} className="flex items-start gap-2">
-                                        <span className="w-5 h-5 rounded-full bg-apple-grey-100 text-[10px] font-semibold text-apple-tertiary flex items-center justify-center flex-shrink-0 mt-0.5">{j + 1}</span>
-                                        <div>
-                                          <span className="text-[11px] font-semibold text-apple-text">{item.step}</span>
-                                          <p className="text-[11px] text-apple-secondary leading-relaxed">{item.explanation}</p>
+                                      <div key={j} className={`flex items-start gap-2 p-2 rounded-lg ${item.grounded === false ? 'bg-amber-50/50 border-l-2 border-amber-300' : 'bg-apple-grey-50'}`}>
+                                        <span className={`w-5 h-5 rounded-full text-[10px] font-semibold flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                                          item.grounded === true ? 'bg-emerald-100 text-emerald-600' :
+                                          item.grounded === false ? 'bg-amber-100 text-amber-600' :
+                                          'bg-apple-grey-100 text-apple-tertiary'
+                                        }`}>
+                                          {item.grounded === true ? <CheckCircle2 className="w-3 h-3" /> :
+                                           item.grounded === false ? <Info className="w-3 h-3" /> :
+                                           j + 1}
+                                        </span>
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-[11px] font-semibold text-apple-text">{item.step}</span>
+                                            {item.grounding_type === 'inference' && (
+                                              <span className="text-[8px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-600 font-medium">INFERENCE</span>
+                                            )}
+                                            {item.grounding_type === 'unverified' && (
+                                              <span className="text-[8px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">UNVERIFIED</span>
+                                            )}
+                                            {item.grounded === true && (
+                                              <span className="text-[8px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-600 font-medium">DATA VERIFIED</span>
+                                            )}
+                                          </div>
+                                          <p className="text-[11px] text-apple-secondary leading-relaxed mt-0.5">{item.explanation}</p>
+                                          {item.data_source?.tool && (
+                                            <div className="flex items-center gap-1.5 mt-1">
+                                              <Database className="w-3 h-3 text-apple-muted" />
+                                              <span className="text-[9px] font-mono text-apple-muted bg-white px-1.5 py-0.5 rounded border border-apple-grey-100">{item.data_source.tool}</span>
+                                              {item.data_source.metric && (
+                                                <span className="text-[9px] text-apple-muted">{item.data_source.metric}</span>
+                                              )}
+                                              {item.data_source.row_count !== undefined && item.data_source.row_count > 0 && (
+                                                <span className="text-[9px] text-apple-muted">({item.data_source.row_count} rows)</span>
+                                              )}
+                                            </div>
+                                          )}
+                                          {item.grounding_issue && (
+                                            <p className="text-[9px] text-amber-600 mt-1 flex items-center gap-1">
+                                              <AlertTriangle className="w-3 h-3" />
+                                              {item.grounding_issue}
+                                            </p>
+                                          )}
                                         </div>
                                       </div>
                                     ))}

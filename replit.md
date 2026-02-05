@@ -126,6 +126,12 @@ Progressive disclosure pattern for AI transparency - reasoning is hidden by defa
 **Design Principle**: All reasoning sections only display data when it actually exists in the database - no synthetic/fabricated fallbacks. Shows explicit "not available" messages when data is missing.
 
 ## Recent Changes
+- 2026-02-05: Implemented data grounding validation for causal chain claims
+  - Each causal chain step now requires data_source citation (tool, metric, row_count)
+  - Post-processing validates cited tools against actual investigation steps
+  - Steps marked as "grounded", "inference", "unverified", or "missing" based on validation
+  - Frontend shows visual indicators: green checkmark (verified), amber (unverified/inference)
+  - Grounding issues displayed inline with warning icon
 - 2026-02-05: Fixed key_risks extraction in brief generator - now properly extracts from nested risk_summary structure
 - 2026-02-05: Added key_risks column to site_intelligence_briefs model and schema
 - 2026-02-05: Updated API response mapper to include key_risks field

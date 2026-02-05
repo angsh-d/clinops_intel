@@ -309,9 +309,21 @@ class SiteMetricDetail(BaseModel):
     note: str | None = None
 
 
+class DataSourceCitation(BaseModel):
+    """Data source citation for a causal chain step."""
+    tool: str
+    metric: str | None = None
+    row_count: int | None = None
+
+
 class CausalStepExplained(BaseModel):
+    """A single step in a causal reasoning chain with grounding information."""
     step: str
     explanation: str
+    data_source: DataSourceCitation | None = None
+    grounded: bool | None = None
+    grounding_type: str | None = None  # "data", "inference", "unverified", "missing"
+    grounding_issue: str | None = None  # Description of any grounding problem
 
 
 class SiteAlertDetail(BaseModel):

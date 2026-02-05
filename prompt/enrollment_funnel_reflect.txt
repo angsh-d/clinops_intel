@@ -8,24 +8,30 @@ CRITICAL REFLECTION INSTRUCTIONS:
 - Would your conclusions surprise a clinical operations manager, or just confirm what's obvious from the KPIs?
 - Are your recommended actions things a CRO can actually execute? Do NOT recommend auditing documents that don't exist (e.g., "offline pre-screening logs"). Realistic actions include: site engagement calls, PI interviews about referral pipeline, competitive landscape reviews (ClinicalTrials.gov), referral network expansion, site rescue or closure decisions.
 
-REQUIRED - CAUSAL CHAIN EXPLANATION:
-For each finding, you MUST provide a "causal_chain_explained" array that breaks down the causal chain into plain English steps that a non-technical person can understand. Do NOT use jargon or abbreviations.
+REQUIRED - CAUSAL CHAIN EXPLANATION WITH DATA CITATIONS:
+For each finding, you MUST provide a "causal_chain_explained" array that breaks down the causal chain into plain English steps. Each step MUST include a data_source object citing the specific tool and metric that supports the claim.
 
-IMPORTANT: Always include temporal details (dates, timeframes, durations) in each step when available from the data.
+CRITICAL DATA GROUNDING RULES:
+- Each step MUST cite the tool that provided the data (e.g., "screening_funnel", "enrollment_velocity", "vendor_kpi_analysis")
+- Include the specific metric or value from the tool output
+- Include the row_count returned by the tool (use 0 if tool returned no data)
+- If a step is a logical inference, set tool to "inference" and explain what data it's derived from
+- NEVER claim data exists if the tool returned 0 rows
+- If you cannot cite a data source, DO NOT include that claim
 
-EXAMPLE 1 - With temporal context:
+EXAMPLE 1 - With data citations:
 "causal_chain_explained": [
-  {{"step": "Broad referral acceptance (Jan-Mar 2026)", "explanation": "Starting in January, the site accepted 44 patient referrals from local oncologists without pre-screening for basic eligibility criteria"}},
-  {{"step": "Screening for diagnosis (ongoing)", "explanation": "The site appears to be using the study's free biopsies and scans to diagnose patients, with 38 of 44 referrals failing on histology or ECOG criteria"}},
-  {{"step": "High screen failure (current)", "explanation": "As of today, 86% of referred patients have failed screening because they were never likely to qualify"}},
-  {{"step": "Budget overrun ($181k over plan)", "explanation": "At $4,200 per screening procedure, the 38 failed screens have cost $160k in wasted spend, pushing the site 51% over budget"}}
+  {{"step": "Broad referral acceptance (Jan-Mar 2026)", "explanation": "Starting in January, the site accepted 44 patient referrals from local oncologists without pre-screening for basic eligibility criteria", "data_source": {{"tool": "screening_funnel", "metric": "referrals=44, pre_screen_rate=0%", "row_count": 44}}}},
+  {{"step": "Screening for diagnosis (ongoing)", "explanation": "The site appears to be using the study's free biopsies and scans to diagnose patients, with 38 of 44 referrals failing on histology or ECOG criteria", "data_source": {{"tool": "screen_failure_root_cause", "metric": "failed=38, top_reasons=[histology, ECOG]", "row_count": 38}}}},
+  {{"step": "High screen failure (current)", "explanation": "As of today, 86% of referred patients have failed screening because they were never likely to qualify", "data_source": {{"tool": "inference", "metric": "derived from 38/44 = 86%", "row_count": 0}}}},
+  {{"step": "Budget overrun ($181k over plan)", "explanation": "At $4,200 per screening procedure, the 38 failed screens have cost $160k in wasted spend, pushing the site 51% over budget", "data_source": {{"tool": "site_financial_metrics", "metric": "variance_pct=51%, over_plan_amount=$181k", "row_count": 1}}}}
 ]
 
-EXAMPLE 2 - With temporal context:
+EXAMPLE 2 - With data citations:
 "causal_chain_explained": [
-  {{"step": "Kit stockout (Week 12)", "explanation": "On March 15th, the site's last 3 drug kits were used and resupply didn't arrive until April 2nd - an 18-day gap"}},
-  {{"step": "Randomization delay (Weeks 12-14)", "explanation": "During the stockout, 4 patients who passed screening on March 18, 22, 25, and 28 could not be randomized"}},
-  {{"step": "Enrollment velocity drop (current)", "explanation": "Monthly randomizations dropped from 6/month to 2/month in Q1, and 2 of the 4 delayed patients have since withdrawn"}}
+  {{"step": "Kit stockout (Week 12)", "explanation": "On March 15th, the site's last 3 drug kits were used and resupply didn't arrive until April 2nd - an 18-day gap", "data_source": {{"tool": "kit_inventory", "metric": "stockout_start=2025-03-15, resupply=2025-04-02, gap_days=18", "row_count": 3}}}},
+  {{"step": "Randomization delay (Weeks 12-14)", "explanation": "During the stockout, 4 patients who passed screening on March 18, 22, 25, and 28 could not be randomized", "data_source": {{"tool": "randomization_log", "metric": "pending_randomization=4, dates=[Mar 18,22,25,28]", "row_count": 4}}}},
+  {{"step": "Enrollment velocity drop (current)", "explanation": "Monthly randomizations dropped from 6/month to 2/month in Q1, and 2 of the 4 delayed patients have since withdrawn", "data_source": {{"tool": "enrollment_velocity", "metric": "pre_stockout=6/mo, post_stockout=2/mo, withdrawals=2", "row_count": 12}}}}
 ]
 
 ORIGINAL QUERY: {query}
@@ -43,9 +49,9 @@ Produce a JSON reflection:
       "root_cause": "Underlying cause",
       "causal_chain": "A -> B -> C",
       "causal_chain_explained": [
-        {{"step": "A", "explanation": "Plain-English explanation of what A means and why it happens"}},
-        {{"step": "B", "explanation": "Plain-English explanation of what B means and how it follows from A"}},
-        {{"step": "C", "explanation": "Plain-English explanation of the outcome C and its impact"}}
+        {{"step": "A", "explanation": "Plain-English explanation of what A means and why it happens", "data_source": {{"tool": "tool_name", "metric": "specific_value", "row_count": N}}}},
+        {{"step": "B", "explanation": "Plain-English explanation of what B means and how it follows from A", "data_source": {{"tool": "tool_name", "metric": "specific_value", "row_count": N}}}},
+        {{"step": "C", "explanation": "Plain-English explanation of the outcome C and its impact", "data_source": {{"tool": "inference or tool_name", "metric": "derived or specific_value", "row_count": N}}}}
       ],
       "funnel_stage": "volume/conversion/retention/randomization",
       "confidence": 0.0-1.0,

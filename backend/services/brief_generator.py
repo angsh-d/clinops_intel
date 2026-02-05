@@ -111,7 +111,8 @@ class SiteIntelligenceBriefGenerator:
         contributing_agents = list(agent_map.values()) if agent_map else None
 
         # Build investigation steps from findings reasoning traces
-        investigation_steps = []
+        # Keep ALL steps for validation, but truncate for display
+        all_investigation_steps = []
         seen_steps = set()  # Deduplicate steps
         for f in findings:
             if f.reasoning_trace and isinstance(f.reasoning_trace, dict):
@@ -121,22 +122,27 @@ class SiteIntelligenceBriefGenerator:
                     step_key = (step.get("tool", ""), step.get("step", "")[:50])
                     if step_key not in seen_steps:
                         seen_steps.add(step_key)
-                        investigation_steps.append({
+                        all_investigation_steps.append({
                             "icon": step.get("icon", "search"),
                             "step": step.get("step", "Analyzed data"),
                             "tool": step.get("tool"),
                             "success": step.get("success", True),
                             "row_count": step.get("row_count"),
                         })
-        # Limit to 10 most relevant steps for display
-        if investigation_steps:
-            investigation_steps = investigation_steps[:10]
+        
+        # Truncate for display, but keep all_investigation_steps for validation
+        if all_investigation_steps:
+            investigation_steps = all_investigation_steps[:10]
         else:
             investigation_steps = None
 
         # Extract key_risks from nested risk_summary structure
         risk_summary = parsed.get("risk_summary", {})
         key_risks = risk_summary.get("key_risks") if isinstance(risk_summary, dict) else None
+
+        # Data grounding validation: verify causal chain claims against ALL tool outputs (not truncated)
+        if key_risks and all_investigation_steps:
+            key_risks = self._validate_data_grounding(key_risks, all_investigation_steps)
 
         brief = SiteIntelligenceBrief(
             scan_id=scan_id,
@@ -169,6 +175,93 @@ class SiteIntelligenceBriefGenerator:
             "phantom_compliance": "Compliance & Fraud Detection",
         }
         return roles.get(agent_id, "Analysis & Investigation")
+
+    def _validate_data_grounding(
+        self, key_risks: list[dict], investigation_steps: list[dict]
+    ) -> list[dict]:
+        """Validate causal chain claims against actual tool outputs.
+        
+        Adds 'grounded' boolean to each causal chain step:
+        - True: Tool was called and returned data (row_count > 0)
+        - False: Tool wasn't called, or returned 0 rows, or is an inference
+        
+        Also adds 'grounding_issue' string when there's a mismatch.
+        """
+        # Build map of tool names to their actual results (normalized to lowercase)
+        tool_results = {}
+        for step in investigation_steps:
+            tool_name = step.get("tool")
+            if tool_name:
+                normalized_tool = tool_name.strip().lower()
+                row_count = step.get("row_count", 0) or 0
+                success = step.get("success", False)
+                # Store the best result for each tool (highest row count)
+                if normalized_tool not in tool_results or row_count > tool_results[normalized_tool]["row_count"]:
+                    tool_results[normalized_tool] = {
+                        "row_count": row_count,
+                        "success": success,
+                    }
+
+        validated_risks = []
+        for risk in key_risks:
+            causal_chain = risk.get("causal_chain_explained", [])
+            validated_chain = []
+            
+            for step in causal_chain:
+                validated_step = dict(step)
+                data_source = step.get("data_source", {})
+                
+                if isinstance(data_source, dict) and data_source:
+                    cited_tool = data_source.get("tool", "").strip().lower()
+                    cited_row_count = data_source.get("row_count") or 0
+                    
+                    # Determine grounding status
+                    if not cited_tool:
+                        # Empty tool field
+                        validated_step["grounded"] = False
+                        validated_step["grounding_type"] = "missing"
+                        validated_step["grounding_issue"] = "No tool specified in data source"
+                    elif cited_tool == "inference" or cited_tool == "derived":
+                        # Inferences are explicitly marked as such (not unverified)
+                        validated_step["grounded"] = False
+                        validated_step["grounding_type"] = "inference"
+                    elif cited_tool in tool_results:
+                        actual = tool_results[cited_tool]
+                        if actual["row_count"] > 0 and actual["success"]:
+                            validated_step["grounded"] = True
+                            validated_step["grounding_type"] = "data"
+                            # Check for significant row count mismatch (allow 20% variance)
+                            if cited_row_count > 0:
+                                variance = abs(cited_row_count - actual["row_count"]) / max(actual["row_count"], 1)
+                                if variance > 0.2:
+                                    validated_step["grounding_issue"] = (
+                                        f"Cited {cited_row_count} rows, tool returned {actual['row_count']}"
+                                    )
+                        else:
+                            validated_step["grounded"] = False
+                            validated_step["grounding_type"] = "unverified"
+                            validated_step["grounding_issue"] = (
+                                f"Tool {cited_tool} returned 0 rows but claim cites data"
+                            )
+                    else:
+                        # Tool was cited but never actually called
+                        validated_step["grounded"] = False
+                        validated_step["grounding_type"] = "unverified"
+                        validated_step["grounding_issue"] = (
+                            f"Tool '{cited_tool}' was not called during investigation"
+                        )
+                else:
+                    # No data_source provided (legacy format)
+                    validated_step["grounded"] = False
+                    validated_step["grounding_type"] = "missing"
+                    validated_step["grounding_issue"] = "No data source citation provided"
+                
+                validated_chain.append(validated_step)
+            
+            risk["causal_chain_explained"] = validated_chain
+            validated_risks.append(risk)
+        
+        return validated_risks
 
     async def generate_study_synthesis(
         self,
