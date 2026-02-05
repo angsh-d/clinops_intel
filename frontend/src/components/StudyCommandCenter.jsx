@@ -125,6 +125,11 @@ export function StudyCommandCenter() {
     return names
   }, [insights, attentionSites, sites])
 
+  // Site IDs that need attention
+  const needsAttentionSiteIds = useMemo(() => {
+    return new Set(attentionSites.map(s => s.site_id).filter(Boolean))
+  }, [attentionSites])
+
   const handleSiteClick = (site) => setSelectedSite(site)
   const handleInvestigate = (query, site = null) => setInvestigation({ question: query, site, status: 'routing' })
 
@@ -205,6 +210,7 @@ export function StudyCommandCenter() {
             onSiteHover={setHoveredSite}
             onSiteClick={handleSiteClick}
             highlightedSiteNames={highlightedSiteNames}
+            needsAttentionSiteIds={needsAttentionSiteIds}
           />
         </div>
       </div>
@@ -362,7 +368,7 @@ function SiteTableToggle({ sites, expanded, onToggle, sort, onSort, onClick }) {
 
 /* ── MapPanel ────────────────────────────────────────────────────────────── */
 
-function MapPanel({ sites, hoveredSite, onSiteHover, onSiteClick, highlightedSiteNames }) {
+function MapPanel({ sites, hoveredSite, onSiteHover, onSiteClick, highlightedSiteNames, needsAttentionSiteIds }) {
   return (
     <WorldMap
       sites={sites}
@@ -371,6 +377,7 @@ function MapPanel({ sites, hoveredSite, onSiteHover, onSiteClick, highlightedSit
       hoveredSite={hoveredSite}
       height="h-full"
       highlightedSiteNames={highlightedSiteNames}
+      needsAttentionSiteIds={needsAttentionSiteIds}
     />
   )
 }

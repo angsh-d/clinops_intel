@@ -362,6 +362,7 @@ export function CommandCenter() {
                   hoveredSite={null}
                   height="h-[320px]"
                   highlightedSiteNames={new Set(attentionItems.map(a => a.name))}
+                  needsAttentionSiteIds={new Set(attentionItems.map(a => a.id))}
                 />
               </motion.div>
             )}
