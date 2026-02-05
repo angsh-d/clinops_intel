@@ -184,26 +184,25 @@ export function SiteDossier() {
             transition={{ duration: 0.4, delay: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
             className="mb-10"
           >
-            <h2 className="section-header mb-4">Intelligence Brief</h2>
-            <div className="card-elevated p-6">
-              <p className="text-body text-apple-text leading-relaxed">
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-apple-tertiary mb-4">Intelligence Brief</h2>
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-apple-grey-100">
+              <p className="text-[15px] text-apple-text leading-relaxed font-medium">
                 {typeof latestBrief.risk_summary === 'string' 
                   ? latestBrief.risk_summary 
                   : latestBrief.risk_summary?.headline || 'No summary available'}
               </p>
               
               {latestBrief.risk_summary?.key_risks?.length > 0 && (
-                <div className="mt-4 space-y-2">
+                <div className="mt-5 space-y-3">
                   {latestBrief.risk_summary.key_risks.map((risk, i) => (
-                    <div key={i} className={`flex items-start gap-3 p-3 rounded-apple ${
-                      risk.severity === 'critical' ? 'bg-apple-critical/5' : 'bg-apple-warning/5'
+                    <div key={i} className={`flex items-start gap-3 p-4 rounded-xl border-l-[3px] ${
+                      risk.severity === 'critical' 
+                        ? 'bg-red-50/50 border-l-red-500' 
+                        : 'bg-amber-50/50 border-l-amber-500'
                     }`}>
-                      <div className={`w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0 ${
-                        risk.severity === 'critical' ? 'bg-apple-critical' : 'bg-apple-warning'
-                      }`} />
                       <div>
-                        <span className="text-caption font-medium text-apple-text">{risk.risk}</span>
-                        <p className="text-caption text-apple-secondary mt-0.5">{risk.evidence}</p>
+                        <span className="text-[13px] font-semibold text-apple-text">{risk.risk}</span>
+                        <p className="text-[12px] text-apple-secondary mt-1 leading-relaxed">{risk.evidence}</p>
                       </div>
                     </div>
                   ))}
@@ -211,12 +210,12 @@ export function SiteDossier() {
               )}
 
               {latestBrief.vendor_accountability?.cro_issues?.length > 0 && (
-                <div className="mt-5 pt-4 border-t border-apple-divider">
-                  <p className="text-caption font-medium text-apple-text mb-2">Vendor Issues</p>
-                  <ul className="space-y-1">
+                <div className="mt-6 pt-5 border-t border-apple-grey-100">
+                  <p className="text-[12px] font-semibold text-apple-text mb-3">Vendor Issues</p>
+                  <ul className="space-y-2">
                     {latestBrief.vendor_accountability.cro_issues.map((issue, i) => (
-                      <li key={i} className="text-caption text-apple-secondary flex items-start gap-2">
-                        <span className="text-apple-grey-400 mt-0.5">•</span>
+                      <li key={i} className="text-[12px] text-apple-secondary flex items-start gap-2.5">
+                        <span className="w-1 h-1 rounded-full bg-apple-grey-400 mt-2 flex-shrink-0" />
                         <span>{issue}</span>
                       </li>
                     ))}
@@ -225,15 +224,17 @@ export function SiteDossier() {
               )}
 
               {latestBrief.recommended_actions?.length > 0 && (
-                <div className="mt-5 pt-4 border-t border-apple-divider">
-                  <p className="text-caption font-medium text-apple-text mb-3">Recommended Actions</p>
-                  <div className="space-y-2">
+                <div className="mt-6 pt-5 border-t border-apple-grey-100">
+                  <p className="text-[12px] font-semibold text-apple-text mb-3">Recommended Actions</p>
+                  <div className="space-y-3">
                     {latestBrief.recommended_actions.map((a, i) => (
                       <div key={i} className="flex items-start gap-3">
-                        <span className="text-caption text-apple-tertiary font-medium w-5 flex-shrink-0">{i + 1}.</span>
-                        <div>
-                          <span className="text-caption text-apple-text">{typeof a === 'string' ? a : a.action}</span>
-                          {a.owner && <span className="text-caption text-apple-tertiary ml-2">({a.owner})</span>}
+                        <span className="w-5 h-5 rounded-full bg-apple-grey-100 text-[10px] font-semibold text-apple-tertiary flex items-center justify-center flex-shrink-0">
+                          {i + 1}
+                        </span>
+                        <div className="flex-1">
+                          <span className="text-[12px] text-apple-text">{typeof a === 'string' ? a : a.action}</span>
+                          {a.owner && <span className="text-[11px] text-apple-muted ml-2">({a.owner})</span>}
                         </div>
                       </div>
                     ))}
@@ -242,8 +243,8 @@ export function SiteDossier() {
               )}
               
               {/* Provenance */}
-              <div className="mt-5 pt-4 border-t border-apple-divider">
-                <p className="text-[11px] font-mono text-apple-muted">
+              <div className="mt-6 pt-4 border-t border-apple-grey-100">
+                <p className="text-[10px] font-mono text-apple-muted">
                   Generated by {latestBrief.agent || 'proactive_briefing_agent'} · Updated {latestBrief.created_at ? new Date(latestBrief.created_at).toLocaleString() : 'recently'}
                 </p>
               </div>
@@ -259,17 +260,17 @@ export function SiteDossier() {
             transition={{ duration: 0.4, delay: 0.15, ease: [0.25, 0.46, 0.45, 0.94] }}
             className="mb-10"
           >
-            <h2 className="section-header mb-4">Active Alerts</h2>
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-apple-tertiary mb-4">Active Alerts</h2>
             <div className="space-y-3">
               {detail.alerts.slice(0, 3).map((alert, i) => (
-                <div key={i} className="card p-4 flex items-start gap-4">
-                  <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
-                    alert.severity === 'critical' ? 'bg-apple-critical' : 
-                    alert.severity === 'warning' ? 'bg-apple-warning' : 'bg-apple-grey-400'
+                <div key={i} className="bg-white rounded-2xl p-5 shadow-sm border border-apple-grey-100 flex items-start gap-4">
+                  <div className={`w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0 ${
+                    alert.severity === 'critical' ? 'bg-red-500' : 
+                    alert.severity === 'warning' ? 'bg-amber-500' : 'bg-apple-grey-400'
                   }`} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-body text-apple-text font-medium">{alert.message}</p>
-                    <p className="text-[11px] text-apple-tertiary font-mono mt-2">
+                    <p className="text-[14px] text-apple-text font-medium leading-relaxed">{alert.message}</p>
+                    <p className="text-[11px] text-apple-muted font-mono mt-2">
                       {alert.time}
                     </p>
                   </div>
@@ -291,19 +292,26 @@ export function SiteDossier() {
 
 function MetricCard({ label, value, suffix = '', status = 'neutral', note }) {
   const statusStyles = {
-    success: 'border-l-apple-success',
-    warning: 'border-l-apple-warning', 
-    neutral: 'border-l-apple-grey-300'
+    success: 'from-emerald-500 to-emerald-400',
+    warning: 'from-amber-500 to-amber-400', 
+    neutral: 'from-apple-grey-400 to-apple-grey-300'
   }
   
   return (
-    <div className={`metric-card border-l-[3px] ${statusStyles[status]}`}>
-      <p className="metric-label mb-2">{label}</p>
-      <p className="metric-value">
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-apple-grey-100 hover:shadow-md transition-shadow duration-200">
+      <div className="flex items-start justify-between mb-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-apple-tertiary">{label}</p>
+        <div className={`w-2 h-2 rounded-full bg-gradient-to-br ${statusStyles[status]}`} />
+      </div>
+      <p className="text-[36px] font-light text-apple-text tracking-tight leading-none">
         {value}
-        {suffix && <span className="text-lg text-apple-secondary font-normal ml-0.5">{suffix}</span>}
+        {suffix && <span className="text-xl text-apple-secondary font-normal">{suffix}</span>}
       </p>
-      {note && <p className="metric-note">{note}</p>}
+      {note && (
+        <p className="text-[10px] text-apple-muted mt-3 leading-relaxed font-mono">
+          {note}
+        </p>
+      )}
     </div>
   )
 }
@@ -322,11 +330,11 @@ function SiteJourneyTimeline({ journey, excludeAlerts = false }) {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
-  const getSeverityDot = (severity) => {
+  const getSeverityStyles = (severity) => {
     switch (severity) {
-      case 'critical': return 'bg-apple-critical'
-      case 'warning': return 'bg-apple-warning'
-      case 'success': return 'bg-apple-success'
+      case 'critical': return 'bg-red-500'
+      case 'warning': return 'bg-amber-500'
+      case 'success': return 'bg-emerald-500'
       default: return 'bg-apple-grey-400'
     }
   }
@@ -348,43 +356,44 @@ function SiteJourneyTimeline({ journey, excludeAlerts = false }) {
       className="mb-10"
     >
       <div className="flex items-center justify-between mb-4">
-        <h2 className="section-header">Site Journey</h2>
-        <div className="flex items-center gap-3">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-apple-tertiary">Site Journey</h2>
+        <div className="flex items-center gap-4">
           {Object.entries(journey.event_counts || {}).slice(0, 4).map(([type, count]) => (
-            <span key={type} className="text-[11px] text-apple-tertiary">
-              {type.replace('_', ' ')}: <span className="font-medium text-apple-secondary">{count}</span>
+            <span key={type} className="text-[10px] text-apple-muted">
+              {type.replace('_', ' ')}: <span className="font-semibold text-apple-tertiary">{count}</span>
             </span>
           ))}
         </div>
       </div>
       
-      <div className="card-elevated p-6 max-h-[400px] overflow-y-auto scrollbar-minimal">
-        <div className="space-y-0">
-          {filteredEvents.slice(0, 15).map((event, i) => {
-            const Icon = getEventIcon(event.event_type)
-            return (
-              <div key={i} className="timeline-event">
-                <div className={`timeline-dot ${getSeverityDot(event.severity)}`} />
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-apple-grey-100 max-h-[420px] overflow-y-auto">
+        <div className="relative">
+          <div className="absolute left-[7px] top-3 bottom-3 w-px bg-apple-grey-200" />
+          <div className="space-y-4">
+            {filteredEvents.slice(0, 15).map((event, i) => {
+              const Icon = getEventIcon(event.event_type)
+              return (
+                <div key={i} className="relative flex items-start gap-4 pl-6">
+                  <div className={`absolute left-0 top-1.5 w-[14px] h-[14px] rounded-full border-2 border-white ${getSeverityStyles(event.severity)} shadow-sm`} />
+                  <div className="flex-1 min-w-0 py-0.5">
                     <div className="flex items-center gap-2">
                       <Icon className="w-3.5 h-3.5 text-apple-tertiary flex-shrink-0" />
-                      <p className="text-body text-apple-text font-medium truncate">{event.title}</p>
+                      <p className="text-[13px] text-apple-text font-medium">{event.title}</p>
                     </div>
                     {event.description && (
-                      <p className="text-caption text-apple-secondary mt-1 ml-5">{event.description}</p>
+                      <p className="text-[11px] text-apple-secondary mt-1 ml-5 leading-relaxed">{event.description}</p>
                     )}
                   </div>
-                  <span className="text-[11px] text-apple-muted font-mono flex-shrink-0">{formatDate(event.date)}</span>
+                  <span className="text-[10px] text-apple-muted font-mono flex-shrink-0 mt-0.5">{formatDate(event.date)}</span>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
       </div>
       
-      <p className="text-[10px] text-apple-muted font-mono mt-3 text-center">
-        Sources: {journey.data_sources?.join(', ') || 'N/A'}
+      <p className="text-[9px] text-apple-muted font-mono mt-3 text-center uppercase tracking-wider">
+        Data sources: {journey.data_sources?.join(' · ') || 'N/A'}
       </p>
     </motion.section>
   )
