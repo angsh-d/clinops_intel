@@ -82,39 +82,11 @@ class SiteIntelligenceBriefGenerator:
 
         findings_json = json.dumps(findings_by_agent, default=str)
 
-        # Build investigation steps BEFORE calling LLM so we can pass them to the prompt
-        all_investigation_steps = []
-        seen_steps = set()
-        for f in findings:
-            if f.reasoning_trace and isinstance(f.reasoning_trace, dict):
-                steps = f.reasoning_trace.get("steps", [])
-                for step in steps:
-                    step_key = (step.get("tool", ""), step.get("step", "")[:50])
-                    if step_key not in seen_steps:
-                        seen_steps.add(step_key)
-                        all_investigation_steps.append({
-                            "icon": step.get("icon", "search"),
-                            "step": step.get("step", "Analyzed data"),
-                            "tool": step.get("tool"),
-                            "success": step.get("success", True),
-                            "row_count": step.get("row_count"),
-                        })
-
-        # Format tools list for the prompt so LLM knows what tools were actually called
-        tools_for_prompt = []
-        for s in all_investigation_steps:
-            tool_name = s.get("tool", "unknown")
-            row_count = s.get("row_count", 0) or 0
-            success = "success" if s.get("success", True) else "failed"
-            tools_for_prompt.append(f"- {tool_name}: {row_count} rows ({success})")
-        investigation_tools_str = "\n".join(tools_for_prompt) if tools_for_prompt else "No tools called"
-
         prompt = prompts.render(
             "proactive_site_brief",
             site_id=site_id,
             findings_by_agent=findings_json,
             findings_count=str(len(findings)),
-            investigation_tools=investigation_tools_str,
         )
 
         response = await llm.generate_structured(
@@ -138,7 +110,27 @@ class SiteIntelligenceBriefGenerator:
                 }
         contributing_agents = list(agent_map.values()) if agent_map else None
 
-        # Truncate investigation_steps for display (all_investigation_steps already built above)
+        # Build investigation steps from findings reasoning traces
+        # Keep ALL steps for validation, but truncate for display
+        all_investigation_steps = []
+        seen_steps = set()  # Deduplicate steps
+        for f in findings:
+            if f.reasoning_trace and isinstance(f.reasoning_trace, dict):
+                steps = f.reasoning_trace.get("steps", [])
+                for step in steps:
+                    # Create a unique key to deduplicate
+                    step_key = (step.get("tool", ""), step.get("step", "")[:50])
+                    if step_key not in seen_steps:
+                        seen_steps.add(step_key)
+                        all_investigation_steps.append({
+                            "icon": step.get("icon", "search"),
+                            "step": step.get("step", "Analyzed data"),
+                            "tool": step.get("tool"),
+                            "success": step.get("success", True),
+                            "row_count": step.get("row_count"),
+                        })
+        
+        # Truncate for display, but keep all_investigation_steps for validation
         if all_investigation_steps:
             investigation_steps = all_investigation_steps[:10]
         else:
