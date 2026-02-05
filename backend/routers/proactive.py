@@ -190,6 +190,51 @@ def _brief_to_response(b: SiteIntelligenceBrief) -> SiteBriefResponse:
     )
 
 
+@router.post(
+    "/proactive/briefs/{site_id}/regenerate",
+    response_model=SiteBriefResponse,
+    summary="Regenerate brief for a site with data grounding validation",
+)
+async def regenerate_site_brief(
+    site_id: str,
+    db: Session = Depends(get_db),
+):
+    """Regenerate an intelligence brief for a specific site using latest findings.
+    
+    This applies the new data grounding validation to causal chain claims.
+    """
+    import uuid
+    from backend.models.governance import AgentFinding
+    from backend.services.brief_generator import SiteIntelligenceBriefGenerator
+    
+    findings = (
+        db.query(AgentFinding)
+        .filter(AgentFinding.site_id == site_id)
+        .order_by(AgentFinding.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    
+    if not findings:
+        raise HTTPException(status_code=404, detail=f"No findings found for site {site_id}")
+    
+    scan_id = f"regen-{uuid.uuid4().hex[:8]}"
+    
+    generator = SiteIntelligenceBriefGenerator()
+    briefs = await generator.generate_briefs(
+        scan_id=scan_id,
+        findings=findings,
+        db=db,
+    )
+    
+    if briefs:
+        brief = briefs[0]
+        logger.info(f"Regenerated brief id={brief.id} for site {site_id}")
+        return _brief_to_response(brief)
+    else:
+        raise HTTPException(status_code=500, detail="Failed to generate brief")
+
+
 # ── Directive endpoints ─────────────────────────────────────────────────────
 
 @router.get(
