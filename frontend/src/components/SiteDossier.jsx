@@ -176,12 +176,97 @@ export function SiteDossier() {
           </div>
         </motion.section>
 
-        {/* Intelligence Brief */}
+        {/* Two Column Layout: Active Alerts + Site Journey */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10"
+        >
+          {/* Active Alerts - Left Column */}
+          <div>
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-apple-tertiary mb-4">Active Signals</h2>
+            <div className="bg-white rounded-2xl shadow-sm border border-apple-grey-100 h-[360px] overflow-hidden flex flex-col">
+              {detail.alerts?.length > 0 ? (
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {detail.alerts.slice(0, 5).map((alert, i) => (
+                    <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-apple-grey-50/50">
+                      <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                        alert.severity === 'critical' ? 'bg-red-500' : 
+                        alert.severity === 'warning' ? 'bg-amber-500' : 'bg-apple-grey-400'
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] text-apple-text font-medium leading-relaxed">{alert.message}</p>
+                        <p className="text-[10px] text-apple-muted font-mono mt-1.5">{alert.time}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-apple-tertiary">
+                  <p className="text-[13px]">No active signals</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Site Journey - Right Column */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-apple-tertiary">Site Journey</h2>
+              <div className="flex items-center gap-3">
+                {journey?.event_counts && Object.entries(journey.event_counts).slice(0, 3).map(([type, count]) => (
+                  <span key={type} className="text-[9px] text-apple-muted">
+                    {type.replace('_', ' ')}: <span className="font-semibold text-apple-tertiary">{count}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl shadow-sm border border-apple-grey-100 h-[360px] overflow-hidden">
+              {journey?.events?.length > 0 ? (
+                <div className="h-full overflow-y-auto p-4">
+                  <div className="relative">
+                    <div className="absolute left-[5px] top-2 bottom-2 w-px bg-apple-grey-200" />
+                    <div className="space-y-3">
+                      {(detail.alerts?.length > 0 
+                        ? journey.events.filter(e => e.event_type !== 'alert') 
+                        : journey.events
+                      ).slice(0, 12).map((event, i) => (
+                        <div key={i} className="relative flex items-start gap-3 pl-5">
+                          <div className={`absolute left-0 top-1 w-[10px] h-[10px] rounded-full border-2 border-white shadow-sm ${
+                            event.severity === 'critical' ? 'bg-red-500' :
+                            event.severity === 'warning' ? 'bg-amber-500' :
+                            event.severity === 'success' ? 'bg-emerald-500' : 'bg-apple-grey-400'
+                          }`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[12px] text-apple-text font-medium leading-snug">{event.title}</p>
+                            {event.description && (
+                              <p className="text-[10px] text-apple-secondary mt-0.5 leading-relaxed">{event.description}</p>
+                            )}
+                          </div>
+                          <span className="text-[9px] text-apple-muted font-mono flex-shrink-0">
+                            {new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-full flex items-center justify-center text-apple-tertiary">
+                  <p className="text-[13px]">No journey events</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Intelligence Brief - Full Width Below */}
         {latestBrief && (
           <motion.section
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
+            transition={{ duration: 0.4, delay: 0.15, ease: [0.25, 0.46, 0.45, 0.94] }}
             className="mb-10"
           >
             <h2 className="text-[11px] font-semibold uppercase tracking-wider text-apple-tertiary mb-4">Intelligence Brief</h2>
@@ -193,54 +278,54 @@ export function SiteDossier() {
               </p>
               
               {latestBrief.risk_summary?.key_risks?.length > 0 && (
-                <div className="mt-5 space-y-3">
+                <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-3">
                   {latestBrief.risk_summary.key_risks.map((risk, i) => (
-                    <div key={i} className={`flex items-start gap-3 p-4 rounded-xl border-l-[3px] ${
+                    <div key={i} className={`p-4 rounded-xl border-l-[3px] ${
                       risk.severity === 'critical' 
                         ? 'bg-red-50/50 border-l-red-500' 
                         : 'bg-amber-50/50 border-l-amber-500'
                     }`}>
-                      <div>
-                        <span className="text-[13px] font-semibold text-apple-text">{risk.risk}</span>
-                        <p className="text-[12px] text-apple-secondary mt-1 leading-relaxed">{risk.evidence}</p>
-                      </div>
+                      <span className="text-[13px] font-semibold text-apple-text">{risk.risk}</span>
+                      <p className="text-[12px] text-apple-secondary mt-1 leading-relaxed">{risk.evidence}</p>
                     </div>
                   ))}
                 </div>
               )}
 
-              {latestBrief.vendor_accountability?.cro_issues?.length > 0 && (
-                <div className="mt-6 pt-5 border-t border-apple-grey-100">
-                  <p className="text-[12px] font-semibold text-apple-text mb-3">Vendor Issues</p>
-                  <ul className="space-y-2">
-                    {latestBrief.vendor_accountability.cro_issues.map((issue, i) => (
-                      <li key={i} className="text-[12px] text-apple-secondary flex items-start gap-2.5">
-                        <span className="w-1 h-1 rounded-full bg-apple-grey-400 mt-2 flex-shrink-0" />
-                        <span>{issue}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {latestBrief.recommended_actions?.length > 0 && (
-                <div className="mt-6 pt-5 border-t border-apple-grey-100">
-                  <p className="text-[12px] font-semibold text-apple-text mb-3">Recommended Actions</p>
-                  <div className="space-y-3">
-                    {latestBrief.recommended_actions.map((a, i) => (
-                      <div key={i} className="flex items-start gap-3">
-                        <span className="w-5 h-5 rounded-full bg-apple-grey-100 text-[10px] font-semibold text-apple-tertiary flex items-center justify-center flex-shrink-0">
-                          {i + 1}
-                        </span>
-                        <div className="flex-1">
-                          <span className="text-[12px] text-apple-text">{typeof a === 'string' ? a : a.action}</span>
-                          {a.owner && <span className="text-[11px] text-apple-muted ml-2">({a.owner})</span>}
-                        </div>
-                      </div>
-                    ))}
+              <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {latestBrief.vendor_accountability?.cro_issues?.length > 0 && (
+                  <div className="pt-5 border-t border-apple-grey-100 lg:border-t-0 lg:pt-0">
+                    <p className="text-[12px] font-semibold text-apple-text mb-3">Vendor Issues</p>
+                    <ul className="space-y-2">
+                      {latestBrief.vendor_accountability.cro_issues.map((issue, i) => (
+                        <li key={i} className="text-[12px] text-apple-secondary flex items-start gap-2.5">
+                          <span className="w-1 h-1 rounded-full bg-apple-grey-400 mt-2 flex-shrink-0" />
+                          <span>{issue}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                </div>
-              )}
+                )}
+
+                {latestBrief.recommended_actions?.length > 0 && (
+                  <div className="pt-5 border-t border-apple-grey-100 lg:border-t-0 lg:pt-0">
+                    <p className="text-[12px] font-semibold text-apple-text mb-3">Recommended Actions</p>
+                    <div className="space-y-2.5">
+                      {latestBrief.recommended_actions.map((a, i) => (
+                        <div key={i} className="flex items-start gap-2.5">
+                          <span className="w-5 h-5 rounded-full bg-apple-grey-100 text-[10px] font-semibold text-apple-tertiary flex items-center justify-center flex-shrink-0">
+                            {i + 1}
+                          </span>
+                          <div className="flex-1">
+                            <span className="text-[12px] text-apple-text">{typeof a === 'string' ? a : a.action}</span>
+                            {a.owner && <span className="text-[11px] text-apple-muted ml-2">({a.owner})</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               
               {/* Provenance */}
               <div className="mt-6 pt-4 border-t border-apple-grey-100">
@@ -251,37 +336,6 @@ export function SiteDossier() {
             </div>
           </motion.section>
         )}
-
-        {/* Active Alerts */}
-        {detail.alerts?.length > 0 && (
-          <motion.section
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.15, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="mb-10"
-          >
-            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-apple-tertiary mb-4">Active Alerts</h2>
-            <div className="space-y-3">
-              {detail.alerts.slice(0, 3).map((alert, i) => (
-                <div key={i} className="bg-white rounded-2xl p-5 shadow-sm border border-apple-grey-100 flex items-start gap-4">
-                  <div className={`w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0 ${
-                    alert.severity === 'critical' ? 'bg-red-500' : 
-                    alert.severity === 'warning' ? 'bg-amber-500' : 'bg-apple-grey-400'
-                  }`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[14px] text-apple-text font-medium leading-relaxed">{alert.message}</p>
-                    <p className="text-[11px] text-apple-muted font-mono mt-2">
-                      {alert.time}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.section>
-        )}
-
-        {/* Site Journey Timeline */}
-        <SiteJourneyTimeline journey={journey} excludeAlerts={detail.alerts?.length > 0} />
       </main>
 
       {/* Floating AI Assistant */}
