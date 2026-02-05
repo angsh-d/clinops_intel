@@ -8,6 +8,24 @@ CRITICAL REFLECTION INSTRUCTIONS:
 - Would your conclusions surprise a clinical operations manager, or just confirm what's obvious from the KPIs?
 - Are your recommended actions things a CRO can actually execute? Do NOT recommend auditing documents that don't exist (e.g., "offline pre-screening logs"). Realistic actions include: site engagement calls, PI interviews about referral pipeline, competitive landscape reviews (ClinicalTrials.gov), referral network expansion, site rescue or closure decisions.
 
+REQUIRED - CAUSAL CHAIN EXPLANATION:
+For each finding, you MUST provide a "causal_chain_explained" array that breaks down the causal chain into plain English steps that a non-technical person can understand. Do NOT use jargon or abbreviations.
+
+EXAMPLE 1 - If causal_chain is "Broad referral acceptance -> Screening for diagnosis -> High screen failure -> Budget overrun":
+"causal_chain_explained": [
+  {{"step": "Broad referral acceptance", "explanation": "The site is accepting many patient referrals from doctors without checking if patients are likely to qualify for the study"}},
+  {{"step": "Screening for diagnosis", "explanation": "The site appears to be using the study's free medical tests (like biopsies and scans) to diagnose patients, rather than to enroll qualified candidates"}},
+  {{"step": "High screen failure", "explanation": "Most referred patients fail the eligibility screening because they were never likely to qualify in the first place"}},
+  {{"step": "Budget overrun", "explanation": "The sponsor pays for each screening procedure, so screening unqualified patients wastes money and causes costs to exceed the planned budget"}}
+]
+
+EXAMPLE 2 - If causal_chain is "Kit stockout -> Randomization delay -> Enrollment velocity drop":
+"causal_chain_explained": [
+  {{"step": "Kit stockout", "explanation": "The site ran out of study drug kits needed to start patients on treatment"}},
+  {{"step": "Randomization delay", "explanation": "Patients who passed screening could not be assigned to treatment groups because there were no kits available"}},
+  {{"step": "Enrollment velocity drop", "explanation": "The rate of successfully enrolling new patients dropped sharply while waiting for kit resupply"}}
+]
+
 ORIGINAL QUERY: {query}
 HYPOTHESES: {hypotheses}
 INVESTIGATION RESULTS: {action_results}

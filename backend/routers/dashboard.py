@@ -946,6 +946,16 @@ def site_detail(
                         reasoning = detail.get("recommended_action")
                     
                     raw_explained = detail.get("causal_chain_explained")
+                    if not raw_explained:
+                        nested_findings = detail.get("findings", [])
+                        if nested_findings and isinstance(nested_findings, list) and len(nested_findings) > 0:
+                            first_finding = nested_findings[0] if isinstance(nested_findings[0], dict) else {}
+                            raw_explained = first_finding.get("causal_chain_explained")
+                            if not causal:
+                                causal = first_finding.get("causal_chain") or first_finding.get("root_cause")
+                                if causal:
+                                    reasoning = causal
+                    
                     if raw_explained and isinstance(raw_explained, list):
                         causal_chain_explained = [
                             CausalStepExplained(
