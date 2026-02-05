@@ -126,6 +126,9 @@ Progressive disclosure pattern for AI transparency - reasoning is hidden by defa
 **Design Principle**: All reasoning sections only display data when it actually exists in the database - no synthetic/fabricated fallbacks. Shows explicit "not available" messages when data is missing.
 
 ## Recent Changes
+- 2026-02-05: Fixed alert reasoning to show meaningful causal chains (root_cause, causal_chain) instead of technical phase names
+- 2026-02-05: Alert reasoning now extracts from finding.detail fields (causal_chain, root_cause, actual_interpretation)
+- 2026-02-05: Added confidence scores to alert display
 - 2026-02-05: Implemented full investigation step capture in PRPA agent loop
 - 2026-02-05: BaseAgent now records detailed tool invocations with icon, step description, tool name, success status, and row count
 - 2026-02-05: Brief generator aggregates investigation_steps from agent reasoning_trace.steps

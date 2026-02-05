@@ -936,23 +936,16 @@ def site_detail(
         if alert.finding_id:
             finding = db.query(AgentFinding).filter(AgentFinding.id == alert.finding_id).first()
             if finding:
-                reasoning_trace = finding.reasoning_trace or []
-                if isinstance(reasoning_trace, list) and reasoning_trace:
-                    phases = []
-                    for item in reasoning_trace:
-                        if isinstance(item, dict):
-                            phase = item.get("phase", "")
-                            summary = item.get("summary", "")
-                            if phase and summary:
-                                phases.append(f"{phase.title()}: {summary[:50]}")
-                            elif phase:
-                                phases.append(phase.title())
-                    if phases:
-                        reasoning = " → ".join(phases[:3])
-                elif isinstance(reasoning_trace, dict):
-                    phases = reasoning_trace.get("phases", [])
-                    if phases:
-                        reasoning = " → ".join(str(p) for p in phases[:3])
+                detail = finding.detail or {}
+                if isinstance(detail, dict):
+                    causal = detail.get("causal_chain") or detail.get("root_cause") or detail.get("actual_interpretation")
+                    if causal:
+                        reasoning = causal
+                    elif detail.get("recommended_action"):
+                        reasoning = detail.get("recommended_action")
+                
+                if not reasoning and finding.summary:
+                    reasoning = finding.summary
                 
                 if finding.data_signals and isinstance(finding.data_signals, dict):
                     sources = list(finding.data_signals.keys())[:2]
