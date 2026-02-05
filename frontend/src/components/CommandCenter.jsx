@@ -11,8 +11,9 @@ import { useStore } from '../lib/store'
 import { 
   getStudySummary, getAttentionSites, startInvestigation, 
   connectInvestigationStream, getQueryStatus, getDataQualityDashboard,
-  getEnrollmentDashboard
+  getEnrollmentDashboard, getSitesOverview
 } from '../lib/api'
+import { WorldMap } from './WorldMap'
 
 const QUICK_ACTIONS = [
   { label: 'Which sites need attention this week?', icon: AlertTriangle },
@@ -47,6 +48,7 @@ export function CommandCenter() {
   
   const [studySummary, setStudySummary] = useState(null)
   const [attentionItems, setAttentionItems] = useState([])
+  const [allSites, setAllSites] = useState([])
   const [kpis, setKpis] = useState(null)
   const [loading, setLoading] = useState(true)
   
@@ -69,11 +71,12 @@ export function CommandCenter() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [summary, attention, dqData, enrollData] = await Promise.all([
+        const [summary, attention, dqData, enrollData, sitesData] = await Promise.all([
           getStudySummary(),
           getAttentionSites(),
           getDataQualityDashboard().catch(() => null),
-          getEnrollmentDashboard().catch(() => null)
+          getEnrollmentDashboard().catch(() => null),
+          getSitesOverview().catch(() => null)
         ])
         
         setStudySummary(summary)
@@ -126,6 +129,18 @@ export function CommandCenter() {
           screenFailRate,
           pctOfTarget: enrollData?.study_pct_of_target || null,
         })
+
+        if (sitesData?.sites) {
+          setAllSites(sitesData.sites.map(s => ({
+            id: s.site_id,
+            site_id: s.site_id,
+            name: s.site_name || s.site_id,
+            country: s.country || 'USA',
+            city: s.city,
+            status: s.status,
+            enrollmentPercent: s.enrollment_percent || 0,
+          })))
+        }
       } catch (err) {
         console.error('Failed to load data:', err)
       } finally {
@@ -258,7 +273,7 @@ export function CommandCenter() {
   return (
     <div className="min-h-screen bg-apple-bg">
       <header className="sticky top-0 z-50 bg-apple-surface/80 backdrop-blur-xl border-b border-apple-divider">
-        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => navigate('/')}
@@ -301,7 +316,7 @@ export function CommandCenter() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-6 py-8">
         {conversationHistory.length === 0 && !isInvestigating ? (
           <div className="space-y-10">
             {kpis && (
@@ -330,6 +345,23 @@ export function CommandCenter() {
                   label="Screen Fail" 
                   value={kpis.screenFailRate !== null ? `${kpis.screenFailRate}%` : '—'}
                   trend={kpis.screenFailRate === null ? 'neutral' : kpis.screenFailRate <= 25 ? 'good' : kpis.screenFailRate <= 40 ? 'neutral' : 'warn'}
+                />
+              </motion.div>
+            )}
+
+            {allSites.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <WorldMap 
+                  sites={allSites}
+                  onSiteClick={(site) => handleSiteClick(site.site_id || site.id)}
+                  onSiteHover={() => {}}
+                  hoveredSite={null}
+                  height="h-[320px]"
+                  highlightedSiteNames={new Set(attentionItems.map(a => a.name))}
                 />
               </motion.div>
             )}
