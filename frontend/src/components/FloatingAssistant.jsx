@@ -61,7 +61,7 @@ export function FloatingAssistant({ siteName, siteId }) {
                   <Sparkles className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-apple-text">Clinical AI Assistant</h3>
+                  <h3 className="text-sm font-semibold text-apple-text">Ops Intelligence</h3>
                   <p className="text-[10px] text-apple-tertiary">Powered by multi-agent intelligence</p>
                 </div>
               </div>
@@ -113,7 +113,7 @@ export function FloatingAssistant({ siteName, siteId }) {
                 </div>
                 <h4 className="text-base font-semibold text-apple-text mb-2">How can I help?</h4>
                 <p className="text-sm text-apple-secondary max-w-[280px] mx-auto">
-                  Ask me anything about {siteName}'s clinical data, safety signals, or operational status.
+                  Ask me anything about {siteName}'s performance, data quality, or operational status.
                 </p>
               </div>
 
