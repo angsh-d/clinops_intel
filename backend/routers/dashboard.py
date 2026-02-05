@@ -561,12 +561,20 @@ def attention_sites(
 
     attention_list = []
     existing_ids = set()
-
-    # PRIORITY: Sites with validated intelligence briefs from recent scans
-    validated_brief_sites = ['SITE-108', 'SITE-031', 'SITE-012', 'SITE-119', 'SITE-010']
     site_map = {s.site_id: s for s in db.query(Site).all()}
+
+    # PRIORITY: Sites with validated intelligence briefs from recent scans (dynamic query)
+    from sqlalchemy import desc
+    recent_briefs = (
+        db.query(SiteIntelligenceBrief.site_id, func.max(SiteIntelligenceBrief.created_at).label('latest'))
+        .group_by(SiteIntelligenceBrief.site_id)
+        .order_by(desc('latest'))
+        .limit(10)
+        .all()
+    )
+    validated_brief_sites = [row.site_id for row in recent_briefs if row.site_id]
     
-    for site_id in validated_brief_sites:
+    for site_id in validated_brief_sites[:5]:  # Show top 5 validated sites
         site = site_map.get(site_id)
         if site:
             attention_list.append(AttentionSite(
