@@ -270,65 +270,90 @@ export function SiteDossier() {
             className="mb-10"
           >
             <h2 className="text-[11px] font-semibold uppercase tracking-wider text-apple-tertiary mb-4">Intelligence Brief</h2>
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-apple-grey-100">
-              <p className="text-[15px] text-apple-text leading-relaxed font-medium">
-                {typeof latestBrief.risk_summary === 'string' 
-                  ? latestBrief.risk_summary 
-                  : latestBrief.risk_summary?.headline || 'No summary available'}
-              </p>
-              
+            <div className="bg-white rounded-2xl shadow-sm border border-apple-grey-100 overflow-hidden">
+              {/* Header Summary */}
+              <div className="p-6 bg-gradient-to-b from-apple-grey-50/50 to-white border-b border-apple-grey-100">
+                <p className="text-[16px] text-apple-text leading-relaxed font-medium">
+                  {typeof latestBrief.risk_summary === 'string' 
+                    ? latestBrief.risk_summary 
+                    : latestBrief.risk_summary?.headline || 'No summary available'}
+                </p>
+              </div>
+
+              {/* Key Risks */}
               {latestBrief.risk_summary?.key_risks?.length > 0 && (
-                <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-3">
-                  {latestBrief.risk_summary.key_risks.map((risk, i) => (
-                    <div key={i} className={`p-4 rounded-xl border-l-[3px] ${
-                      risk.severity === 'critical' 
-                        ? 'bg-red-50/50 border-l-red-500' 
-                        : 'bg-amber-50/50 border-l-amber-500'
-                    }`}>
-                      <span className="text-[13px] font-semibold text-apple-text">{risk.risk}</span>
-                      <p className="text-[12px] text-apple-secondary mt-1 leading-relaxed">{risk.evidence}</p>
-                    </div>
-                  ))}
+                <div className="p-6 border-b border-apple-grey-100">
+                  <h3 className="text-[10px] font-semibold uppercase tracking-wider text-apple-muted mb-4">Key Risks</h3>
+                  <div className="space-y-3">
+                    {latestBrief.risk_summary.key_risks.map((risk, i) => (
+                      <div key={i} className={`p-4 rounded-xl ${
+                        risk.severity === 'critical' 
+                          ? 'bg-gradient-to-r from-red-50 to-red-50/30 border border-red-100' 
+                          : 'bg-gradient-to-r from-amber-50 to-amber-50/30 border border-amber-100'
+                      }`}>
+                        <div className="flex items-start gap-3">
+                          <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${
+                            risk.severity === 'critical' ? 'bg-red-500' : 'bg-amber-500'
+                          }`} />
+                          <div>
+                            <span className="text-[13px] font-semibold text-apple-text">{risk.risk}</span>
+                            <p className="text-[12px] text-apple-secondary mt-1 leading-relaxed">{risk.evidence}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {latestBrief.vendor_accountability?.cro_issues?.length > 0 && (
-                  <div className="pt-5 border-t border-apple-grey-100 lg:border-t-0 lg:pt-0">
-                    <p className="text-[12px] font-semibold text-apple-text mb-3">Vendor Issues</p>
-                    <ul className="space-y-2">
+              {/* Two Column: Vendor Issues + Recommended Actions */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-apple-grey-100">
+                {/* Vendor Issues */}
+                <div className="p-6">
+                  <h3 className="text-[10px] font-semibold uppercase tracking-wider text-apple-muted mb-4">Vendor Issues</h3>
+                  {latestBrief.vendor_accountability?.cro_issues?.length > 0 ? (
+                    <div className="space-y-3">
                       {latestBrief.vendor_accountability.cro_issues.map((issue, i) => (
-                        <li key={i} className="text-[12px] text-apple-secondary flex items-start gap-2.5">
-                          <span className="w-1 h-1 rounded-full bg-apple-grey-400 mt-2 flex-shrink-0" />
-                          <span>{issue}</span>
-                        </li>
+                        <div key={i} className="flex items-start gap-3 p-3 bg-apple-grey-50/50 rounded-lg">
+                          <AlertTriangle className="w-4 h-4 text-apple-tertiary mt-0.5 flex-shrink-0" />
+                          <span className="text-[12px] text-apple-secondary leading-relaxed">{issue}</span>
+                        </div>
                       ))}
-                    </ul>
-                  </div>
-                )}
+                    </div>
+                  ) : (
+                    <p className="text-[12px] text-apple-muted italic">No vendor issues identified</p>
+                  )}
+                </div>
 
-                {latestBrief.recommended_actions?.length > 0 && (
-                  <div className="pt-5 border-t border-apple-grey-100 lg:border-t-0 lg:pt-0">
-                    <p className="text-[12px] font-semibold text-apple-text mb-3">Recommended Actions</p>
-                    <div className="space-y-2.5">
+                {/* Recommended Actions */}
+                <div className="p-6">
+                  <h3 className="text-[10px] font-semibold uppercase tracking-wider text-apple-muted mb-4">Recommended Actions</h3>
+                  {latestBrief.recommended_actions?.length > 0 ? (
+                    <div className="space-y-3">
                       {latestBrief.recommended_actions.map((a, i) => (
-                        <div key={i} className="flex items-start gap-2.5">
-                          <span className="w-5 h-5 rounded-full bg-apple-grey-100 text-[10px] font-semibold text-apple-tertiary flex items-center justify-center flex-shrink-0">
+                        <div key={i} className="flex items-start gap-3">
+                          <span className="w-6 h-6 rounded-lg bg-apple-grey-800 text-[11px] font-semibold text-white flex items-center justify-center flex-shrink-0">
                             {i + 1}
                           </span>
-                          <div className="flex-1">
-                            <span className="text-[12px] text-apple-text">{typeof a === 'string' ? a : a.action}</span>
-                            {a.owner && <span className="text-[11px] text-apple-muted ml-2">({a.owner})</span>}
+                          <div className="flex-1 pt-0.5">
+                            <p className="text-[12px] text-apple-text leading-relaxed">{typeof a === 'string' ? a : a.action}</p>
+                            {a.owner && (
+                              <span className="inline-block mt-1.5 text-[10px] text-apple-muted bg-apple-grey-100 px-2 py-0.5 rounded-full">
+                                {a.owner}
+                              </span>
+                            )}
                           </div>
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <p className="text-[12px] text-apple-muted italic">No actions recommended</p>
+                  )}
+                </div>
               </div>
               
-              {/* Provenance */}
-              <div className="mt-6 pt-4 border-t border-apple-grey-100">
+              {/* Provenance Footer */}
+              <div className="px-6 py-3 bg-apple-grey-50/50 border-t border-apple-grey-100">
                 <p className="text-[10px] font-mono text-apple-muted">
                   Generated by {latestBrief.agent || 'proactive_briefing_agent'} · Updated {latestBrief.created_at ? new Date(latestBrief.created_at).toLocaleString() : 'recently'}
                 </p>
