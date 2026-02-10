@@ -13,11 +13,12 @@ from backend.agents.base import AgentOutput, OnStepCallback
 from backend.agents.registry import build_agent_registry
 from backend.config import SessionLocal, get_settings
 from backend.llm.failover import FailoverLLMClient
-from backend.models.governance import AgentFinding, ProactiveScan, SiteIntelligenceBrief
+from backend.models.governance import AgentFinding, AlertLog, ProactiveScan, SiteIntelligenceBrief
 from backend.prompts.manager import get_prompt_manager
 from backend.services.alert_service import AlertService
 from backend.services.brief_generator import SiteIntelligenceBriefGenerator
 from backend.services.dedup_service import FindingDeduplicator
+from backend.services.site_risk_assessor import SiteRiskAssessor
 from backend.services.directive_catalog import DirectiveCatalog
 from backend.tools.sql_tools import build_tool_registry
 from backend.tools.vector_tools import index_finding
@@ -72,6 +73,9 @@ class ProactiveScanOrchestrator:
             results, scan_id, scan_date_bucket
         )
 
+        # ── Phase 4b: Archive superseded alerts ──
+        self._archive_superseded_alerts(scan_id)
+
         # ── Phase 5: Generate briefs (short-lived DB session) ──
         brief_ids = await self._generate_briefs(scan_id, all_findings)
 
@@ -88,6 +92,16 @@ class ProactiveScanOrchestrator:
                 logger.error("Study synthesis failed for scan %s: %s", scan_id, e)
             finally:
                 synth_db.close()
+
+        # ── Phase 5c: Site risk assessments ──
+        risk_db = SessionLocal()
+        try:
+            assessor = SiteRiskAssessor()
+            await assessor.assess_all_sites(scan_id, risk_db)
+        except Exception as e:
+            logger.error("Site risk assessment failed for scan %s: %s", scan_id, e)
+        finally:
+            risk_db.close()
 
         # ── Phase 6: Final status update (short-lived DB session) ──
         self._complete_scan(scan_id, agent_results, len(all_findings), alerts_count, brief_ids)
@@ -252,6 +266,36 @@ class ProactiveScanOrchestrator:
         finally:
             db.close()
 
+    def _archive_superseded_alerts(self, current_scan_id: str) -> int:
+        """Resolve open alerts from prior scans, superseded by the current scan."""
+        db = SessionLocal()
+        try:
+            superseded = (
+                db.query(AlertLog)
+                .join(AgentFinding, AlertLog.finding_id == AgentFinding.id)
+                .filter(
+                    AlertLog.status == "open",
+                    AgentFinding.scan_id != current_scan_id,
+                )
+                .all()
+            )
+            for alert in superseded:
+                alert.status = "resolved"
+            db.commit()
+            count = len(superseded)
+            if count:
+                logger.info(
+                    "Scan %s: archived %d superseded alerts from prior scans",
+                    current_scan_id, count,
+                )
+            return count
+        except Exception as e:
+            db.rollback()
+            logger.error("Failed to archive superseded alerts: %s", e)
+            return 0
+        finally:
+            db.close()
+
     def _mark_scan_failed(self, scan_id: str, error: Exception) -> None:
         """Mark scan as failed with error detail."""
         db = SessionLocal()
@@ -302,6 +346,7 @@ class ProactiveScanOrchestrator:
         agent_db = SessionLocal()
         try:
             llm = FailoverLLMClient(settings)
+            fast_llm = FailoverLLMClient(settings, model_name=settings.fast_llm) if settings.fast_llm else llm
             prompts = get_prompt_manager()
             tools = build_tool_registry()
 
@@ -310,6 +355,7 @@ class ProactiveScanOrchestrator:
                 tool_registry=tools,
                 prompt_manager=prompts,
                 db_session=agent_db,
+                fast_llm_client=fast_llm,
             )
 
             logger.info("Scan %s: running %s with directive %s", scan_id, agent_id, directive_id)

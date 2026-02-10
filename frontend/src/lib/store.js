@@ -70,7 +70,10 @@ export const useStore = create((set, get) => ({
   setSiteNameMap: (map) => set({ siteNameMap: map }),
 
   alerts: [],
-  setAlerts: (alerts) => set({ alerts })
+  setAlerts: (alerts) => set({ alerts }),
+
+  assistantPanelWidth: 440,
+  setAssistantPanelWidth: (w) => set({ assistantPanelWidth: w }),
 }))
 
 if (typeof window !== 'undefined') {

@@ -1,8 +1,19 @@
-Identify budget overruns, cost-per-patient anomalies, and burn rate projection risks. Investigate:
+OBJECTIVE: Identify financial risks that could impact study completion — budget overruns, unsustainable burn rates, delay-driven cost escalation, and misalignment between operational performance and financial commitments.
 
-1. Which budget categories show variance exceeding 10% from plan, and what is driving the overrun?
-2. What is the current cost-per-patient compared to budget, and which sites have the highest cost-per-patient?
-3. At the current burn rate, when will the budget be exhausted relative to the planned study timeline?
-4. Are there change orders or scope changes that are driving unplanned costs?
+PRIORITY INVESTIGATION AREAS:
 
-Focus on identifying financial risks that could impact study completion and whether corrective financial actions are needed.
+1. BUDGET VARIANCE ANALYSIS: Which budget categories show variance from plan? Decompose by category, country, and vendor to isolate the root cause. Distinguish between timing variances (spend is ahead of schedule but total will be on budget) and true overruns (total projected spend exceeds budget). Forecast overruns are more actionable than historical ones.
+
+2. COST-PER-PATIENT EFFICIENCY: What is the actual cost-per-patient versus budgeted, and which sites have the highest cost-per-patient? Cross-reference with enrollment velocity — sites with high cost-per-patient AND low enrollment velocity represent compounding inefficiency. These are the sites where closure saves the most money per patient redistributed.
+
+3. BURN RATE & RUNWAY: At the current monthly burn rate, when will the budget be exhausted relative to the planned study completion? If the projected budget exhaustion date is before the projected enrollment completion date, the study faces a funding gap. Quantify the gap in both dollars and months.
+
+4. CHANGE ORDER IMPACT: What is the cumulative financial impact of all approved and pending change orders? Are change orders concentrated in specific categories (regulatory amendments, protocol modifications, site additions) or distributed? Cumulative scope creep through individually small change orders is often invisible until it becomes material.
+
+5. DELAY COST QUANTIFICATION: What is the dollar cost of operational delays — enrollment delays extending the study timeline, site activation delays pushing out first-patient-in, and monitoring visit gaps requiring catch-up visits? This translates operational underperformance into financial terms that support business decisions.
+
+6. PAYMENT MILESTONE & CASH FLOW: Are there payment milestones approaching that are at risk due to unmet deliverables? What is the projected cash flow profile over the next quarter — are there periods where committed payments exceed available budget? Identify any vendor invoices or site payments that are creating cash flow concentration risk.
+
+CROSS-DOMAIN SIGNALS: Flag for site_rescue agent if cost-per-patient analysis identifies specific sites where closure would materially improve the study's financial trajectory. Flag for vendor_performance agent if vendor-related costs (milestone payments, change orders) are driving budget overruns. Flag for enrollment_funnel agent if enrollment delay costs are the dominant driver of budget risk — this supports the business case for enrollment acceleration investment.
+
+DEFENSIBILITY: All financial findings must cite specific dollar amounts, budget line items, and variance percentages. Projections must state their assumptions (e.g., "at current burn rate" or "assuming enrollment acceleration of X"). Distinguish between committed costs (contractually obligated) and discretionary costs (can be reduced through operational decisions).

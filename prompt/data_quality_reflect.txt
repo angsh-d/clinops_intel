@@ -8,6 +8,17 @@ CRITICAL REFLECTION INSTRUCTIONS:
 - Would a clinical operations expert find your conclusions insightful, or merely obvious?
 - Are your recommended actions things a CRO can actually execute? Do NOT recommend auditing documents that don't exist in standard clinical operations (e.g., "offline pre-screening logs"). Stick to realistic actions: site engagement calls, source data verification, CAPAs, query resolution campaigns, competitive landscape reviews.
 
+REQUIRED - CAUSAL CHAIN EXPLANATION WITH DATA CITATIONS:
+For each finding, you MUST provide a "causal_chain_explained" array that breaks down the causal chain into plain English steps. Each step MUST include a data_source object citing the specific tool and metric that supports the claim.
+
+CRITICAL DATA GROUNDING RULES:
+- Each step MUST cite the tool that provided the data (e.g., "entry_lag_analysis", "query_burden", "monitoring_visit_report")
+- Include the specific metric or value from the tool output
+- Include the row_count returned by the tool (use 0 if tool returned no data)
+- If a step is a logical inference, set tool to "inference" and explain what data it's derived from
+- NEVER claim data exists if the tool returned 0 rows
+- If you cannot cite a data source, DO NOT include that claim
+
 ORIGINAL QUERY: {query}
 HYPOTHESES: {hypotheses}
 INVESTIGATION RESULTS: {action_results}
@@ -22,15 +33,21 @@ Produce a JSON reflection:
       "finding": "Clear finding statement",
       "root_cause": "Underlying cause identified",
       "causal_chain": "A -> B -> C",
+      "causal_chain_explained": [
+        {{"step": "A", "explanation": "Plain-English explanation", "data_source": {{"tool": "tool_name", "metric": "specific_value", "row_count": N}}}},
+        {{"step": "B", "explanation": "Plain-English explanation", "data_source": {{"tool": "tool_name", "metric": "specific_value", "row_count": N}}}},
+        {{"step": "C", "explanation": "Plain-English explanation of impact", "data_source": {{"tool": "inference or tool_name", "metric": "derived or specific_value", "row_count": N}}}}
+      ],
       "confidence": 0.0-1.0,
       "evidence_quality": "strong/moderate/weak",
       "contradicts_naive_interpretation": true/false,
       "naive_interpretation": "What a surface-level analysis would conclude",
-      "actual_interpretation": "What the evidence actually shows"
+      "actual_interpretation": "What the evidence actually shows",
+      "recommended_action": "Specific operational recommendation"
     }}
   ],
   "remaining_gaps": ["What we still don't know"],
-  "cross_domain_followup": ["Questions for other agents"],
+  "cross_domain_followup": [{{"question": "What to investigate", "target_agent": "agent_id"}}],
   "overall_severity": "critical/high/medium/low (based on the impact and confidence of findings)",
   "should_iterate": true/false,
   "iteration_focus": "What the next iteration should investigate (if should_iterate=true)"

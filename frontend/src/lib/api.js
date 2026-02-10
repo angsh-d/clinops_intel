@@ -133,6 +133,14 @@ export async function getKpiMetrics() {
   return cachedFetch('/dashboard/kpi-metrics')
 }
 
+export async function getIssueCategories() {
+  return cachedFetch('/dashboard/issue-categories')
+}
+
+export async function getIssueCategoryDetail(index) {
+  return cachedFetch(`/dashboard/issue-category-detail?index=${index}`)
+}
+
 // ── Vendor endpoints ──────────────────────────────────────────────────────
 
 export async function getVendorScorecards() {
@@ -167,6 +175,16 @@ export async function getFinancialByVendor() {
 
 export async function getCostPerPatient() {
   return cachedFetch('/dashboard/cost-per-patient')
+}
+
+// ── MVR endpoints ────────────────────────────────────────────────────────
+
+export async function getMVRList(siteId) {
+  return cachedFetch(`/dashboard/mvr-list${siteId ? `?site_id=${siteId}` : ''}`)
+}
+
+export function getMVRPdfUrl(pdfFilename) {
+  return `/api/dashboard/mvr-pdf/${pdfFilename}`
 }
 
 // ── Alert endpoints ──────────────────────────────────────────────────────

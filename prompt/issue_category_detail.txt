@@ -1,0 +1,37 @@
+You are a clinical operations analyst examining a specific issue category affecting multiple clinical trial sites.
+
+## Issue Category
+- Theme: {theme}
+- Severity: {severity}
+- Description: {description}
+- Key Drivers: {key_drivers}
+
+## Per-Site Risk Data
+{site_data}
+
+## Task
+Analyze the cross-site pattern for this issue category and produce a JSON response with:
+
+1. **root_cause_analysis**: A 2-3 sentence synthesis explaining why this issue is occurring across these sites. Identify common underlying factors, not just symptoms.
+
+2. **cross_site_patterns**: Array of patterns observed across sites. Each pattern:
+   - "pattern": Description of the pattern
+   - "sites": Array of affected site IDs
+   - "severity": "critical" or "warning"
+
+3. **prioritized_actions**: Array of recommended actions ordered by impact. Each action:
+   - "action": Specific, actionable recommendation
+   - "target_sites": Array of site IDs this action applies to
+   - "priority": "immediate", "short_term", or "medium_term"
+   - "rationale": Why this action matters and expected impact
+
+Return ONLY valid JSON in this exact structure:
+{{
+  "root_cause_analysis": "...",
+  "cross_site_patterns": [
+    {{"pattern": "...", "sites": ["SITE-XXX"], "severity": "critical"}}
+  ],
+  "prioritized_actions": [
+    {{"action": "...", "target_sites": ["SITE-XXX"], "priority": "immediate", "rationale": "..."}}
+  ]
+}}

@@ -38,7 +38,7 @@ async def websocket_query(websocket: WebSocket, query_id: str):
             await websocket.close()
             return
 
-        # If already completed, stream cached results instead of re-executing
+        # If already completed, simulate investigation phases then stream cached results
         if interaction.status == "completed":
             cached = _query_results.get(query_id)
             if cached:
@@ -50,6 +50,24 @@ async def websocket_query(websocket: WebSocket, query_id: str):
                 synthesis = interaction.synthesis_data or {"executive_summary": interaction.synthesized_response or ""}
                 agent_outputs = interaction.agent_responses or {}
                 routing = {}
+
+            # Simulate real-time phase progression (6-8s total)
+            simulated_phases = [
+                ("routing", "conductor", 1.0),
+                ("perceive", list(agent_outputs.keys())[0] if agent_outputs else "data_quality", 1.5),
+                ("reason", list(agent_outputs.keys())[0] if agent_outputs else "data_quality", 1.5),
+                ("act", list(agent_outputs.keys())[0] if agent_outputs else "data_quality", 1.5),
+                ("synthesize", "conductor", 1.5),
+            ]
+            for phase, agent_id, delay in simulated_phases:
+                await websocket.send_json({
+                    "phase": phase,
+                    "agent_id": agent_id,
+                    "query_id": query_id,
+                    "data": {},
+                })
+                await asyncio.sleep(delay)
+
             await websocket.send_json({
                 "phase": "complete",
                 "query_id": query_id,
@@ -77,13 +95,14 @@ async def websocket_query(websocket: WebSocket, query_id: str):
         question = interaction.user_query
         session_id = interaction.session_id
 
-        # Build conductor
+        # Build conductor with tiered models (fast for routing/plan/reflect, full for reason/synthesize)
         settings = get_settings()
         llm = CachedLLMClient(FailoverLLMClient(settings))
+        fast_llm = CachedLLMClient(FailoverLLMClient(settings, model_name=settings.fast_llm)) if settings.fast_llm else llm
         prompts = get_prompt_manager()
         agents = build_agent_registry()
         tools = build_tool_registry()
-        conductor = ConductorRouter(llm, prompts, agents, tools)
+        conductor = ConductorRouter(llm, prompts, agents, tools, fast_llm_client=fast_llm)
 
         # on_step callback streams phases to WebSocket (errors swallowed by BaseAgent)
         async def on_step(phase: str, agent_id: str, data: dict):

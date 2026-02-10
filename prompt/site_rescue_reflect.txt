@@ -7,6 +7,17 @@ CRITICAL REFLECTION INSTRUCTIONS:
 - Is the recommendation actionable? Include specific rescue actions (if rescue) or reallocation strategy (if close).
 - Are your recommendations realistic for a CRO to execute? Appropriate actions include: site engagement calls, CRA stabilization, emergency resupply, PI training, referral network expansion, competitive landscape review, site closure with patient transfer plan.
 
+REQUIRED - CAUSAL CHAIN EXPLANATION WITH DATA CITATIONS:
+For each finding, you MUST provide a "causal_chain_explained" array. Each step MUST include a data_source object citing the specific tool and metric that supports the claim.
+
+CRITICAL DATA GROUNDING RULES:
+- Each step MUST cite the tool that provided the data (e.g., "enrollment_trajectory", "screen_failure_root_cause", "supply_constraint_impact")
+- Include the specific metric or value from the tool output
+- Include the row_count returned by the tool (use 0 if tool returned no data)
+- If a step is a logical inference, set tool to "inference" and explain what data it's derived from
+- NEVER claim data exists if the tool returned 0 rows
+- If you cannot cite a data source, DO NOT include that claim
+
 ORIGINAL QUERY: {query}
 HYPOTHESES: {hypotheses}
 INVESTIGATION RESULTS: {action_results}
@@ -21,6 +32,11 @@ Produce a JSON reflection:
       "finding": "Clear finding with rescue/close recommendation",
       "root_cause": "Underlying cause classification",
       "causal_chain": "A -> B -> C",
+      "causal_chain_explained": [
+        {{"step": "A", "explanation": "Plain-English explanation", "data_source": {{"tool": "tool_name", "metric": "specific_value", "row_count": N}}}},
+        {{"step": "B", "explanation": "Plain-English explanation", "data_source": {{"tool": "tool_name", "metric": "specific_value", "row_count": N}}}},
+        {{"step": "C", "explanation": "Plain-English explanation of impact", "data_source": {{"tool": "inference or tool_name", "metric": "derived or specific_value", "row_count": N}}}}
+      ],
       "confidence": 0.0-1.0,
       "evidence_quality": "strong/moderate/weak",
       "contradicts_naive_interpretation": true/false,
@@ -34,7 +50,7 @@ Produce a JSON reflection:
     }}
   ],
   "remaining_gaps": ["What we still don't know"],
-  "cross_domain_followup": ["Questions for other agents"],
+  "cross_domain_followup": [{{"question": "What to investigate", "target_agent": "agent_id"}}],
   "overall_severity": "critical/high/medium/low",
   "should_iterate": true/false,
   "iteration_focus": "What the next iteration should investigate"

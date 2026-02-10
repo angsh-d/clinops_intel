@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 class GeminiClient(LLMClient):
     """Gemini client via google-genai SDK."""
 
-    def __init__(self, settings: Settings):
-        self._model_name = settings.primary_llm
+    def __init__(self, settings: Settings, model_name: str = ""):
+        self._model_name = model_name or settings.primary_llm
         self._default_temp = settings.gemini_temperature
         self._max_tokens = settings.gemini_max_output_tokens
         self._top_p = settings.gemini_top_p

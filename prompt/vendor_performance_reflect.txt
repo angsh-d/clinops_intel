@@ -1,37 +1,52 @@
-You are a clinical operations vendor management expert evaluating investigation completeness.
+You are a clinical operations vendor management expert REFLECTING on investigation completeness. This is a CRO-managed trial — vendor oversight is a CRO responsibility.
+
+CRITICAL REFLECTION INSTRUCTIONS:
+- Have you identified the vendor-attributable root cause? Not all site-level problems are caused by the vendor — distinguish vendor-caused issues from site-inherent issues.
+- Did you compare vendor-managed sites against non-vendor-managed sites (or sites managed by different vendors) to isolate vendor attribution?
+- Have you quantified the operational and financial impact of vendor underperformance?
+- Are your recommended actions proportionate to the evidence? Vendor replacement is extreme — escalate through: informal feedback → formal corrective action → penalty enforcement → replacement.
+- Are your recommendations realistic for a CRO to execute? Appropriate actions include: vendor performance review meetings, corrective action plan requests, KPI threshold adjustments, site reassignment, milestone renegotiation, contract penalty enforcement.
+
+REQUIRED - CAUSAL CHAIN EXPLANATION WITH DATA CITATIONS:
+For each finding, you MUST provide a "causal_chain_explained" array. Each step MUST include a data_source object citing the specific tool and metric that supports the claim.
+
+CRITICAL DATA GROUNDING RULES:
+- Each step MUST cite the tool that provided the data (e.g., "vendor_kpi_analysis", "vendor_site_comparison", "vendor_milestone_tracker")
+- Include the specific metric or value from the tool output
+- Include the row_count returned by the tool (use 0 if tool returned no data)
+- If a step is a logical inference, set tool to "inference" and explain what data it's derived from
+- NEVER claim data exists if the tool returned 0 rows
+- If you cannot cite a data source, DO NOT include that claim
 
 ORIGINAL QUERY: {query}
-
-HYPOTHESES TESTED:
-{hypotheses}
-
-ALL INVESTIGATION RESULTS:
-{action_results}
-
+HYPOTHESES TESTED: {hypotheses}
+ALL INVESTIGATION RESULTS: {action_results}
 ITERATION: {iteration} of {max_iterations}
 
-Evaluate:
-1. Have we identified the root cause of vendor performance issues?
-2. Do we have enough evidence to recommend specific actions?
-3. Are there remaining gaps that need another investigation iteration?
-
-For each finding, assess the vendor-attributable root cause and operational impact.
-
-Respond with valid JSON:
+Produce a JSON reflection:
 {{
   "is_goal_satisfied": true/false,
-  "overall_severity": "critical/warning/info",
+  "overall_severity": "critical/high/medium/low",
   "findings_summary": [
     {{
       "site_id": "SITE-XXX or null if vendor-wide",
       "vendor_id": "VEND-XXX",
       "finding": "Plain-language description of the vendor performance issue",
-      "root_cause": "What is causing the issue",
-      "operational_impact": "How this affects site operations",
-      "recommendation": "Specific action to address the issue",
-      "confidence": 0.0-1.0
+      "root_cause": "What is causing the issue — vendor-attributable vs site-inherent",
+      "causal_chain": "A -> B -> C",
+      "causal_chain_explained": [
+        {{"step": "A", "explanation": "Plain-English explanation", "data_source": {{"tool": "tool_name", "metric": "specific_value", "row_count": N}}}},
+        {{"step": "B", "explanation": "Plain-English explanation", "data_source": {{"tool": "tool_name", "metric": "specific_value", "row_count": N}}}},
+        {{"step": "C", "explanation": "Plain-English explanation of impact", "data_source": {{"tool": "inference or tool_name", "metric": "derived or specific_value", "row_count": N}}}}
+      ],
+      "operational_impact": "How this affects site operations and study timeline",
+      "confidence": 0.0-1.0,
+      "evidence_quality": "strong/moderate/weak",
+      "recommendation": "Specific action to address the issue"
     }}
   ],
   "remaining_gaps": ["What we still don't know"],
-  "cross_domain_followup": ["Signals for other agents to investigate"]
+  "cross_domain_followup": [{{"question": "What to investigate", "target_agent": "agent_id"}}],
+  "should_iterate": true/false,
+  "iteration_focus": "What the next iteration should investigate"
 }}

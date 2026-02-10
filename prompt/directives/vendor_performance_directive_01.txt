@@ -1,8 +1,19 @@
-Detect vendor performance trends showing KPI degradation, milestone slippage, or unresolved issues. Investigate:
+OBJECTIVE: Assess vendor operational performance, quantify impact on study timelines and quality, and identify vendors requiring corrective action, escalation, or replacement.
 
-1. Which vendors have KPI scores trending downward over the last 3 months?
-2. Are there vendors with overdue milestones or repeated milestone extensions?
-3. Which vendors have the highest volume of unresolved issue logs, and are resolution times increasing?
-4. Is there a correlation between vendor underperformance and site-level data quality or enrollment issues?
+PRIORITY INVESTIGATION AREAS:
 
-Focus on identifying vendor-attributable root causes for operational problems and whether corrective action plans are needed.
+1. KPI TREND ANALYSIS: Which vendors show KPI scores trending downward? Decompose by KPI category (quality, timeliness, compliance) to identify the specific dimension of deterioration. Compare each vendor's current KPI performance against their contractual thresholds — vendors approaching or breaching threshold boundaries require proactive intervention before formal breach.
+
+2. MILESTONE DELIVERY: Which vendors have overdue milestones or a pattern of repeated milestone extensions? Analyze the gap between planned and actual completion dates — is the delay pattern consistent (systematic capacity issue) or sporadic (isolated incidents)? Identify milestones currently at risk based on remaining timeline and vendor's historical delivery rate.
+
+3. ISSUE RESOLUTION EFFECTIVENESS: Which vendors have the highest volume of unresolved issues, and are resolution times trending upward? Analyze the severity distribution — vendors with accumulating critical or high-severity unresolved issues pose greater risk than those with many low-severity items. Chronic issue accumulation indicates either insufficient vendor capacity or inadequate corrective action.
+
+4. SITE-LEVEL OPERATIONAL IMPACT: Compare operational metrics (enrollment velocity, entry lag, query burden, monitoring compliance) at sites managed by each vendor. Are there vendors whose assigned sites systematically underperform relative to sites managed by other vendors? This comparison isolates the vendor-attributable contribution to site performance from site-inherent factors.
+
+5. FINANCIAL IMPACT OF VENDOR DELAYS: What is the dollar cost of vendor-attributable delays — milestone slippage, enrollment delays at vendor-managed sites, data quality rework? Cross-reference with payment milestones to assess whether the sponsor is paying for performance that hasn't been delivered.
+
+6. CORRECTIVE ACTION TRACKING: For vendors with existing corrective action plans (CAPAs), are the actions being implemented on schedule? Are KPIs improving after corrective action, or is the vendor showing non-responsiveness to intervention?
+
+CROSS-DOMAIN SIGNALS: Flag for financial_intelligence agent if vendor delays are projected to cause budget overruns or timeline extensions. Flag for data_quality agent if vendor-managed monitoring activities show declining quality (finding rates, visit frequency, action item follow-through). Flag for site_rescue agent if vendor underperformance is contributing to site-level operational failure.
+
+DEFENSIBILITY: Cite specific KPI values, milestone dates, and issue counts for every vendor finding. Present trend data (not just point-in-time snapshots) to demonstrate trajectory. For vendor comparison findings, use controlled comparisons that account for site-level confounders (site experience level, enrollment volume, country).

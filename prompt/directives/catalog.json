@@ -4,7 +4,7 @@
       "directive_id": "data_quality_directive_01",
       "agent_id": "data_quality",
       "name": "Data Quality Debt Detection",
-      "description": "Identify sites with worsening entry lag trends, high query burden, or monitoring gaps.",
+      "description": "Identify sites accumulating data quality debt — entry lag, query lifecycle, monitoring gaps, visit compliance failures, overdue actions, KRI deterioration, and cross-domain consistency issues threatening database lock readiness.",
       "prompt_file": "data_quality_directive_01.txt",
       "enabled": true,
       "priority": "high"
@@ -13,7 +13,7 @@
       "directive_id": "enrollment_funnel_directive_01",
       "agent_id": "enrollment_funnel",
       "name": "Enrollment Pipeline Health",
-      "description": "Detect enrollment velocity drops, screen failure spikes, and consent withdrawal patterns.",
+      "description": "Detect enrollment pipeline failures — velocity declines, funnel bottlenecks by failure reason, consent withdrawals, supply chain risks, randomization delays, regional disparities, and arm balance issues threatening study timeline.",
       "prompt_file": "enrollment_funnel_directive_01.txt",
       "enabled": true,
       "priority": "high"
@@ -22,7 +22,7 @@
       "directive_id": "clinical_trials_gov_directive_01",
       "agent_id": "clinical_trials_gov",
       "name": "Competitive Landscape Shifts",
-      "description": "Monitor for new competing trials, enrollment target changes, or status changes in the competitive landscape.",
+      "description": "Monitor competitive trial landscape — new entries, status changes, geographic overlap with underperforming sites, regulatory signals, and protocol design comparisons affecting enrollment feasibility.",
       "prompt_file": "clinical_trials_gov_directive_01.txt",
       "enabled": true,
       "priority": "medium"
@@ -31,7 +31,7 @@
       "directive_id": "phantom_compliance_directive_01",
       "agent_id": "phantom_compliance",
       "name": "Data Integrity Surveillance",
-      "description": "Flag sites showing suspiciously low variance or patterns suggesting fabrication or rubber-stamping.",
+      "description": "Centralized statistical monitoring — detect variance suppression, CRA rubber-stamping, temporal pattern anomalies, query lifecycle manipulation, narrative fabrication, correction provenance paradoxes, and cross-domain consistency red flags.",
       "prompt_file": "phantom_compliance_directive_01.txt",
       "enabled": true,
       "priority": "high"
@@ -40,7 +40,7 @@
       "directive_id": "site_rescue_directive_01",
       "agent_id": "site_rescue",
       "name": "At-Risk Site Identification",
-      "description": "Identify sites with declining enrollment trajectory that may need rescue intervention or closure.",
+      "description": "Identify sites requiring rescue or closure — enrollment trajectory viability, multi-domain deterioration, root cause differentiation, supply chain contribution, regional benchmarking, and KRI escalation with rescue-vs-closure recommendation framework.",
       "prompt_file": "site_rescue_directive_01.txt",
       "enabled": true,
       "priority": "high"
@@ -49,7 +49,7 @@
       "directive_id": "vendor_performance_directive_01",
       "agent_id": "vendor_performance",
       "name": "Vendor KPI Degradation",
-      "description": "Detect vendor performance trends showing KPI degradation, milestone slippage, or unresolved issues.",
+      "description": "Assess vendor operational performance — KPI trend analysis, milestone delivery, issue resolution effectiveness, site-level operational impact, financial cost of vendor delays, and corrective action tracking.",
       "prompt_file": "vendor_performance_directive_01.txt",
       "enabled": true,
       "priority": "medium"
@@ -58,10 +58,19 @@
       "directive_id": "financial_intelligence_directive_01",
       "agent_id": "financial_intelligence",
       "name": "Budget Variance & Burn Rate",
-      "description": "Identify budget overruns, cost-per-patient anomalies, and burn rate projection risks.",
+      "description": "Identify financial risks — budget variance by category/country/vendor, cost-per-patient efficiency, burn rate runway projection, change order scope creep, delay cost quantification, and payment milestone cash flow risks.",
       "prompt_file": "financial_intelligence_directive_01.txt",
       "enabled": true,
       "priority": "medium"
+    },
+    {
+      "directive_id": "mvr_analysis_directive_01",
+      "agent_id": "mvr_analysis",
+      "name": "MVR Pattern Intelligence",
+      "description": "Analyze MVR narratives for cross-visit recurrence (zombie findings), CRA behavioral patterns (rubber-stamping, quality gaps), PI engagement decline, hidden compliance risks, post-gap monitoring debt, data integrity red flags, and temporal anomalies.",
+      "prompt_file": "mvr_analysis_directive_01.txt",
+      "enabled": true,
+      "priority": "high"
     }
   ]
 }

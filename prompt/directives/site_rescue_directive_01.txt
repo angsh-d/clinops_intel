@@ -1,8 +1,26 @@
-Identify sites with declining enrollment trajectory that may need rescue intervention or closure decision. Investigate:
+OBJECTIVE: Identify sites requiring rescue intervention or closure decision by assessing enrollment viability, operational health, and the cost-benefit of continued investment versus patient redistribution.
 
-1. Which sites have enrolled zero patients in the last 60 days despite being active?
-2. Which sites are below 50% of their enrollment target with less than 6 months remaining?
-3. Are there sites showing concurrent deterioration in both enrollment and data quality — suggesting operational breakdown?
-4. For underperforming sites, what is the root cause: referral pipeline exhaustion, competitive pressure, PI disengagement, or operational constraints?
+PRIORITY INVESTIGATION AREAS:
 
-For each at-risk site, assess whether rescue intervention or closure is the better operational decision based on available evidence.
+1. ENROLLMENT TRAJECTORY ANALYSIS: Which sites have stalled enrollment (zero patients in a prolonged period despite being active)? For stalled sites, analyze the trajectory slope — is this a sudden stop (event-driven, potentially recoverable) or a gradual decline to zero (structural, likely unrecoverable)? Project each site's realistic completion date at current velocity.
+
+2. TARGET GAP VIABILITY: Which sites have an enrollment gap that is mathematically unachievable given their historical velocity and remaining study timeline? Calculate the required acceleration factor — sites needing >3x their historical best weekly rate are effectively non-viable without extraordinary intervention.
+
+3. MULTI-DOMAIN DETERIORATION: Are there sites showing concurrent decline across enrollment, data quality, and monitoring compliance? Simultaneous deterioration across independent operational dimensions is the strongest signal of systemic site-level breakdown (typically PI disengagement or key staff departure). Cross-reference enrollment velocity trends with entry lag trends, query response times, and monitoring visit findings.
+
+4. ROOT CAUSE DIFFERENTIATION: For each underperforming site, diagnose the primary barrier: (a) referral pipeline exhaustion — screen failure reasons indicate wrong patient population reaching the site, (b) competitive pressure — competing trials at the same location siphoning patients, (c) protocol burden — disproportionately high screen failure on specific eligibility criteria vs. other sites, (d) operational constraints — staff turnover, CRA oversight gaps, or supply chain issues.
+
+5. SUPPLY CHAIN CONTRIBUTION: Have supply constraints contributed to enrollment stalls? Analyze randomization delay events — sites with repeated kit-related delays or stockout episodes may have viable patient flow but logistics bottlenecks. These sites are rescue candidates if the supply chain can be fixed.
+
+6. REGIONAL CONTEXT: How do underperforming sites compare against peers in the same country or region? Sites performing significantly worse than regional peers have site-specific issues amenable to targeted intervention. Sites performing in line with struggling regional peers suggest market-level barriers requiring strategic (not site-level) response.
+
+7. RISK INDICATOR ESCALATION: What is the KRI trajectory for at-risk sites? Sites with KRIs that have been chronically Red (multiple consecutive snapshots) have persistent structural problems. Sites with recently escalating KRIs (Green → Amber → Red) may still respond to intervention if caught early.
+
+RESCUE vs. CLOSURE FRAMEWORK: For each at-risk site, provide a clear recommendation:
+- RESCUE if: root cause is identifiable and remediable, regional enrollment need justifies continued investment, site has demonstrated past capability, and the enrollment gap is bridgeable.
+- CLOSURE if: multiple domains are simultaneously failing, the enrollment gap is unrecoverable, cost-per-patient is significantly above study average, or data integrity concerns make continued enrollment risky.
+- For closure recommendations, note patient transfer implications — enrolled patients at a closing site need continuity of care and data integrity through transition.
+
+CROSS-DOMAIN SIGNALS: Flag for financial_intelligence agent the cost-per-patient at sites recommended for closure (supports budget reallocation case). Flag for vendor_performance agent if underperformance correlates with vendor-managed activities at the site.
+
+DEFENSIBILITY: Every rescue/closure recommendation must include the quantitative evidence basis (velocity trend, gap-to-target, KRI trajectory, cost-per-patient) and the specific root cause diagnosis. Document what remediation was considered and why it was deemed sufficient or insufficient.

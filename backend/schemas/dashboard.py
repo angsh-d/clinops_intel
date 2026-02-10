@@ -247,6 +247,9 @@ class AttentionSite(BaseModel):
     severity: str
     metric: str
     metric_value: float | None
+    risk_level: str | None = None
+    primary_issue: str | None = None
+    issue_detail: str | None = None
 
 
 class AttentionSitesResponse(BaseModel):
@@ -396,6 +399,16 @@ class VendorMilestoneSchema(BaseModel):
     status: str | None
     delay_days: int
 
+class VendorKPISummary(BaseModel):
+    kpi_name: str
+    value: float | None
+    target: float | None
+    status: str | None
+
+class VendorIssueSummary(BaseModel):
+    severity: str | None
+    description: str
+
 class VendorScorecard(BaseModel):
     vendor_id: str
     name: str
@@ -406,6 +419,8 @@ class VendorScorecard(BaseModel):
     active_sites: int
     issue_count: int
     milestones: list[VendorMilestoneSchema]
+    kpi_summary: list[VendorKPISummary]
+    top_issues: list[VendorIssueSummary]
 
 class VendorScorecardsResponse(BaseModel):
     vendors: list[VendorScorecard]
@@ -597,3 +612,83 @@ class KPIMetricsResponse(BaseModel):
     sites_at_risk: KPIMetric
     dq_score: KPIMetric
     screen_fail_rate: KPIMetric
+
+
+class IssueCategory(BaseModel):
+    theme: str
+    severity: str
+    description: str
+    affected_sites: list[str]
+    count: int
+    primary_dimension: str | None = None
+    key_drivers: list[str] = []
+
+
+class IssueCategoriesResponse(BaseModel):
+    categories: list[IssueCategory]
+    summary: str | None = None
+    site_count: int
+    generated_at: str | None = None
+
+
+# ── Issue Category Detail ──────────────────────────────────────────────────
+
+class SiteRiskDetail(BaseModel):
+    site_id: str
+    site_name: str | None = None
+    country: str | None = None
+    city: str | None = None
+    status: str
+    risk_score: float
+    dimension_scores: dict = {}
+    key_drivers: list[str] = []
+    status_rationale: str | None = None
+    trend: str | None = None
+    key_risks: list[dict] = []
+    recommended_actions: list = []
+
+
+class CrossSitePattern(BaseModel):
+    pattern: str
+    sites: list[str]
+    severity: str
+
+
+class PrioritizedAction(BaseModel):
+    action: str
+    target_sites: list[str]
+    priority: str
+    rationale: str
+
+
+class IssueCategoryDetailResponse(BaseModel):
+    theme: str
+    severity: str
+    description: str
+    primary_dimension: str | None = None
+    key_drivers: list[str] = []
+    affected_sites: list[SiteRiskDetail]
+    site_count: int
+    root_cause_analysis: str | None = None
+    cross_site_patterns: list[CrossSitePattern] = []
+    prioritized_actions: list[PrioritizedAction] = []
+    generated_at: str | None = None
+
+
+# ── MVR (Monitoring Visit Report) ────────────────────────────────────────────
+
+class MVRListItem(BaseModel):
+    id: int
+    site_id: str
+    visit_date: str | None
+    visit_type: str | None
+    visit_number: int | None
+    cra_id: str | None
+    pdf_filename: str | None
+    executive_summary: str | None
+    action_required_count: int | None
+    word_count: int | None
+
+
+class MVRListResponse(BaseModel):
+    reports: list[MVRListItem]

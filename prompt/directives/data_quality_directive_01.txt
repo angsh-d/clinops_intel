@@ -1,8 +1,21 @@
-Identify sites with worsening entry lag trends, high query burden, or monitoring gaps that suggest hidden data quality debt. Specifically investigate:
+OBJECTIVE: Identify sites accumulating data quality debt that threatens database lock readiness, patient safety signal detection, or regulatory defensibility.
 
-1. Which sites have eCRF entry lags exceeding 5 days and whether the trend is worsening?
-2. Which sites have an open query count above 15, and what is the query aging distribution?
-3. Are there sites where CRA monitoring visits are overdue or where CRA transitions have disrupted data review cadence?
-4. Which sites show a pattern of increasing data corrections that may indicate systematic entry errors?
+PRIORITY INVESTIGATION AREAS:
 
-Focus on identifying the root cause of any data quality degradation — is it a staffing issue, a process gap, or a site capability problem?
+1. ENTRY TIMELINESS & COMPLETENESS: Which sites have eCRF entry lag trending above the study-wide median? Decompose by CRF page category — safety-critical pages (adverse events, concomitant medications, lab results) vs. efficacy and administrative pages. Flag any sites with missing critical fields (has_missing_critical = true) as these directly impact safety reporting.
+
+2. QUERY LIFECYCLE HEALTH: Which sites have disproportionate open query burden relative to their enrollment volume? Analyze the aging distribution — are queries aging because sites aren't responding, or because monitors aren't closing answered queries? What proportion are monitoring-triggered vs. system-generated, and what does that ratio reveal about source data verification thoroughness?
+
+3. MONITORING OVERSIGHT CONTINUITY: Are there sites with CRA transitions that created oversight gaps — periods where no CRA was assigned or where a new CRA's first monitoring visit was significantly delayed after transition? What do the most recent monitoring visit reports reveal — are there recurring critical findings, or patterns of findings that repeat across visits (suggesting unresolved systemic issues)?
+
+4. DATA CORRECTION PATTERNS: Which sites show correction rates that deviate significantly from the study-wide norm? Are corrections concentrated in specific CRF pages or fields? Critically: what proportion of corrections were triggered by monitoring queries versus unprompted — unprompted corrections at rates inconsistent with query burden may indicate either proactive quality culture or after-the-fact data manipulation.
+
+5. VISIT COMPLIANCE & DATA GAPS: Are there sites with elevated missed visit rates? Missed visits create systematic data gaps that compound over time. Cross-reference visit compliance (SubjectVisit status = Missed) with data completeness — sites with both missed visits and high entry lag are at highest risk for unrecoverable data loss.
+
+6. OVERDUE ACTION RESOLUTION: Are monitoring visit follow-up actions being resolved within their due dates? Chronic overdue actions indicate site-level process failure and predict future quality degradation. Identify the categories of actions most commonly overdue.
+
+7. RISK INDICATOR TRAJECTORY: Are Key Risk Indicator snapshots showing deteriorating trends? Sites with KRIs migrating from Green to Amber, or persisting in Red across consecutive snapshots, require immediate attention. Correlate KRI status with the specific operational signals found above.
+
+CROSS-DOMAIN SIGNALS: Flag for enrollment_funnel agent if data quality issues correlate with enrollment velocity changes. Flag for phantom_compliance agent if you detect sites with suspiciously perfect metrics (near-zero variance in entry lag, uniform query resolution times) that may indicate manufactured compliance rather than genuine quality.
+
+DEFENSIBILITY: Every finding must cite the specific data signal, the tool that produced it, and the metric values. Distinguish between confirmed findings (strong evidence) and hypotheses requiring further investigation. Rate evidence quality for each finding.

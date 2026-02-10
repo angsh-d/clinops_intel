@@ -115,16 +115,17 @@ Operational data flows into CODM from clinical trial vendor systems. Ingestion i
 
 | Vendor Type | Example Vendor | Data Delivered | Typical Frequency | CODM Target Tables |
 |-------------|---------------|----------------|-------------------|-------------------|
-| **EDC Vendor** | Medidata Rave | eCRF entries, queries, data corrections | Daily extract | `ecrf_entries`, `queries`, `data_corrections` |
-| **IRT/IWRS Vendor** | Almac | Randomization events, kit inventory, depot shipments, screening logs | Daily extract | `randomization_log`, `randomization_events`, `kit_inventory`, `depot_shipments`, `screening_log` |
-| **Global CRO** | IQVIA | Monitoring visits, CRA assignments, overdue actions, site activation status | Weekly transfer | `monitoring_visits`, `cra_assignments`, `overdue_actions`, `sites` (partial) |
+| **EDC Vendor** | Medidata Rave | eCRF entries, queries, data corrections, subject visit records | Daily extract | `ecrf_entries`, `queries`, `data_corrections`, `subject_visits` |
+| **IRT/IWRS Vendor** | Almac | Randomization events, kit inventory, depot definitions, depot shipments, drug kit type reference, screening logs, enrollment velocity metrics | Daily extract | `randomization_log`, `randomization_events`, `kit_inventory`, `depots`, `depot_shipments`, `drug_kit_types`, `screening_log`, `enrollment_velocity` |
+| **Global CRO** | IQVIA | Monitoring visits, CRA assignments, overdue actions, site activation status, KRI snapshots | Weekly transfer | `monitoring_visits`, `cra_assignments`, `overdue_actions`, `sites` (partial), `kri_snapshots` |
 | **Regional CRO(s)** | EPS (Japan) | Same as Global CRO, for assigned countries | Weekly transfer | Same tables, country-scoped |
 | **Central Lab** | Covance | Lab results, sample tracking | Weekly transfer | Referenced via `subject_visits`, lab-related `queries` |
 | **Imaging Vendor** | Bioclinica | Image review status, adjudication outcomes | Biweekly transfer | Referenced via `subject_visits`, imaging-related `queries` |
 | **Safety/PV Vendor** | PharSafer | SAE reports, safety narratives | As reported | Referenced via safety-related `queries` and `kri_snapshots` |
 | **Patient Recruitment Vendor** | StudyKIK | Referral volumes, pre-screening funnels | Weekly report | Feeds into `screening_log` referral attribution |
-| **Sponsor Finance / ERP** | Internal | Budgets, invoices, change orders, payment milestones | Monthly close | `study_budget`, `budget_line_items`, `financial_snapshots`, `invoices`, `change_orders`, `payment_milestones` |
-| **Digital Protocol (Sponsor)** | Internal | Study config, visit schedule, eligibility criteria, arms, stratification | As amended | `study_config`, `study_arms`, `visit_schedule`, `visit_activities`, `eligibility_criteria`, `stratification_factors` |
+| **Sponsor Finance / ERP** | Internal | Budgets, budget categories, invoices, change orders, payment milestones, site-level financial metrics | Monthly close | `study_budget`, `budget_categories`, `budget_line_items`, `financial_snapshots`, `invoices`, `change_orders`, `payment_milestones`, `site_financial_metrics` |
+| **Sponsor Vendor Management** | Internal | Vendor contracts, scope of work, site assignments, KPI targets, milestones, issue tracking | As contracted / quarterly | `vendors`, `vendor_scope`, `vendor_site_assignments`, `vendor_kpis`, `vendor_milestones`, `vendor_issues` |
+| **Digital Protocol (Sponsor)** | Internal | Study config, visit schedule, eligibility criteria, arms, stratification, screen failure reason codes | As amended | `study_config`, `study_arms`, `visit_schedule`, `visit_activities`, `eligibility_criteria`, `stratification_factors`, `screen_failure_reason_codes` |
 
 **Multi-CRO ingestion pattern:** In a multi-CRO model, monitoring data arrives from multiple CROs covering different geographies. The Global CRO (e.g., IQVIA) provides monitoring visit data, CRA assignments, and site oversight for most countries, while Regional CROs (e.g., EPS for Japan) provide the same data types for their assigned countries. The ingestion layer normalizes both feeds into the same CODM tables, with `vendor_site_assignments` tracking which vendor is responsible for which site. This enables apples-to-apples comparison of CRO performance across regions.
 
@@ -242,13 +243,24 @@ The Orchestrator uses the LLM to understand query intent and select agents. Ther
 
 When multiple agents are selected, the Orchestrator runs them concurrently via `asyncio.gather`. Each agent receives an **isolated SQLAlchemy session** (`SessionLocal()`) to prevent concurrent access issues. Sessions are closed in a `finally` block regardless of outcome. Exceptions from individual agents are caught and logged without aborting others.
 
-### Cross-Domain Synthesis
+### Cross-Domain Synthesis with Ground Truth Anchoring
 
-When `requires_synthesis` is true and multiple agents return results, the Orchestrator invokes a synthesis LLM call (`conductor_synthesize` prompt) that receives all agent outputs and identifies:
+The Orchestrator always invokes a synthesis LLM call (`conductor_synthesize` prompt), even for single-agent results. Synthesis receives three inputs:
 
-- Cross-domain findings (e.g., enrollment stall + data quality collapse share a CRA transition root cause)
+1. **Agent outputs** — findings from all routed agents
+2. **Operational snapshot** — an authoritative ground-truth payload pulled from the shared service layer (`backend/services/dashboard_data.py`), containing the same attention-sites list and site overview data displayed on the dashboard. This ensures synthesis responses never contradict dashboard KPIs.
+3. **Query type classification** — the synthesis prompt detects whether the user query is a **data retrieval** ("show me", "list"), **analytical** ("why", "root cause"), or **comparison** ("compare", "rank") request, and adapts the response format accordingly.
+
+Synthesis outputs:
+
+- Cross-domain findings with causal chains
 - Priority actions ranked by impact
-- An executive summary that integrates findings across domains
+- An executive summary grounded in both agent findings and the operational snapshot
+- A **display format** directive (`narrative`, `narrative_table`, `table`, or `narrative_chart`) with optional structured `table_data` and `chart_data` — consumed by the frontend to render the response in the optimal visual format
+
+### Anti-Hallucination Guardrails
+
+The synthesis prompt enforces strict factual accuracy rules: every numerical claim must be directly traceable to agent data, cross-metric inference is prohibited (e.g., "zero enrollment" must not imply "zero monitoring visits"), and all claims are cross-checked against the operational snapshot before output.
 
 ---
 
@@ -438,18 +450,24 @@ During the **Plan phase**, the LLM receives the full list of available tool desc
 
 `ToolRegistry.invoke()` checks an in-memory LRU cache (`sql_tool_cache`) keyed by tool name + kwargs. Cache hits skip SQL execution entirely. Only successful results are cached.
 
-### Tool Categories (30+ tools)
+### Tool Categories (35+ tools)
 
 | Domain | Tools |
 |--------|-------|
-| **Data Quality** | `entry_lag_analysis`, `query_burden`, `data_correction_analysis`, `cra_assignment_history`, `monitoring_visit_history`, `site_summary` |
+| **Data Quality** | `entry_lag_analysis`, `query_burden`, `data_correction_analysis`, `cra_assignment_history`, `monitoring_visit_history`, `monitoring_visit_report`, `site_summary` |
 | **Enrollment Funnel** | `screening_funnel`, `enrollment_velocity`, `screen_failure_pattern`, `regional_comparison`, `kit_inventory`, `kri_snapshot` |
 | **Data Integrity** | `data_variance_analysis`, `timestamp_clustering`, `query_lifecycle_anomaly`, `monitoring_findings_variance`, `weekday_entry_pattern`, `cra_oversight_gap`, `cra_portfolio_analysis`, `correction_provenance`, `entry_date_clustering`, `screening_narrative_duplication`, `cross_domain_consistency` |
 | **Site Rescue** | `enrollment_trajectory`, `screen_failure_root_cause`, `supply_constraint_impact` |
 | **Vendor Performance** | `vendor_kpi_analysis` (KPI trends across all vendors), `vendor_site_comparison` (operational metrics per vendor via site assignments — enables Global CRO vs. Regional CRO comparison), `vendor_milestone_tracker`, `vendor_issue_log` |
 | **Financial** | `budget_variance_analysis`, `cost_per_patient_analysis`, `burn_rate_projection`, `change_order_impact`, `financial_impact_of_delays` |
+| **Study Operations** | `study_operational_snapshot` (authoritative study-wide snapshot: attention sites + site overview — shared data source with dashboard) |
 | **Cross-Domain** | `context_search` (vector similarity), `trend_projection` (forecasting) |
 | **External** | `competing_trial_search` (BioMCP — geo-distance, synonym expansion, pagination), `trial_detail` (BioMCP — protocol, locations, references, outcomes by NCT ID) |
+
+**Notable tool additions:**
+
+- **`study_operational_snapshot`** — Calls the shared service layer (`dashboard_data.py`) to return the same attention-sites list and site overview data shown on the dashboard. Agents use this as the authoritative source for "which sites need attention" queries, ensuring consistency between agent responses and dashboard displays.
+- **`monitoring_visit_report`** — Returns detailed monitoring visit reports for a specific site, including visit metadata, findings counts, and linked follow-up action items from the `overdue_actions` table. Pre-formats a `findings_summary` field for LLM consumption.
 
 ---
 
@@ -500,6 +518,95 @@ The `on_step` callback is wrapped in `_make_safe_callback()` which swallows exce
 
 All LLM calls use `generate_structured()` with a system instruction requiring valid JSON output. Temperature is set to 0.0 for deterministic outputs. Responses are parsed through `parse_llm_json()` which handles markdown fences and extraction from mixed content. Parse failures fall back to safe defaults rather than crashing the pipeline.
 
-### Tool Result Caching
+### Two-Layer Persistent Cache
 
-Identical SQL tool invocations within a session return cached results, avoiding redundant database queries when multiple agents or iterations request the same data. The cache is keyed by tool name + kwargs and only stores successful results.
+The platform uses a two-layer cache (L1: in-memory LRU, L2: PostgreSQL-backed) for dashboard results, SQL tool results, and LLM responses. L1 provides fast access within a running process; L2 survives server restarts. No TTL — entries persist until explicitly invalidated (e.g., after an investigation completes). This avoids redundant SQL/LLM calls across requests and agent iterations.
+
+### Dashboard–Agent Data Consistency
+
+A shared service layer (`backend/services/dashboard_data.py`) contains the SQL logic for attention-sites and site-overview computations. Both the dashboard API endpoints and the `study_operational_snapshot` agent tool call the same service functions, guaranteeing that dashboard KPIs, map pulsating dots, and agent investigation responses all reflect the same underlying data.
+
+### Operational Signal Fallback
+
+Proactive scans may not cover every site in every cycle. Sites without AlertLog entries, agent findings, or intelligence briefs still receive operational signals derived from their live metrics (anomaly flags, open query counts, enrollment %, entry lag). The `site_detail` endpoint generates these fallback signals from already-computed data, ensuring no site appears silent when real issues exist.
+
+---
+
+## 11. Frontend Architecture
+
+React 18 + Vite + Tailwind CSS + Zustand (state management). Apple-inspired greyscale design system (`bg-apple-surface`, `border-apple-border`, `text-apple-text/secondary/tertiary`). Framer Motion for all transitions and modal animations.
+
+### Command Center (`frontend/src/components/CommandCenter.jsx`)
+
+The Command Center is the study-level intelligence hub — it combines operational KPIs, geographic site visualization, AI-powered investigation, and pre-aggregated domain summaries in a single view.
+
+**Layout (top to bottom when no conversation is active):**
+
+1. **Sticky header** — Study ID, phase, enrollment progress bar, site count, "New chat" button
+2. **KPI cards** — 4-column grid: Enrolled (with target), Sites at Risk, DQ Score, Screen Fail Rate. Each card includes a RAG status dot and a hover tooltip showing formula, data source, and sample size (sourced from `/api/dashboard/kpi-metrics`)
+3. **World Map** — D3-geo projection showing all sites with pulsating blue dots for sites needing attention. Clickable for site drill-down
+4. **AI Investigation search** — Natural-language input with quick action chips (pre-built queries) and "Explore more" section
+5. **Attention list** — Top 5 sites needing attention, sorted by risk level
+
+**Assistant Panel (`AssistantPanel.jsx`):** When a query is submitted, a right-side slide-in panel opens (420px, Framer Motion animated) while the dashboard remains fully visible. The panel renders investigation results using an LLM-chosen display format:
+
+- **Narrative** — executive summary, top hypothesis with causal chain, recommended action
+- **Narrative + Table** — narrative section plus a sortable data table (headers/rows from `display_format.table_data`)
+- **Table** — full-width sortable table with minimal narrative
+- **Narrative + Chart** — narrative section plus an inline SVG bar/line chart
+
+Investigation progress streams via WebSocket with phase labels (Analyzing → Gathering → Analyzing patterns → Planning → Running → Evaluating → Preparing → Complete). The panel includes a follow-up input for iterative investigation. For cached results, the backend simulates phase progression (~7s) to provide a consistent real-time feel.
+
+### Explore More Modals
+
+The "Explore more" section exposes 4 domain summaries as lightweight modals that display pre-aggregated dashboard data — no agent investigation required. Each modal fetches from cached dashboard API endpoints on open and renders in a consistent Apple greyscale design.
+
+**Shared modal chrome (`ExploreModal` component):**
+- Framer Motion spring animation (`damping: 30, stiffness: 400`)
+- Backdrop blur overlay with click-to-close
+- `max-w-4xl`, scrollable body, X close button
+- Consistent header with title + subtitle
+
+**Modal 1: Vendor Performance Summary**
+- **API**: `GET /api/dashboard/vendor-scorecards` → `getVendorScorecards()`
+- **Header**: RAG breakdown (on track / watch / action needed vendor counts) in greyscale tones
+- **Body**: 2-column grid of vendor cards — each shows vendor name, type, country HQ, greyscale RAG dot, contract value ($M), active sites, KPI summary (value/target with bold emphasis for off-target), top issues with severity labels, and milestone status pills
+
+**Modal 2: Financial Health Overview**
+- **APIs**: `GET /api/dashboard/financial-summary` → `getFinancialSummary()` + `GET /api/dashboard/cost-per-patient` → `getCostPerPatient()`
+- **Header**: 4-metric row — Total Budget, Spent to Date, Remaining, Forecast (formatted as $M/$K)
+- **Indicators**: Variance % badge (color-coded), burn rate per month, spend trend
+- **Body**: Top 8 sites by cost variance as a compact table (site name, cost per randomized patient, variance %)
+
+**Modal 3: Data Quality Trends**
+- **API**: `GET /api/dashboard/data-quality` → `getDataQualityDashboard()`
+- **Header**: Study-wide averages — mean entry lag (days), total queries
+- **Body**: Top 12 sites sorted by worst data quality (highest mean entry lag) in a compact table with visual bar indicators for entry lag and open query counts, plus correction counts
+
+**Modal 4: Enrollment Velocity**
+- **API**: `GET /api/dashboard/enrollment-funnel` → `getEnrollmentDashboard()`
+- **Header**: 4-metric row — Screened, Randomized, Target, % of Target
+- **Funnel**: Horizontal bar visualization showing screened → passed screening → randomized with counts
+- **Body**: Top 12 sites sorted by lowest enrollment % in a compact table with color-coded progress bars
+
+**Design rationale:** These modals provide instant operational visibility without waiting for agent investigations. The data is pre-aggregated on the backend (pure SQL, no LLM calls), served from cached endpoints (120s TTL with in-flight dedup), and renders in under 200ms. This complements the AI investigation workflow — users get a quick overview from modals, then ask targeted questions via the search bar for deeper analysis.
+
+### API Client (`frontend/src/lib/api.js`)
+
+All API calls route through a client-side caching layer:
+
+- **`cachedFetch(endpoint, ttlMs)`** — TTL-based cache (default 120s) with in-flight request deduplication. Prevents redundant network calls when multiple components request the same data simultaneously
+- **`invalidateApiCache()`** — Clears all cached data; called after investigation completes (new findings may change dashboard data)
+- **WebSocket streaming** — `connectInvestigationStream()` manages the `/ws/query/{queryId}` connection with phase, completion, error, and keepalive message handling. For cached investigation results, the backend simulates real-time phase progression (~7s) before delivering the final response
+
+### Other Key Views
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| `Home` | `Home.jsx` | Landing page with study selection, AI agents modal, platform architecture modal |
+| `AssistantPanel` | `AssistantPanel.jsx` | Right-side slide-in panel for investigation results with smart display format rendering |
+| `Pulse` | `Pulse.jsx` | Real-time data pulse visualization |
+| `Constellation` | `Constellation.jsx` | Site network graph |
+| `WorldMap` | `WorldMap.jsx` | D3-geo geographic site map (reused in Command Center) |
+| `CommandPalette` | `CommandPalette.jsx` | Cmd+K command interface for natural-language queries |
+| `InvestigationTheater` | `InvestigationTheater.jsx` | Full-screen agent investigation result display |

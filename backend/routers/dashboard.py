@@ -1,8 +1,10 @@
 """Dashboard router: pure SQL aggregations, no LLM."""
 
 import logging
+import os
 import re
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy import func, case
 from sqlalchemy.orm import Session
 
@@ -22,7 +24,7 @@ from backend.schemas.dashboard import (
     AgentActivityStatus, AgentActivityResponse,
     SiteMetricDetail, SiteAlertDetail, SiteDetailResponse, CausalStepExplained,
     SiteJourneyEvent, SiteJourneyResponse,
-    VendorScorecard, VendorScorecardsResponse, VendorMilestoneSchema,
+    VendorScorecard, VendorScorecardsResponse, VendorMilestoneSchema, VendorKPISummary, VendorIssueSummary,
     VendorDetailResponse, VendorKPITrend, VendorSiteBreakdown,
     VendorComparisonResponse, VendorComparisonKPI, VendorComparisonValue,
     FinancialSummaryResponse, FinancialWaterfallResponse, WaterfallSegment,
@@ -34,6 +36,8 @@ from backend.schemas.dashboard import (
     CrossDomainCorrelation, StudyHypothesis, StudySynthesis,
     DataSourceCitation,
     KPIMetric, KPIMetricsResponse,
+    IssueCategory, IssueCategoriesResponse,
+    SiteRiskDetail, CrossSitePattern, PrioritizedAction, IssueCategoryDetailResponse,
 )
 from data_generators.models import (
     ECRFEntry, Query, DataCorrection, ScreeningLog,
@@ -43,8 +47,9 @@ from data_generators.models import (
     VendorMilestone, VendorIssue,
     StudyBudget, BudgetCategory, BudgetLineItem, FinancialSnapshot,
     Invoice, PaymentMilestone, ChangeOrder, SiteFinancialMetric,
+    MonitoringVisitReport,
 )
-from backend.models.governance import AgentFinding, AlertLog, ProactiveScan, SiteIntelligenceBrief
+from backend.models.governance import AgentFinding, AlertLog, ProactiveScan, SiteIntelligenceBrief, SiteRiskAssessment
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -571,49 +576,74 @@ def kpi_metrics(
     enrolled_pct = round((enrolled / target * 100), 1) if target > 0 else 0
     enrolled_trend = "good" if enrolled_pct >= 80 else "neutral" if enrolled_pct >= 50 else "warn"
 
-    # 2. Sites at Risk (critical status count)
-    sites = db.query(Site).all()
-    total_sites = len(sites)
-    critical_count = 0
-    for site in sites:
-        open_queries = db.query(func.count(Query.id)).filter(
-            Query.site_id == site.site_id,
-            Query.status == "Open"
-        ).scalar() or 0
-        alert_count = db.query(func.count(AlertLog.id)).filter(
-            AlertLog.site_id == site.site_id,
-            AlertLog.status == "active"
-        ).scalar() or 0
-        if site.anomaly_type or open_queries > settings.status_critical_open_queries or alert_count > settings.status_critical_alert_count:
-            critical_count += 1
-    
+    # 2. Sites at Risk + 3. DQ Score — prefer LLM risk assessments, fallback to deterministic
+    total_sites = db.query(func.count(Site.id)).scalar() or 0
+
+    # Check for LLM risk assessments (most recent per site)
+    latest_assessments = {}
+    all_assessments = (
+        db.query(SiteRiskAssessment)
+        .order_by(SiteRiskAssessment.created_at.desc())
+        .all()
+    )
+    for a in all_assessments:
+        if a.site_id not in latest_assessments:
+            latest_assessments[a.site_id] = a
+
+    if latest_assessments:
+        # LLM-driven: count critical + warning sites, derive DQ from dimension scores
+        critical_count = sum(1 for a in latest_assessments.values() if a.status == "critical")
+        risk_formula = "COUNT(site_risk_assessments WHERE status = 'critical') — LLM multi-dimensional assessment"
+        risk_source = "site_risk_assessments table (LLM-driven proactive scan)"
+
+        dq_scores = []
+        for a in latest_assessments.values():
+            dq_dim = (a.dimension_scores or {}).get("data_quality", 0)
+            dq_scores.append(round((1 - dq_dim) * 100))
+        avg_dq = round(sum(dq_scores) / len(dq_scores)) if dq_scores else None
+        dq_sample_size = len(dq_scores)
+        dq_formula = "AVG((1 - dimension_scores.data_quality) × 100) — LLM multi-signal assessment"
+        dq_source = "site_risk_assessments.dimension_scores (LLM-driven proactive scan)"
+    else:
+        # Fallback: deterministic (before first proactive scan)
+        sites = db.query(Site).all()
+        critical_count = 0
+        for site in sites:
+            open_queries = db.query(func.count(Query.id)).filter(
+                Query.site_id == site.site_id,
+                Query.status == "Open"
+            ).scalar() or 0
+            alert_count = db.query(func.count(AlertLog.id)).filter(
+                AlertLog.site_id == site.site_id,
+                AlertLog.status == "open"
+            ).scalar() or 0
+            if site.anomaly_type or open_queries > settings.status_critical_open_queries or alert_count > settings.status_critical_alert_count:
+                critical_count += 1
+        risk_formula = f"COUNT(sites WHERE anomaly_type IS NOT NULL OR open_queries > {settings.status_critical_open_queries} OR open_alerts > {settings.status_critical_alert_count})"
+        risk_source = "sites table + queries table + alert_log table (deterministic fallback)"
+
+        ecrf_sites = db.query(
+            ECRFEntry.site_id,
+            func.avg(ECRFEntry.entry_lag_days).label("mean_lag")
+        ).group_by(ECRFEntry.site_id).all()
+        queries_data = db.query(
+            Query.site_id,
+            func.count(Query.id).filter(Query.status == "Open").label("open_queries"),
+        ).group_by(Query.site_id).all()
+        queries_by_site = {r.site_id: r.open_queries or 0 for r in queries_data}
+        dq_scores = []
+        for row in ecrf_sites:
+            lag = float(row.mean_lag or 0)
+            queries = queries_by_site.get(row.site_id, 0)
+            lag_penalty = min(lag * 2, 20)
+            query_penalty = min(queries, 30)
+            dq_scores.append(max(100 - lag_penalty - query_penalty, 0))
+        avg_dq = round(sum(dq_scores) / len(dq_scores)) if dq_scores else None
+        dq_sample_size = len(dq_scores)
+        dq_formula = "AVG(100 - MIN(entry_lag_days × 2, 20) - MIN(open_queries, 30))"
+        dq_source = "ecrf_entries table (entry lag) + queries table (deterministic fallback)"
+
     risk_trend = "good" if critical_count == 0 else "neutral" if critical_count <= 3 else "warn"
-
-    # 3. DQ Score (average across sites with data - aligned with data-quality endpoint)
-    # Uses ECRFEntry sites (same as data-quality endpoint) as base
-    ecrf_sites = db.query(
-        ECRFEntry.site_id,
-        func.avg(ECRFEntry.entry_lag_days).label("mean_lag")
-    ).group_by(ECRFEntry.site_id).all()
-    
-    # Get open queries per site
-    queries_data = db.query(
-        Query.site_id,
-        func.count(Query.id).filter(Query.status == "Open").label("open_queries"),
-    ).group_by(Query.site_id).all()
-    queries_by_site = {r.site_id: r.open_queries or 0 for r in queries_data}
-
-    dq_scores = []
-    for row in ecrf_sites:
-        lag = float(row.mean_lag or 0)
-        queries = queries_by_site.get(row.site_id, 0)
-        lag_penalty = min(lag * 2, 20)
-        query_penalty = min(queries, 30)
-        score = max(100 - lag_penalty - query_penalty, 0)
-        dq_scores.append(score)
-
-    avg_dq = round(sum(dq_scores) / len(dq_scores)) if dq_scores else None
-    dq_sample_size = len(dq_scores)
     dq_trend = "good" if avg_dq and avg_dq >= 85 else "neutral" if avg_dq and avg_dq >= 70 else "warn"
 
     # 4. Screen Fail Rate
@@ -636,8 +666,8 @@ def kpi_metrics(
             label="Sites at Risk",
             value=str(critical_count),
             raw_value=critical_count,
-            formula=f"COUNT(sites WHERE anomaly_type IS NOT NULL OR open_queries > {settings.status_critical_open_queries} OR active_alerts > {settings.status_critical_alert_count})",
-            data_source="sites table + queries table + alert_log table",
+            formula=risk_formula,
+            data_source=risk_source,
             sample_size=total_sites,
             trend=risk_trend,
         ),
@@ -645,8 +675,8 @@ def kpi_metrics(
             label="DQ Score",
             value=str(avg_dq) if avg_dq else "—",
             raw_value=avg_dq,
-            formula="AVG(100 - MIN(entry_lag_days × 2, 20) - MIN(open_queries, 30))",
-            data_source="ecrf_entries table (entry lag) + queries table (open queries)",
+            formula=dq_formula,
+            data_source=dq_source,
             sample_size=dq_sample_size,
             trend=dq_trend,
         ),
@@ -681,113 +711,15 @@ def attention_sites(
     if cached is not None:
         return cached
 
-    attention_list = []
-    existing_ids = set()
-    site_map = {s.site_id: s for s in db.query(Site).all()}
+    from backend.services.dashboard_data import get_attention_sites_data
+    raw = get_attention_sites_data(db, settings)
 
-    # PRIORITY: Sites with validated intelligence briefs from recent scans (dynamic query)
-    from sqlalchemy import desc
-    recent_briefs = (
-        db.query(SiteIntelligenceBrief.site_id, func.max(SiteIntelligenceBrief.created_at).label('latest'))
-        .group_by(SiteIntelligenceBrief.site_id)
-        .order_by(desc('latest'))
-        .limit(10)
-        .all()
-    )
-    validated_brief_sites = [row.site_id for row in recent_briefs if row.site_id]
-    
-    for site_id in validated_brief_sites[:5]:  # Show top 5 validated sites
-        site = site_map.get(site_id)
-        if site:
-            attention_list.append(AttentionSite(
-                site_id=site_id,
-                site_name=getattr(site, 'name', None) or f"Site {site_id}",
-                country=site.country,
-                city=site.city,
-                issue="Validated AI insights available",
-                severity="critical",
-                metric="View validated brief",
-                metric_value=None,
-                risk_level="critical",
-                primary_issue="AI-validated intelligence brief available",
-                issue_detail="Click to view grounded insights",
-            ))
-            existing_ids.add(site_id)
+    attention_list = [AttentionSite(**s) for s in raw["sites"]]
 
-    # Get sites with high open query counts
-    high_query_sites = db.query(
-        Query.site_id,
-        func.count(Query.id).filter(Query.status == "Open").label("open_queries"),
-    ).group_by(Query.site_id).having(
-        func.count(Query.id).filter(Query.status == "Open") > settings.attention_open_query_threshold
-    ).all()
-
-    for row in high_query_sites:
-        if row.site_id not in existing_ids:
-            site = site_map.get(row.site_id)
-            if site:
-                attention_list.append(AttentionSite(
-                    site_id=row.site_id,
-                    site_name=getattr(site, 'name', None),
-                    country=site.country,
-                    city=site.city,
-                    issue="High open query count",
-                    severity="critical" if row.open_queries > settings.attention_open_query_critical else "warning",
-                    metric=f"{row.open_queries} open queries",
-                    metric_value=float(row.open_queries),
-                ))
-                existing_ids.add(row.site_id)
-
-    # Get sites with high entry lag
-    high_lag_sites = db.query(
-        ECRFEntry.site_id,
-        func.avg(ECRFEntry.entry_lag_days).label("avg_lag"),
-    ).group_by(ECRFEntry.site_id).having(
-        func.avg(ECRFEntry.entry_lag_days) > settings.attention_entry_lag_threshold
-    ).all()
-    for row in high_lag_sites:
-        if row.site_id not in existing_ids:
-            site = site_map.get(row.site_id)
-            if site:
-                attention_list.append(AttentionSite(
-                    site_id=row.site_id,
-                    site_name=getattr(site, 'name', None),
-                    country=site.country,
-                    city=site.city,
-                    issue="Elevated entry lag",
-                    severity="warning",
-                    metric=f"{round(row.avg_lag, 1)} day lag",
-                    metric_value=float(row.avg_lag),
-                ))
-                existing_ids.add(row.site_id)
-    
-    # Get sites with anomaly types
-    anomaly_sites = db.query(Site).filter(Site.anomaly_type.isnot(None)).limit(5).all()
-    for site in anomaly_sites:
-        if site.site_id not in existing_ids:
-            attention_list.append(AttentionSite(
-                site_id=site.site_id,
-                site_name=getattr(site, 'name', None),
-                country=site.country,
-                city=site.city,
-                issue=site.anomaly_type or "Anomaly detected",
-                severity="critical",
-                metric="Flagged for review",
-                metric_value=None,
-            ))
-            existing_ids.add(site.site_id)
-    
-    # Sort by severity (critical first) and limit
-    attention_list.sort(key=lambda x: (0 if x.severity == "critical" else 1, x.site_id))
-    attention_list = attention_list[:10]
-    
-    critical_count = sum(1 for s in attention_list if s.severity == "critical")
-    warning_count = sum(1 for s in attention_list if s.severity == "warning")
-    
     result = AttentionSitesResponse(
         sites=attention_list,
-        critical_count=critical_count,
-        warning_count=warning_count,
+        critical_count=raw["critical_count"],
+        warning_count=raw["warning_count"],
     )
     dashboard_cache.set(ck, result)
     return result
@@ -809,70 +741,12 @@ def sites_overview(
     if cached is not None:
         return cached
 
-    sites = db.query(Site).all()
+    from backend.services.dashboard_data import get_sites_overview_data
+    raw = get_sites_overview_data(db, settings)
 
-    # Get enrollment counts per site
-    enrollment_counts = dict(
-        db.query(RandomizationLog.site_id, func.count(RandomizationLog.id))
-        .group_by(RandomizationLog.site_id)
-        .all()
-    )
+    site_list = [SiteOverview(**s) for s in raw["sites"]]
 
-    # Get open query counts per site
-    query_counts = dict(
-        db.query(Query.site_id, func.count(Query.id))
-        .filter(Query.status == "Open")
-        .group_by(Query.site_id)
-        .all()
-    )
-
-    # Get alert counts per site
-    alert_counts = dict(
-        db.query(AlertLog.site_id, func.count(AlertLog.id))
-        .filter(AlertLog.status == "active")
-        .group_by(AlertLog.site_id)
-        .all()
-    )
-
-    site_list = []
-    for site in sites:
-        site_target = site.target_enrollment or 0
-        enrolled = enrollment_counts.get(site.site_id, 0)
-        enrollment_pct = min(100.0, round((enrolled / site_target) * 100, 1)) if site_target else 0
-
-        open_queries = query_counts.get(site.site_id, 0)
-        alert_count = alert_counts.get(site.site_id, 0)
-
-        # Compute data quality score (inverse of query rate)
-        dq_score = max(0, settings.dq_score_base - (open_queries * settings.dq_score_penalty_per_query))
-
-        # Determine status
-        if site.anomaly_type or open_queries > settings.status_critical_open_queries or alert_count > settings.status_critical_alert_count:
-            status = "critical"
-        elif open_queries > settings.status_warning_open_queries or enrollment_pct < settings.status_warning_enrollment_pct:
-            status = "warning"
-        else:
-            status = "healthy"
-
-        finding = site.anomaly_type or (
-            f"{open_queries} open queries" if open_queries > settings.site_entry_lag_elevated else
-            "On track" if enrollment_pct >= settings.site_enrollment_below_target_pct else
-            "Below target"
-        )
-        
-        site_list.append(SiteOverview(
-            site_id=site.site_id,
-            site_name=getattr(site, 'name', None),
-            country=site.country,
-            city=site.city,
-            enrollment_percent=enrollment_pct,
-            data_quality_score=dq_score,
-            alert_count=alert_count,
-            status=status,
-            finding=finding,
-        ))
-    
-    result = SitesOverviewResponse(sites=site_list, total=len(site_list))
+    result = SitesOverviewResponse(sites=site_list, total=raw["total"])
     dashboard_cache.set(ck, result)
     return result
 
@@ -1162,7 +1036,7 @@ def site_detail(
             AlertLog.title.like(f"{site_id}:%"),
             AlertLog.title.like(f"{site_id}: %")
         ),
-        AlertLog.status.in_(["open", "active"])
+        AlertLog.status == "open"
     ).order_by(AlertLog.created_at.desc()).limit(5).all()
     
     alerts = []
@@ -1238,6 +1112,41 @@ def site_detail(
             confidence=confidence,
         ))
     
+    # If no alerts from AlertLog, generate operational signals from already-computed metrics
+    if not alerts:
+        if site.anomaly_type:
+            alerts.append(SiteAlertDetail(
+                severity="critical",
+                message=f"Anomaly detected: {site.anomaly_type.replace('_', ' ')}",
+                time="Ongoing",
+                agent="operational",
+                reasoning=None, causal_chain_explained=None, data_source="Site metadata", confidence=None,
+            ))
+        if open_queries > 20:
+            alerts.append(SiteAlertDetail(
+                severity="critical" if open_queries > 50 else "warning",
+                message=f"{open_queries} open queries requiring resolution",
+                time="Current",
+                agent="operational",
+                reasoning=None, causal_chain_explained=None, data_source="Query log", confidence=None,
+            ))
+        if site_target > 0 and randomized < site_target * 0.5:
+            alerts.append(SiteAlertDetail(
+                severity="warning",
+                message=f"Enrollment at {enrollment_pct}% — {randomized}/{site_target} patients randomized",
+                time="Current",
+                agent="operational",
+                reasoning=None, causal_chain_explained=None, data_source="Randomization log", confidence=None,
+            ))
+        if entry_lag and entry_lag > 7:
+            alerts.append(SiteAlertDetail(
+                severity="warning",
+                message=f"Average data entry lag: {round(entry_lag, 1)} days",
+                time="Current",
+                agent="operational",
+                reasoning=None, causal_chain_explained=None, data_source="eCRF entries", confidence=None,
+            ))
+
     # Get CRA assignments for timeline
     cra_rows = db.query(CRAAssignment).filter(CRAAssignment.site_id == site_id).order_by(CRAAssignment.start_date.desc()).all()
     cra_list = [
@@ -1481,11 +1390,31 @@ def vendor_scorecards(db: Session = Depends(get_db)):
         else:
             overall_rag = "Green"
 
-        # Open issue count
-        issue_count = db.query(func.count(VendorIssue.id)).filter(
+        # KPI summary — all latest KPIs with value/target/status
+        kpi_summary = [VendorKPISummary(
+            kpi_name=k.kpi_name,
+            value=k.value,
+            target=k.target,
+            status=k.status,
+        ) for k in latest_kpis]
+
+        # Open issues with descriptions
+        open_issues = db.query(VendorIssue).filter(
+            VendorIssue.vendor_id == v.vendor_id,
+            VendorIssue.status.in_(["Open", "In Progress"]),
+        ).order_by(
+            case((VendorIssue.severity == "Critical", 0), (VendorIssue.severity == "Major", 1), else_=2)
+        ).limit(3).all()
+
+        issue_count = len(open_issues) or db.query(func.count(VendorIssue.id)).filter(
             VendorIssue.vendor_id == v.vendor_id,
             VendorIssue.status.in_(["Open", "In Progress"]),
         ).scalar() or 0
+
+        top_issues = [VendorIssueSummary(
+            severity=iss.severity,
+            description=iss.description,
+        ) for iss in open_issues]
 
         # Milestones
         milestones_db = db.query(VendorMilestone).filter(
@@ -1510,6 +1439,8 @@ def vendor_scorecards(db: Session = Depends(get_db)):
             active_sites=active_sites,
             issue_count=issue_count,
             milestones=milestones,
+            kpi_summary=kpi_summary,
+            top_issues=top_issues,
         ))
 
     result = VendorScorecardsResponse(vendors=scorecards)
@@ -1902,7 +1833,7 @@ def intelligence_summary(db: Session = Depends(get_db)):
 
     # 4. Open alert count
     open_alerts = db.query(func.count(AlertLog.id)).filter(
-        AlertLog.status.in_(["open", "active"])
+        AlertLog.status == "open"
     ).scalar() or 0
 
     # 5. Site intelligence briefs
@@ -2099,3 +2030,304 @@ def theme_findings(theme_id: str, db: Session = Depends(get_db)):
     )
     dashboard_cache.set(ck, result)
     return result
+
+
+# ── Issue Categories (LLM-synthesized) ─────────────────────────────────────
+@router.get("/issue-categories", response_model=IssueCategoriesResponse)
+async def issue_categories(
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_dep),
+):
+    """LLM-synthesized thematic issue categories across at-risk sites."""
+    import json
+    from datetime import datetime, timezone
+    from sqlalchemy import desc
+    from backend.llm.failover import FailoverLLMClient
+    from backend.llm.utils import parse_llm_json
+    from backend.prompts.manager import get_prompt_manager
+
+    ck = cache_key("issue_categories")
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
+    # Latest risk assessment per site (critical/warning only)
+    subq = (
+        db.query(
+            SiteRiskAssessment.site_id,
+            func.max(SiteRiskAssessment.id).label("max_id"),
+        )
+        .group_by(SiteRiskAssessment.site_id)
+        .subquery()
+    )
+    assessments = (
+        db.query(SiteRiskAssessment)
+        .join(subq, SiteRiskAssessment.id == subq.c.max_id)
+        .filter(SiteRiskAssessment.status.in_(["critical", "warning"]))
+        .order_by(desc(SiteRiskAssessment.risk_score))
+        .all()
+    )
+
+    if not assessments:
+        empty = IssueCategoriesResponse(categories=[], site_count=0)
+        dashboard_cache.set(ck, empty)
+        return empty
+
+    site_packages = [
+        {
+            "site_id": a.site_id,
+            "status": a.status,
+            "risk_score": a.risk_score,
+            "dimension_scores": a.dimension_scores,
+            "status_rationale": a.status_rationale,
+            "key_drivers": a.key_drivers,
+            "trend": a.trend,
+        }
+        for a in assessments
+    ]
+
+    prompts = get_prompt_manager()
+    prompt_text = prompts.render(
+        "dashboard_issue_categories",
+        site_assessments=json.dumps(site_packages, default=str),
+    )
+
+    llm = FailoverLLMClient(settings)
+    response = await llm.generate_structured(
+        prompt_text,
+        system="You are a clinical operations analyst. Return valid JSON only.",
+    )
+    parsed = parse_llm_json(response.text)
+
+    categories = [
+        IssueCategory(
+            theme=c.get("theme", ""),
+            severity=c.get("severity", "warning"),
+            description=c.get("description", ""),
+            affected_sites=c.get("affected_sites", []),
+            count=c.get("count", len(c.get("affected_sites", []))),
+            primary_dimension=c.get("primary_dimension"),
+            key_drivers=c.get("key_drivers", []),
+        )
+        for c in parsed.get("categories", [])
+    ]
+
+    result = IssueCategoriesResponse(
+        categories=categories,
+        summary=parsed.get("summary"),
+        site_count=len(assessments),
+        generated_at=datetime.now(timezone.utc).isoformat(),
+    )
+    dashboard_cache.set(ck, result)
+    return result
+
+
+# ── Issue Category Detail (LLM-synthesized) ────────────────────────────────
+@router.get("/issue-category-detail", response_model=IssueCategoryDetailResponse)
+async def issue_category_detail(
+    index: int,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_dep),
+):
+    """Per-site risk details + LLM cross-site synthesis for one issue category."""
+    import json
+    from datetime import datetime, timezone
+    from fastapi import HTTPException
+    from sqlalchemy import desc
+    from backend.llm.failover import FailoverLLMClient
+    from backend.llm.utils import parse_llm_json
+    from backend.prompts.manager import get_prompt_manager
+
+    ck = cache_key("issue_category_detail", index)
+    cached = dashboard_cache.get(ck)
+    if cached is not None:
+        return cached
+
+    # 1. Get (or regenerate) issue categories
+    categories_ck = cache_key("issue_categories")
+    categories_resp = dashboard_cache.get(categories_ck)
+    if categories_resp is None:
+        categories_resp = await issue_categories(db, settings)
+
+    if index < 0 or index >= len(categories_resp.categories):
+        raise HTTPException(status_code=404, detail="Category index out of range")
+
+    category = categories_resp.categories[index]
+    affected_site_ids = category.affected_sites
+
+    # 2. Latest SiteRiskAssessment per affected site
+    subq = (
+        db.query(
+            SiteRiskAssessment.site_id,
+            func.max(SiteRiskAssessment.id).label("max_id"),
+        )
+        .filter(SiteRiskAssessment.site_id.in_(affected_site_ids))
+        .group_by(SiteRiskAssessment.site_id)
+        .subquery()
+    )
+    assessments = (
+        db.query(SiteRiskAssessment)
+        .join(subq, SiteRiskAssessment.id == subq.c.max_id)
+        .order_by(desc(SiteRiskAssessment.risk_score))
+        .all()
+    )
+    assessment_map = {a.site_id: a for a in assessments}
+
+    # 3. Latest SiteIntelligenceBrief per affected site
+    brief_subq = (
+        db.query(
+            SiteIntelligenceBrief.site_id,
+            func.max(SiteIntelligenceBrief.id).label("max_id"),
+        )
+        .filter(SiteIntelligenceBrief.site_id.in_(affected_site_ids))
+        .group_by(SiteIntelligenceBrief.site_id)
+        .subquery()
+    )
+    briefs = (
+        db.query(SiteIntelligenceBrief)
+        .join(brief_subq, SiteIntelligenceBrief.id == brief_subq.c.max_id)
+        .all()
+    )
+    brief_map = {b.site_id: b for b in briefs}
+
+    # 4. Site metadata
+    site_rows = db.query(Site).filter(Site.site_id.in_(affected_site_ids)).all()
+    site_meta = {s.site_id: s for s in site_rows}
+
+    # 5. Build SiteRiskDetail list
+    site_details = []
+    for sid in affected_site_ids:
+        a = assessment_map.get(sid)
+        b = brief_map.get(sid)
+        s = site_meta.get(sid)
+
+        risk_summary = b.risk_summary if b else {}
+        if isinstance(risk_summary, str):
+            risk_summary = {}
+
+        site_details.append(SiteRiskDetail(
+            site_id=sid,
+            site_name=s.name if s else None,
+            country=s.country if s else None,
+            city=s.city if s else None,
+            status=a.status if a else "unknown",
+            risk_score=a.risk_score if a else 0.0,
+            dimension_scores=a.dimension_scores or {} if a else {},
+            key_drivers=a.key_drivers or [] if a else [],
+            status_rationale=a.status_rationale if a else None,
+            trend=a.trend if a else None,
+            key_risks=risk_summary.get("key_risks", []) if isinstance(risk_summary, dict) else [],
+            recommended_actions=b.recommended_actions or [] if b else [],
+        ))
+
+    # 6. LLM cross-site synthesis
+    root_cause_analysis = None
+    cross_site_patterns = []
+    prioritized_actions = []
+
+    try:
+        site_data_for_llm = [
+            {
+                "site_id": sd.site_id,
+                "status": sd.status,
+                "risk_score": sd.risk_score,
+                "dimension_scores": sd.dimension_scores,
+                "key_drivers": sd.key_drivers,
+                "status_rationale": sd.status_rationale,
+                "trend": sd.trend,
+            }
+            for sd in site_details
+        ]
+
+        prompts = get_prompt_manager()
+        prompt_text = prompts.render(
+            "issue_category_detail",
+            theme=category.theme,
+            severity=category.severity,
+            description=category.description,
+            key_drivers=json.dumps(category.key_drivers, default=str),
+            site_data=json.dumps(site_data_for_llm, default=str),
+        )
+
+        llm = FailoverLLMClient(settings)
+        response = await llm.generate_structured(
+            prompt_text,
+            system="You are a clinical operations analyst. Return valid JSON only.",
+        )
+        parsed = parse_llm_json(response.text)
+
+        root_cause_analysis = parsed.get("root_cause_analysis")
+        cross_site_patterns = [
+            CrossSitePattern(
+                pattern=p.get("pattern", ""),
+                sites=p.get("sites", []),
+                severity=p.get("severity", "warning"),
+            )
+            for p in parsed.get("cross_site_patterns", [])
+        ]
+        prioritized_actions = [
+            PrioritizedAction(
+                action=a.get("action", ""),
+                target_sites=a.get("target_sites", []),
+                priority=a.get("priority", "short_term"),
+                rationale=a.get("rationale", ""),
+            )
+            for a in parsed.get("prioritized_actions", [])
+        ]
+    except Exception:
+        logger.warning("LLM synthesis failed for issue category %d", index, exc_info=True)
+
+    result = IssueCategoryDetailResponse(
+        theme=category.theme,
+        severity=category.severity,
+        description=category.description,
+        primary_dimension=category.primary_dimension,
+        key_drivers=category.key_drivers,
+        affected_sites=site_details,
+        site_count=len(site_details),
+        root_cause_analysis=root_cause_analysis,
+        cross_site_patterns=cross_site_patterns,
+        prioritized_actions=prioritized_actions,
+        generated_at=datetime.now(timezone.utc).isoformat(),
+    )
+    dashboard_cache.set(ck, result)
+    return result
+
+
+# ── MVR (Monitoring Visit Report) Endpoints ─────────────────────────────────
+
+@router.get("/mvr-list", summary="List MVR reports")
+def get_mvr_list(site_id: str | None = None, db: Session = Depends(get_db)):
+    """List MVR reports for a site (or all sites)."""
+    query = db.query(MonitoringVisitReport)
+    if site_id:
+        query = query.filter(MonitoringVisitReport.site_id == site_id)
+    rows = query.order_by(MonitoringVisitReport.visit_date.desc()).all()
+    return {"reports": [
+        {
+            "id": r.id,
+            "site_id": r.site_id,
+            "visit_date": r.visit_date.isoformat() if r.visit_date else None,
+            "visit_type": r.visit_type,
+            "visit_number": r.visit_number,
+            "cra_id": r.cra_id,
+            "pdf_filename": r.pdf_filename,
+            "executive_summary": (r.executive_summary or "")[:150],
+            "action_required_count": r.action_required_count,
+            "word_count": r.word_count,
+        }
+        for r in rows
+    ]}
+
+
+@router.get("/mvr-pdf/{pdf_path:path}", summary="Serve MVR PDF")
+def get_mvr_pdf(pdf_path: str):
+    """Serve an MVR PDF file. pdf_path is relative within monitoring_reports/generated/."""
+    # Sanitize: only allow alphanumeric, dash, underscore, dot, slash
+    safe_path = re.sub(r'[^A-Za-z0-9_/.-]', '', pdf_path)
+    if '..' in safe_path:
+        raise HTTPException(status_code=400, detail="Invalid path")
+    full_path = os.path.join("monitoring_reports", "generated", safe_path)
+    if not os.path.isfile(full_path):
+        raise HTTPException(status_code=404, detail="PDF not found")
+    return FileResponse(full_path, media_type="application/pdf")

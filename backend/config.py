@@ -40,6 +40,7 @@ class Settings(BaseSettings):
 
     # Model settings (override in .env)
     primary_llm: str = ""
+    fast_llm: str = ""  # Lighter model for routing, plan, reflect phases
     embedding_model: str = ""
 
     # Vector store
@@ -69,13 +70,13 @@ class Settings(BaseSettings):
     attention_open_query_critical: int = 25
     attention_entry_lag_threshold: float = 5.0
 
-    # Site status classification
+    # Site status classification — fallback thresholds used only before first LLM risk assessment scan
     status_critical_open_queries: int = 20
     status_critical_alert_count: int = 2
     status_warning_open_queries: int = 10
     status_warning_enrollment_pct: float = 50.0
 
-    # Data quality score formula: max(0, dq_score_base - (open_queries * dq_score_penalty))
+    # Data quality score formula — fallback used only before first LLM risk assessment scan
     dq_score_base: int = 100
     dq_score_penalty_per_query: int = 5
 

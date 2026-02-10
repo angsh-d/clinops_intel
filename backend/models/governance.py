@@ -186,3 +186,38 @@ class SiteIntelligenceBrief(Base):
         Index("ix_brief_scan", "scan_id"),
         Index("ix_brief_site", "site_id"),
     )
+
+
+# ── site_risk_assessments ─────────────────────────────────────────────────
+class SiteRiskAssessment(Base):
+    __tablename__ = "site_risk_assessments"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    scan_id = Column(String(50), nullable=False)
+    site_id = Column(String(20), nullable=False)
+
+    # Overall classification (replaces deterministic status)
+    status = Column(String(20), nullable=False)  # critical / warning / healthy
+    risk_score = Column(Float, nullable=False)    # 0.0 - 1.0 composite
+    confidence = Column(Float, nullable=False)    # 0.0 - 1.0
+
+    # Multi-dimensional scores (each 0.0 - 1.0, higher = more risk)
+    dimension_scores = Column(JSONB)
+    # Expected shape:
+    # {
+    #   "data_quality": 0.7,   (query burden, entry lag, completeness)
+    #   "enrollment": 0.3,     (vs target, trajectory, time-adjusted)
+    #   "compliance": 0.5,     (visit compliance, protocol deviations)
+    #   "operational": 0.4,    (CRA stability, monitoring gaps)
+    #   "integrity": 0.1,      (phantom compliance signals)
+    # }
+
+    # LLM-generated explanation
+    status_rationale = Column(Text, nullable=False)  # Why this classification
+    key_drivers = Column(JSONB)   # Top 3 factors driving the status
+    trend = Column(String(20))    # improving / stable / deteriorating
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    __table_args__ = (
+        Index("ix_risk_scan", "scan_id"),
+        Index("ix_risk_site", "site_id"),
+    )

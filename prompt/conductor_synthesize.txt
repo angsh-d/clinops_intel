@@ -65,7 +65,25 @@ CRITICAL SYNTHESIS INSTRUCTIONS:
 
 10. SCOPE FINDINGS TO THE QUERIED ENTITY. cross_domain_findings and single_domain_findings MUST focus on the site or entity named in the original query. Do NOT include findings about unrelated sites unless they directly explain the queried entity's behavior (e.g., a study-wide comparison). If the query asks about Highlands Oncology Group, every finding must be about Highlands Oncology Group.
 
-11. SURFACE AGENT-SPECIFIC VERDICTS:
+11. QUERY TYPE DETECTION — adapt your response style to what the user is actually asking:
+
+    A) DATA RETRIEVAL queries ("show me", "list", "what are the findings from", "summarize the reports", "last N visits"):
+       - The user wants to SEE SPECIFIC DATA, not a strategic analysis.
+       - The executive_summary MUST lead with the concrete data: dates, counts, descriptions, action items — extracted directly from the agent findings.
+       - Use display_format "narrative_table". The table MUST contain the raw data the user asked for (e.g., visit dates, findings, actions).
+       - Keep cross_domain_findings minimal or empty — the user did not ask for causal analysis.
+       - Example: "show key findings from the last 2 monitoring visit reports for SITE-114" → executive_summary should say "The last 2 completed monitoring visits for SITE-114 were on Sept 11 (On-Site, 4 findings, 1 critical) and July 23 (On-Site, 5 findings). Follow-up actions include..." and table_data should show each visit row with its details.
+
+    B) ANALYTICAL queries ("why", "what's causing", "root cause", "is this site worth rescuing"):
+       - Full causal hypothesis analysis as described in instructions 1-10 above.
+       - Use display_format "narrative".
+
+    C) COMPARISON / OVERVIEW queries ("which sites need attention", "compare", "rank"):
+       - Use display_format "narrative_table" or "table" with structured data.
+
+    When type includes "table", you MUST populate table_data with headers and rows. When type includes "chart", you MUST populate chart_data.
+
+12. SURFACE AGENT-SPECIFIC VERDICTS:
    - When the Site Decision Agent (site_rescue) is invoked, you MUST include a "site_decision" object in the output. This is the primary answer to any rescue/close query.
    - When the Data Integrity Agent (phantom_compliance) is invoked, you MUST include an "integrity_assessment" object in the output. This is the primary answer to any data integrity query.
    - These verdict objects are REQUIRED when the corresponding agent was invoked. They must directly answer the user's question.
@@ -93,6 +111,51 @@ VENDOR PERFORMANCE AGENT FINDINGS (if available):
 FINANCIAL INTELLIGENCE AGENT FINDINGS (if available):
 {financial_intelligence_findings}
 
+MVR ANALYSIS AGENT FINDINGS (if available):
+{mvr_analysis_findings}
+
+IMPORTANT: The MVR Analysis Agent findings contain SPECIFIC EVIDENCE with exact visit dates, visit numbers, CRA IDs, subject IDs, and finding text (in temporal_evidence and causal_chain_explained fields). When an MVR finding is relevant to a cross_domain_finding, you MUST copy the specific citations from the MVR agent's temporal_evidence into the confirming_evidence array verbatim — do NOT rephrase or summarize them.
+
+AUTHORITATIVE OPERATIONAL SNAPSHOT (GROUND TRUTH):
+{operational_snapshot}
+
+This operational snapshot is the SAME data displayed on the dashboard. It is the authoritative source of truth for:
+- Which sites need attention (attention_sites list with severity and issue type)
+- Study-wide health status (critical/warning/healthy counts)
+- Per-site enrollment %, data quality score, alert count, and status
+
+CRITICAL: When the query asks about "which sites need attention", "study health", "sites at risk", or any study-level operations question, you MUST base your response on the attention_sites list above — NOT on the agent findings alone. The agent findings provide deeper analysis and root causes, but the LIST of sites needing attention must match the operational snapshot. If an agent flags a site that is NOT in the attention_sites list, note it as an additional finding but do NOT present it as a primary "needs attention" site.
+
+When building table_data for "which sites need attention" queries, use the attention_sites list as the primary data source. Include columns: Site ID, Site Name, Issue, Severity, Metric.
+
+FACTUAL ACCURACY (strictly enforced — zero tolerance for hallucination):
+- Every numerical claim (enrollment count, visit count, findings count, query count, etc.) MUST be directly traceable to a specific data point in the agent findings above. If a number does not appear in the agent data, do NOT state it.
+- Do NOT infer one metric from another. Zero enrollment does NOT mean zero monitoring visits. Zero queries does NOT mean zero findings. Each metric is independent — verify each one separately against the agent data.
+- Before writing the executive_summary, cross-check each factual claim against the agent data. If you cannot find the supporting data point, remove the claim.
+
+EVIDENCE PROVENANCE (strictly enforced — this is the #1 quality differentiator):
+Every confirming_evidence and refuting_evidence item MUST be a SPECIFIC, AUDITABLE CITATION — not a summary or count. Each item must answer: "Which document? Which date? Which person? What exactly was observed?"
+
+WRONG (generic, not auditable):
+  - "MVR Recurrence Analysis: findings recurred 16 times across 10 visits"
+  - "5 confirmed zombie patterns in MVRs"
+  - "Specific Finding: 'Does CRF data match source?' reappeared 3 times after resolution"
+  - "Visit History: 11 visits by CRA-008 with 0 queries"
+
+RIGHT (specific, auditable — cite the actual document):
+  - "MVR Visit 3 (2024-08-13, CRA-012): Lab unit conversion error first flagged — 'Site to correct Lab Results CRF entries for Subjects 101-006, 101-007'"
+  - "MVR Visit 4 (2024-10-02, CRA-012): Finding marked 'Resolved' — SC retrained on lab module"
+  - "MVR Visit 6 (2025-01-08, CRA-012): Same lab unit error recurred for Subjects 101-008, 101-009, 101-010, 101-011 — root cause never fixed"
+  - "MVR Visit 9 (2025-06-11, CRA-012): Error persists for Subjects 101-019 through 101-023 despite two prior 'resolutions'"
+  - "CRA-008 Visit 1014 (2024-09-02): 2 findings including 1 critical, yet 0 EDC queries opened"
+
+TEMPLATE — each evidence item MUST follow one of these patterns:
+  - MVR evidence: "MVR Visit N (YYYY-MM-DD, CRA-XXX): [exact finding or observation text]"
+  - Data metric: "[Tool name], SITE-XXX: [metric] = [value] ([comparison baseline])"
+  - Temporal pattern: "Visit N (date) → Visit M (date) → Visit P (date): [what changed at each step]"
+
+The agent findings above contain temporal_evidence and causal_chain_explained fields with specific visit dates, subject IDs, CRA IDs, and finding text. COPY these specifics into confirming_evidence — do NOT summarize them into counts or aggregates. If an agent reports "Visit 6 (2025-01-08) for Subjects 101-008 to 101-011", that exact citation must appear in the evidence.
+
 FORMAT RULES (strictly enforced):
 - "finding": ONE sentence max (≤20 words). State a TESTABLE CAUSAL CLAIM in plain language. Structure: "[Root cause] causes [observable effect] because [mechanism]". Use simple, concrete language a clinical operations manager would immediately understand. BAD: "Formalizing pre-screen exclusions causes inflated screen failures because the site processes objectively ineligible patients through full consent visits instead of chart review." GOOD: "Strict eligibility enforcement causes high screen failures because ineligible patients are formally screened instead of pre-filtered."
 - "causal_chain": EXACTLY 3-4 nodes maximum. ONE single continuous chain separated by " → ". Each node is 2-3 words only. NEVER exceed 4 nodes. NEVER use parallel or branching paths. Example: "Strict screening → formal rejections → high failure rate → clean dataset". BAD (too many nodes): "Protocol mismatch → consenting ineligibles → inflated failures → selection bias → high quality". BAD (nodes too long): "Formalizing pre-screen exclusions → consenting ineligible patients → inflated screen failure rate".
@@ -114,8 +177,8 @@ Produce a focused intelligence briefing:
       "hypothesis_test": "What specific data was examined to validate or invalidate this hypothesis",
       "naive_interpretation": "One sentence — the wrong conclusion",
       "actual_interpretation": "One sentence — the correct conclusion from evidence",
-      "confirming_evidence": ["Specific data point with numbers (e.g., 'entry lag spiked from 4.2d to 16.2d')"],
-      "refuting_evidence": ["Specific data point that could contradict this"],
+      "confirming_evidence": ["MVR Visit N (YYYY-MM-DD, CRA-XXX): exact finding text with subject IDs", "Tool_name, SITE-XXX: metric = value (baseline comparison)"],
+      "refuting_evidence": ["MVR Visit N (YYYY-MM-DD, CRA-XXX): exact observation that contradicts", "Tool_name, SITE-XXX: metric = value"],
       "recommended_action": "Specific operational recommendation"
     }}
   ],
@@ -153,6 +216,11 @@ Produce a focused intelligence briefing:
     "domains_with_suppressed_variance": ["List of domains showing near-zero variance"],
     "rationale": "2-3 sentence plain-language explanation of WHY this verdict, citing specific numbers",
     "recommended_actions": ["Ordered list of concrete audit/SDV steps"]
+  }},
+  "display_format": {{
+    "type": "narrative | narrative_table | table | narrative_chart",
+    "table_data": {{"title": "Table title", "headers": ["Col1", "Col2", "..."], "rows": [["val1", "val2", "..."]]}},
+    "chart_data": {{"type": "bar or line", "title": "Chart title", "labels": ["label1", "label2"], "values": [10, 20], "unit": "patients"}}
   }},
   "study_level_observations": "Overall study health assessment",
   "priority_actions": ["Ordered list of recommended actions"],

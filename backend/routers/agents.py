@@ -1,9 +1,11 @@
 """Agent router: invoke agents directly, retrieve findings, launch investigations."""
 
 import logging
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query as QueryParam
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.dependencies import get_db, get_settings_dep
@@ -146,10 +148,41 @@ async def investigate(
     if request.site_id:
         question = f"[Site: {request.site_id}] {request.query}"
 
-    # Check for a completed investigation with the same question text
+    # Check for a completed investigation with the same question text.
+    # Normalize: strip backticks, punctuation, extra whitespace; lowercase.
+    def _normalize_query(q: str) -> str:
+        q = re.sub(r'[`]', '', q)  # strip backticks
+        q = re.sub(r'\s+', ' ', q).strip().lower()
+        return q
+
+    def _strip_trailing_punct(q: str) -> str:
+        return re.sub(r'[?.!,;:\s]+$', '', q)
+
+    normalized = _normalize_query(question)
+    normalized_core = _strip_trailing_punct(normalized)
+
+    # 1. Try exact match first (fast path)
     existing = db.query(ConversationalInteraction).filter_by(
         user_query=question, status="completed",
     ).order_by(ConversationalInteraction.completed_at.desc()).first()
+
+    # 2. If no exact match, try normalized prefix/containment match
+    if not existing:
+        completed = db.query(ConversationalInteraction).filter(
+            ConversationalInteraction.status == "completed",
+            ConversationalInteraction.synthesis_data.isnot(None),
+        ).order_by(ConversationalInteraction.completed_at.desc()).limit(50).all()
+
+        for candidate in completed:
+            cn = _normalize_query(candidate.user_query)
+            cn_core = _strip_trailing_punct(cn)
+            # Match if: exact normalized, or either core is a prefix of the other
+            if (cn == normalized
+                    or cn_core.startswith(normalized_core)
+                    or normalized_core.startswith(cn_core)):
+                existing = candidate
+                logger.info("Fuzzy cache match: input=[%s] matched=[%s]", normalized_core[:60], cn_core[:60])
+                break
 
     if existing:
         logger.info("Returning cached investigation %s for duplicate question", existing.query_id)

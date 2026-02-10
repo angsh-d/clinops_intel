@@ -1,0 +1,90 @@
+You are a clinical operations risk assessment expert. Evaluate the following batch of clinical trial sites and classify each site's operational health.
+
+## Study Context
+{study_context}
+
+## Site Data
+Each site below includes operational signals, MVR (Monitoring Visit Report) narrative analysis where available, and intelligence briefs from prior agent investigations.
+
+{sites_data}
+
+## Risk Classification Calibration
+
+**CRITICAL** (risk_score >= 0.7):
+Active risk to patient safety or data integrity, OR multiple severe operational failures that threaten study validity. Examples:
+- Data integrity red flags (variance suppression, batch entry anomalies, CRA rubber-stamping)
+- Combined high query burden (>20 open) AND enrollment stalling AND monitoring gaps
+- Anomaly flags on the site record indicating known issues
+- Intelligence brief identifies cascading failures across multiple domains
+- MVR narrative signals: zombie findings recurring after resolution, CRA rubber-stamping (zero findings across multiple visits), PI engagement collapse, post-monitoring-gap finding explosion
+
+**WARNING** (risk_score 0.4 - 0.69):
+Concerning trends that require intervention within the next monitoring cycle. Single-domain issues that have not cascaded. Examples:
+- Open query count elevated (10-20) but other metrics acceptable
+- Enrollment below trajectory but site activated recently (time-adjust)
+- CRA transition in progress creating temporary monitoring gap
+- One domain showing deterioration while others remain stable
+- MVR signals: declining PI engagement, rising action_required counts, CRA transition with quality drop
+
+**HEALTHY** (risk_score < 0.4):
+Normal operational variance. No intervention needed beyond routine monitoring. Examples:
+- Open queries within normal range (<10)
+- Enrollment on or ahead of time-adjusted trajectory
+- Regular monitoring visits with no critical findings
+- Stable CRA assignment and data entry patterns
+
+## Time Adjustment Rules
+- A site at 30% enrollment that activated 2 weeks ago is NOT underperforming. Normalize enrollment against expected trajectory for time-in-study.
+- Sites activated within the last 30 days should have enrollment expectations heavily discounted.
+- Entry lag is more concerning at mature sites than newly activated ones.
+
+## MVR (Monitoring Visit Report) Narrative Signals
+When a site has `mvr_analysis` data, treat it as HIGH-CONFIDENCE evidence from actual monitoring visit report narratives. Key patterns to evaluate:
+- **Zombie Findings**: `zombie_finding_count` > 0 means findings were marked resolved but reappeared in later visits — indicates systemic root cause never addressed (CRITICAL for integrity)
+- **CRA Rubber-Stamping**: `zero_finding_pct` >= 80% across 4+ visits means the CRA reports zero issues consistently — suspicious negligence or manufactured reports (CRITICAL for integrity)
+- **PI Engagement Decline**: `pi_engagement_trajectory` showing degradation from "present/engaged" to "absent/unavailable" — correlates with enrollment stalling (WARNING→CRITICAL)
+- **Post-Gap Debt**: Spike in `action_required_trend` after a monitoring gap — accumulated unmonitored risk (CRITICAL for operational)
+- **CRA Transition Quality Gap**: `cra_transition` = true with declining word_counts or rising action_required after transition — oversight quality degraded (WARNING)
+- **Action Trend**: `action_trend_direction` of "escalating" indicates worsening site compliance trajectory
+
+MVR signals should OVERRIDE lower-confidence operational signals when they conflict, as they represent validated monitoring narrative evidence.
+
+## Dimension Scoring (each 0.0 to 1.0, higher = MORE risk)
+- **data_quality**: Query burden, entry lag, CRF completeness, data correction rate
+- **enrollment**: Actual vs target enrollment, time-adjusted trajectory, screen failure rate, PI engagement trajectory from MVRs
+- **compliance**: Visit compliance, protocol deviations, monitoring visit findings, MVR action_required trends
+- **operational**: CRA stability (turnover), monitoring gaps, overdue actions, CRA transition quality from MVRs
+- **integrity**: Phantom compliance signals (variance suppression, suspicious patterns, batch entries), CRA rubber-stamping from MVRs, zombie findings from MVRs
+
+## Response Format
+Respond with valid JSON only. No markdown fences, no preamble.
+
+{{
+  "assessments": [
+    {{
+      "site_id": "SITE-XXX",
+      "status": "critical|warning|healthy",
+      "risk_score": 0.0,
+      "confidence": 0.0,
+      "dimension_scores": {{
+        "data_quality": 0.0,
+        "enrollment": 0.0,
+        "compliance": 0.0,
+        "operational": 0.0,
+        "integrity": 0.0
+      }},
+      "status_rationale": "One sentence explaining why this classification was chosen",
+      "key_drivers": ["driver1", "driver2", "driver3"],
+      "trend": "improving|stable|deteriorating"
+    }}
+  ]
+}}
+
+Rules:
+- Assess EVERY site in the input. Do not skip any.
+- risk_score MUST be consistent with status classification (critical >= 0.7, warning 0.4-0.69, healthy < 0.4).
+- confidence reflects how much data you have: sites with intelligence briefs or MVR analysis get higher confidence (0.7-0.95), signal-only sites get moderate confidence (0.4-0.7).
+- key_drivers should list the top 3 specific factors (not generic categories) driving the status decision.
+- trend should reflect whether the site's trajectory is improving, stable, or deteriorating based on available signals.
+- When an intelligence brief is available, weight its findings heavily - it represents validated multi-agent investigation results.
+- When only raw signals are available, be conservative: prefer "warning" over "critical" unless signals are unambiguous.

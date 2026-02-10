@@ -1,8 +1,21 @@
-Analyze the enrollment pipeline across all sites to detect velocity drops, screen failure spikes, and consent withdrawal patterns. Investigate:
+OBJECTIVE: Detect enrollment pipeline failures, funnel bottlenecks, and supply chain risks that threaten the study timeline, randomization balance, or statistical power.
 
-1. Which sites have enrollment velocity below target, and is the gap widening or narrowing?
-2. Are there sites with screen failure rates above 40%, and what are the primary exclusion criteria driving failures?
-3. Are consent withdrawal rates elevated at any sites, and do they correlate with specific protocol amendments or operational changes?
-4. Are there sites with kit inventory shortfalls that could bottleneck upcoming randomizations?
+PRIORITY INVESTIGATION AREAS:
 
-Identify whether enrollment issues are site-specific operational problems or study-wide protocol challenges.
+1. ENROLLMENT VELOCITY & TRAJECTORY: Which sites are enrolling below their expected rate? Analyze the 4-week rolling velocity trend and projected completion date. Critically distinguish between sites that are decelerating (worsening trajectory) versus sites that are consistently slow (may have realistic but low baselines). Compare each site's actual-vs-target gap trajectory.
+
+2. SCREENING FUNNEL DECOMPOSITION: Where in the funnel are patients being lost — at pre-screening, formal screening, or post-consent? For sites with elevated screen failure rates, decompose by failure reason code and compare against the study-wide failure reason distribution. Are specific eligibility criteria (inclusion or exclusion) driving disproportionate failures at certain sites? This may indicate protocol interpretation differences across sites rather than genuine patient population differences.
+
+3. CONSENT & RETENTION: Are consent withdrawal rates elevated at specific sites or during specific study phases? Distinguish between pre-randomization withdrawals (screening dropouts) and post-randomization withdrawals (retention failures) — these have very different root causes and operational implications. Post-randomization withdrawals directly impact statistical power.
+
+4. SUPPLY CHAIN & RANDOMIZATION LOGISTICS: Are there sites experiencing randomization delays due to kit unavailability, depot shipment delays, or IVRS/IWRS processing issues? Analyze RandomizationEvent data for delay events — what are the delay reasons and durations? Cross-reference kit inventory levels with upcoming enrollment projections to identify sites at risk of future stockouts.
+
+5. REGIONAL ENROLLMENT PATTERNS: How does enrollment performance vary across countries and regions? Are there geographic clusters of underperformance that suggest market-level barriers (regulatory delays, competitive pressure, seasonal patterns) versus isolated site-level problems? Regional patterns inform whether the response should be site-specific intervention or protocol amendment.
+
+6. RANDOMIZATION BALANCE: Is the randomization allocation maintaining the intended study arm balance? Are there sites or strata where imbalance is emerging? Imbalance affects statistical power and may indicate IVRS configuration issues or site-level protocol deviations.
+
+7. SITE ACTIVATION TO FIRST PATIENT: For recently activated sites, what is the time from activation to first patient screened? Prolonged activation-to-enrollment gaps suggest site readiness issues (IRB delays, staff training, referral network establishment) that may predict sustained underperformance.
+
+CROSS-DOMAIN SIGNALS: Flag for site_rescue agent if any site shows enrollment trajectory that makes target completion mathematically impossible. Flag for financial_intelligence agent if enrollment delays are projected to push the study beyond its budgeted timeline. Flag for data_quality agent if high-enrolling sites show declining data quality (speed vs. quality tradeoff).
+
+DEFENSIBILITY: Quantify every enrollment gap with absolute numbers and percentages. Include projected timeline impact for each finding. Distinguish between sites where intervention can recover the gap versus sites where the deficit is unrecoverable.

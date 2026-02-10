@@ -35,6 +35,7 @@ def build_agent_registry() -> AgentRegistry:
     from backend.agents.site_rescue import SiteRescueAgent
     from backend.agents.vendor_performance import VendorPerformanceAgent
     from backend.agents.financial_intelligence import FinancialIntelligenceAgent
+    from backend.agents.mvr_analysis import MVRAnalysisAgent
 
     registry = AgentRegistry()
     registry.register(DataQualityAgent)
@@ -44,4 +45,5 @@ def build_agent_registry() -> AgentRegistry:
     registry.register(SiteRescueAgent)
     registry.register(VendorPerformanceAgent)
     registry.register(FinancialIntelligenceAgent)
+    registry.register(MVRAnalysisAgent)
     return registry

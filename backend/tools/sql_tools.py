@@ -10,9 +10,9 @@ from sqlalchemy.orm import Session
 
 from data_generators.models import (
     Site, ECRFEntry, Query, DataCorrection, CRAAssignment,
-    MonitoringVisit, ScreeningLog, RandomizationLog, EnrollmentVelocity,
+    MonitoringVisit, MonitoringVisitReport, OverdueAction, ScreeningLog, RandomizationLog, EnrollmentVelocity,
     ScreenFailureReasonCode, KitInventory, KRISnapshot,
-    RandomizationEvent,
+    RandomizationEvent, SubjectVisit, StudyConfig,
     Vendor, VendorScope, VendorSiteAssignment, VendorKPI,
     VendorMilestone, VendorIssue,
     StudyBudget, BudgetLineItem, FinancialSnapshot,
@@ -197,6 +197,76 @@ class MonitoringVisitHistoryTool(BaseTool):
         rows = q.all()
         data = _serialize_rows(rows)
         return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class MonitoringVisitReportTool(BaseTool):
+    name = "monitoring_visit_report"
+    description = (
+        "Returns the last N monitoring visit reports for a site with full detail: "
+        "visit date, type, CRA, findings count, critical findings, queries generated, "
+        "days overdue, AND linked follow-up action items (category, description, status). "
+        "Use this for questions about monitoring visit findings, visit reports, or follow-up actions. "
+        "Args: site_id (required), limit (optional, default 2)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+        if not site_id:
+            return ToolResult(tool_name=self.name, success=False, data=[], row_count=0,
+                              error="site_id is required")
+        limit = int(kwargs.get("limit", 2))
+
+        visits = (
+            db_session.query(MonitoringVisit)
+            .filter(MonitoringVisit.site_id == site_id, MonitoringVisit.status == "Completed")
+            .order_by(MonitoringVisit.actual_date.desc())
+            .limit(limit)
+            .all()
+        )
+
+        reports = []
+        for v in visits:
+            actions = (
+                db_session.query(OverdueAction)
+                .filter(OverdueAction.monitoring_visit_id == v.id)
+                .all()
+            )
+            action_list = [
+                {
+                    "category": a.category,
+                    "description": a.action_description,
+                    "status": a.status,
+                    "due_date": str(a.due_date) if a.due_date else None,
+                }
+                for a in actions
+            ]
+
+            # Pre-format findings summary for LLM consumption
+            parts = [f"{v.findings_count} findings ({v.critical_findings} critical)"]
+            if action_list:
+                action_strs = [f"[{a['category']}] {a['description']} ({a['status']})" for a in action_list]
+                parts.append("Actions: " + "; ".join(action_strs))
+            else:
+                parts.append("No follow-up actions recorded")
+            if v.queries_generated:
+                parts.append(f"{v.queries_generated} queries generated")
+
+            reports.append({
+                "visit_id": v.id,
+                "site_id": v.site_id,
+                "cra_id": v.cra_id,
+                "visit_date": str(v.actual_date) if v.actual_date else None,
+                "planned_date": str(v.planned_date) if v.planned_date else None,
+                "visit_type": v.visit_type,
+                "findings_count": v.findings_count,
+                "critical_findings": v.critical_findings,
+                "queries_generated": v.queries_generated,
+                "days_overdue": v.days_overdue,
+                "findings_summary": ". ".join(parts),
+                "follow_up_actions": action_list,
+            })
+
+        return ToolResult(tool_name=self.name, success=True, data=reports, row_count=len(reports))
 
 
 class SiteSummaryTool(BaseTool):
@@ -1345,7 +1415,8 @@ class SupplyConstraintImpactTool(BaseTool):
             "stockout_episodes": stockout_data,
             "consent_withdrawals": withdrawal_data,
         }
-        return ToolResult(tool_name=self.name, success=True, data=result, row_count=len(delay_data))
+        total_rows = len(delay_data) + len(stockout_data) + len(withdrawal_data)
+        return ToolResult(tool_name=self.name, success=True, data=result, row_count=total_rows)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1644,6 +1715,32 @@ class ChangeOrderImpactTool(BaseTool):
         return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
 
 
+class StudyOperationalSnapshotTool(BaseTool):
+    name = "study_operational_snapshot"
+    description = (
+        "Returns a study-wide operational snapshot: sites needing attention (with severity, "
+        "issue type, and metrics), and per-site status overview (enrollment %, DQ score, "
+        "alert count, status). This is the authoritative source for 'which sites need attention' "
+        "and 'study health overview' questions. Use this FIRST for study-level operations queries. "
+        "Args: none required."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        from backend.services.dashboard_data import get_attention_sites_data, get_sites_overview_data
+        from backend.config import get_settings
+
+        settings = get_settings()
+        attention = get_attention_sites_data(db_session, settings)
+        overview = get_sites_overview_data(db_session, settings)
+
+        data = {
+            "attention_sites": attention,
+            "sites_overview": overview,
+        }
+        row_count = len(attention.get("sites", [])) + len(overview.get("sites", []))
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=row_count)
+
+
 class FinancialImpactOfDelaysTool(BaseTool):
     name = "financial_impact_of_delays"
     description = (
@@ -1669,39 +1766,501 @@ class FinancialImpactOfDelaysTool(BaseTool):
         site_targets = {s.site_id: s.target_enrollment for s in db_session.query(Site.site_id, Site.target_enrollment).all()}
         site_names = {s.site_id: s.name for s in db_session.query(Site.site_id, Site.name).all()}
 
+        # Get actual study duration from study_config for monthly cost calculation
+        study_config = db_session.query(StudyConfig).first()
+        study_start = study_config.study_start_date if study_config else None
+
         data = []
         for m in metrics:
             enrolled = enrollment_counts.get(m.site_id, 0)
             target = site_targets.get(m.site_id, 0)
             enrollment_gap = max(0, target - enrolled)
-            # Estimate delay cost: additional months of site maintenance
-            monthly_site_cost = (m.cost_to_date or 0) / max(18, 1)  # approx 18 months of study
-            estimated_delay_cost = enrollment_gap * monthly_site_cost * 0.1 if enrollment_gap > 0 else 0
 
-            if m.variance_pct and m.variance_pct > 5:
-                # Calculate over plan amount for transparency
-                planned = m.planned_cost_to_date or 0
-                actual = m.cost_to_date or 0
-                over_plan = actual - planned
-                
+            # Calculate monthly cost from actual study duration, not a hardcoded assumption
+            cost_to_date = m.cost_to_date or 0
+            planned = m.planned_cost_to_date or 0
+            over_plan = cost_to_date - planned
+            months_active = 1
+            if study_start and m.snapshot_date:
+                delta = (m.snapshot_date - study_start).days
+                months_active = max(delta / 30.44, 1)
+            monthly_site_cost = cost_to_date / months_active
+
+            # Estimated delay cost: each unfilled patient slot extends the site for
+            # (1 / site's historical monthly enrollment rate) additional months
+            monthly_enrollment = enrolled / months_active if months_active > 0 else 0
+            if monthly_enrollment > 0 and enrollment_gap > 0:
+                additional_months = enrollment_gap / monthly_enrollment
+                estimated_delay_cost = additional_months * monthly_site_cost
+                delay_formula = (
+                    f"({enrollment_gap} gap ÷ {round(monthly_enrollment, 1)} pts/mo = "
+                    f"{round(additional_months, 1)} extra months × "
+                    f"${round(monthly_site_cost, 0)}/mo) = ${round(estimated_delay_cost, 0)}"
+                )
+            else:
+                estimated_delay_cost = 0
+                delay_formula = "Insufficient enrollment history for projection"
+
+            # Include all sites with meaningful data (not just variance > 5%)
+            if enrollment_gap > 0 or over_plan > 0:
                 data.append({
                     "site_id": m.site_id,
                     "site_name": site_names.get(m.site_id),
-                    "cost_to_date": m.cost_to_date,
+                    "cost_to_date": cost_to_date,
                     "planned_cost_to_date": planned,
                     "over_plan_amount": round(over_plan, 2),
                     "variance_pct": m.variance_pct,
+                    "months_active": round(months_active, 1),
+                    "monthly_site_cost": round(monthly_site_cost, 2),
                     "enrolled": enrolled,
                     "target": target,
                     "enrollment_gap": enrollment_gap,
+                    "monthly_enrollment_rate": round(monthly_enrollment, 2),
                     "estimated_delay_cost": round(estimated_delay_cost, 2),
-                    "delay_cost_formula": f"({enrollment_gap} gap × ${round(monthly_site_cost, 2)}/mo × 0.1) = ${round(estimated_delay_cost, 2)}",
+                    "delay_cost_formula": delay_formula,
                     "cost_per_randomized": m.cost_per_patient_randomized,
-                    "data_source": "site_financial_metrics table",
+                    "data_source": "site_financial_metrics + study_config tables",
                 })
 
         data.sort(key=lambda x: x.get("estimated_delay_cost", 0), reverse=True)
         return ToolResult(tool_name=self.name, success=True, data=data[:30], row_count=len(data))
+
+
+class VisitComplianceAnalysisTool(BaseTool):
+    name = "visit_compliance_analysis"
+    description = (
+        "Per-site visit compliance analysis: completed, missed, and pending visit counts, "
+        "compliance rate (% completed), and average visit delay (actual vs planned date). "
+        "Joins SubjectVisit to ScreeningLog to resolve site_id. "
+        "Args: site_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+
+        # SubjectVisit doesn't have site_id directly — join via subject_id → ScreeningLog
+        q = db_session.query(
+            ScreeningLog.site_id,
+            func.count(SubjectVisit.id).label("total_visits"),
+            func.sum(case((SubjectVisit.visit_status == "Completed", 1), else_=0)).label("completed"),
+            func.sum(case((SubjectVisit.visit_status == "Missed", 1), else_=0)).label("missed"),
+            func.sum(case((SubjectVisit.visit_status == "Pending", 1), else_=0)).label("pending"),
+        ).join(
+            ScreeningLog, SubjectVisit.subject_id == ScreeningLog.subject_id,
+        ).group_by(ScreeningLog.site_id)
+        if site_id:
+            q = q.filter(ScreeningLog.site_id == site_id)
+        rows = q.all()
+
+        # Separate query for visit delay (only where both dates exist)
+        delay_q = db_session.query(
+            ScreeningLog.site_id,
+            func.avg(SubjectVisit.actual_date - SubjectVisit.planned_date).label("avg_delay_days"),
+        ).join(
+            ScreeningLog, SubjectVisit.subject_id == ScreeningLog.subject_id,
+        ).filter(
+            SubjectVisit.actual_date.isnot(None),
+            SubjectVisit.planned_date.isnot(None),
+        ).group_by(ScreeningLog.site_id)
+        if site_id:
+            delay_q = delay_q.filter(ScreeningLog.site_id == site_id)
+        delay_map = {r.site_id: r.avg_delay_days for r in delay_q.all()}
+
+        data = []
+        for r in rows:
+            total = r.total_visits or 0
+            completed = r.completed or 0
+            missed = r.missed or 0
+            compliance_rate = round(completed / total * 100, 1) if total > 0 else 0
+            avg_delay = delay_map.get(r.site_id)
+            if avg_delay is not None:
+                try:
+                    avg_delay = round(float(avg_delay), 1)
+                except (TypeError, ValueError):
+                    avg_delay = None
+            data.append({
+                "site_id": r.site_id,
+                "total_visits": total,
+                "completed": completed,
+                "missed": missed,
+                "pending": r.pending or 0,
+                "compliance_rate_pct": compliance_rate,
+                "avg_visit_delay_days": avg_delay,
+                "missed_visit_flag": missed > total * 0.15,
+            })
+        data.sort(key=lambda x: x["compliance_rate_pct"])
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class OverdueActionSummaryTool(BaseTool):
+    name = "overdue_action_summary"
+    description = (
+        "Study-wide overdue action analysis: per-site counts of total, overdue, and completed "
+        "follow-up actions from monitoring visits, broken down by category. "
+        "Identifies sites with chronic action item backlogs. "
+        "Args: site_id (optional)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+
+        q = db_session.query(
+            OverdueAction.site_id,
+            OverdueAction.category,
+            func.count(OverdueAction.id).label("total_actions"),
+            func.sum(case((OverdueAction.status == "Overdue", 1), else_=0)).label("overdue_count"),
+            func.sum(case((OverdueAction.status == "Completed", 1), else_=0)).label("completed_count"),
+            func.sum(case((OverdueAction.status == "Open", 1), else_=0)).label("open_count"),
+        ).group_by(OverdueAction.site_id, OverdueAction.category)
+        if site_id:
+            q = q.filter(OverdueAction.site_id == site_id)
+        rows = q.all()
+
+        data = []
+        for r in rows:
+            total = r.total_actions or 0
+            overdue = r.overdue_count or 0
+            completed = r.completed_count or 0
+            resolution_rate = round(completed / total * 100, 1) if total > 0 else 0
+            data.append({
+                "site_id": r.site_id,
+                "category": r.category,
+                "total_actions": total,
+                "overdue_count": overdue,
+                "open_count": r.open_count or 0,
+                "completed_count": completed,
+                "resolution_rate_pct": resolution_rate,
+                "chronic_backlog_flag": overdue > 3,
+            })
+        data.sort(key=lambda x: x["overdue_count"], reverse=True)
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MVR ANALYSIS TOOLS (Monitoring Visit Report narrative analysis)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class MVRNarrativeSearchTool(BaseTool):
+    name = "mvr_narrative_search"
+    description = (
+        "Returns MVR narrative content: executive_summary, overall_impression, cra_assessment, "
+        "findings (checklist items with action_required), urgent_issues, pi_engagement, sdv_findings, "
+        "follow_up_from_prior, word_count, action_required_count for monitoring visit reports. "
+        "Args: site_id (optional), cra_id (optional), limit (optional, default 50), "
+        "date_from/date_to (optional date filters)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+        cra_id = kwargs.get("cra_id")
+        limit = kwargs.get("limit", 50)
+        date_from = kwargs.get("date_from")
+        date_to = kwargs.get("date_to")
+
+        q = db_session.query(MonitoringVisitReport).order_by(
+            MonitoringVisitReport.site_id, MonitoringVisitReport.visit_date
+        )
+        if site_id:
+            q = q.filter(MonitoringVisitReport.site_id == site_id)
+        if cra_id:
+            q = q.filter(MonitoringVisitReport.cra_id == cra_id)
+        if date_from:
+            q = q.filter(MonitoringVisitReport.visit_date >= date_from)
+        if date_to:
+            q = q.filter(MonitoringVisitReport.visit_date <= date_to)
+
+        rows = q.limit(limit).all()
+        data = []
+        for r in rows:
+            data.append({
+                "site_id": r.site_id,
+                "cra_id": r.cra_id,
+                "visit_date": r.visit_date.isoformat() if r.visit_date else "",
+                "visit_number": r.visit_number,
+                "visit_type": r.visit_type,
+                "executive_summary": r.executive_summary,
+                "overall_impression": r.overall_impression,
+                "urgent_issues": r.urgent_issues or [],
+                "findings": r.findings or [],
+                "sdv_findings": r.sdv_findings or [],
+                "pi_engagement": r.pi_engagement or {},
+                "follow_up_from_prior": r.follow_up_from_prior or [],
+                "cra_assessment": r.cra_assessment,
+                "word_count": r.word_count,
+                "action_required_count": r.action_required_count,
+            })
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class MVRCRAPortfolioTool(BaseTool):
+    name = "mvr_cra_portfolio"
+    description = (
+        "Per-CRA MVR aggregates: average word_count, average action_required_count, "
+        "zero-finding visit percentage, total visits, sites monitored. "
+        "Identifies CRAs with suspiciously uniform or superficial reports. "
+        "Args: cra_id (optional — if omitted, returns all CRAs)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        cra_id = kwargs.get("cra_id")
+
+        q = db_session.query(
+            MonitoringVisitReport.cra_id,
+            func.count(MonitoringVisitReport.id).label("total_visits"),
+            func.avg(MonitoringVisitReport.word_count).label("avg_word_count"),
+            func.avg(MonitoringVisitReport.action_required_count).label("avg_action_count"),
+            func.sum(case((MonitoringVisitReport.action_required_count == 0, 1), else_=0)).label("zero_finding_visits"),
+            func.count(func.distinct(MonitoringVisitReport.site_id)).label("sites_monitored"),
+            func.min(MonitoringVisitReport.visit_date).label("first_visit"),
+            func.max(MonitoringVisitReport.visit_date).label("last_visit"),
+        ).group_by(MonitoringVisitReport.cra_id)
+
+        if cra_id:
+            q = q.filter(MonitoringVisitReport.cra_id == cra_id)
+
+        rows = q.all()
+        data = []
+        for r in rows:
+            total = r.total_visits or 1
+            zero_pct = round((r.zero_finding_visits or 0) / total * 100, 1)
+            data.append({
+                "cra_id": r.cra_id,
+                "total_visits": total,
+                "avg_word_count": round(float(r.avg_word_count or 0), 0),
+                "avg_action_required_count": round(float(r.avg_action_count or 0), 1),
+                "zero_finding_visit_pct": zero_pct,
+                "sites_monitored": r.sites_monitored,
+                "first_visit": r.first_visit.isoformat() if r.first_visit else "",
+                "last_visit": r.last_visit.isoformat() if r.last_visit else "",
+                "rubber_stamp_flag": zero_pct > 80 and total >= 3,
+            })
+        data.sort(key=lambda x: x["zero_finding_visit_pct"], reverse=True)
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
+
+
+class MVRRecurrenceAnalysisTool(BaseTool):
+    name = "mvr_recurrence_analysis"
+    description = (
+        "Finds checklist items with action_required that recur in the same section across "
+        "non-consecutive visits for a site — zombie findings that keep reappearing despite resolution. "
+        "Args: site_id (required), section (optional — filter to specific checklist section)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+        section_filter = kwargs.get("section")
+
+        if not site_id:
+            return ToolResult(tool_name=self.name, success=False, error="site_id is required")
+
+        # Get all MVRs for this site ordered by visit date
+        mvrs = db_session.query(MonitoringVisitReport).filter(
+            MonitoringVisitReport.site_id == site_id
+        ).order_by(MonitoringVisitReport.visit_date).all()
+
+        if not mvrs:
+            return ToolResult(tool_name=self.name, success=True, data=[], row_count=0)
+
+        # Track findings by section across visits
+        section_history: dict[str, list[dict]] = {}
+        for mvr in mvrs:
+            findings = mvr.findings or []
+            for f in findings:
+                if not f.get("action_required"):
+                    continue
+                section = f.get("section", "Unknown")
+                if section_filter and section != section_filter:
+                    continue
+                if section not in section_history:
+                    section_history[section] = []
+                section_history[section].append({
+                    "visit_date": mvr.visit_date.isoformat() if mvr.visit_date else "",
+                    "visit_number": mvr.visit_number,
+                    "item_number": f.get("item_number"),
+                    "question": f.get("question"),
+                    "action_required": f.get("action_required"),
+                })
+
+        # Detect recurrence: same section appearing in 2+ non-consecutive visits
+        recurrences = []
+        for section, occurrences in section_history.items():
+            if len(occurrences) >= 2:
+                recurrences.append({
+                    "site_id": site_id,
+                    "section": section,
+                    "occurrence_count": len(occurrences),
+                    "occurrences": occurrences,
+                    "zombie_flag": len(occurrences) >= 3,
+                    "pattern": "recurring" if len(occurrences) >= 2 else "isolated",
+                })
+
+        # Also check follow_up_from_prior for items that go resolved → reappear
+        follow_up_patterns = []
+        for i, mvr in enumerate(mvrs):
+            follow_ups = mvr.follow_up_from_prior or []
+            for fu in follow_ups:
+                if fu.get("status") == "Resolved":
+                    # Check if a similar finding appears in later visits
+                    action_text = fu.get("action", "").lower()
+                    for later_mvr in mvrs[i+1:]:
+                        later_findings = later_mvr.findings or []
+                        for lf in later_findings:
+                            if lf.get("action_required") and any(
+                                word in (lf.get("action_required", "") + " " + lf.get("question", "")).lower()
+                                for word in action_text.split()[:3]
+                                if len(word) > 4
+                            ):
+                                follow_up_patterns.append({
+                                    "resolved_visit_date": mvr.visit_date.isoformat(),
+                                    "resolved_action": fu.get("action"),
+                                    "reappeared_visit_date": later_mvr.visit_date.isoformat(),
+                                    "reappeared_finding": lf.get("action_required"),
+                                    "zombie_confirmed": True,
+                                })
+                                break
+
+        data = {
+            "site_id": site_id,
+            "section_recurrences": recurrences,
+            "follow_up_zombie_patterns": follow_up_patterns,
+            "total_recurring_sections": len(recurrences),
+            "total_zombie_patterns": len(follow_up_patterns),
+        }
+        return ToolResult(tool_name=self.name, success=True, data=[data], row_count=1)
+
+
+class MVRTemporalPatternTool(BaseTool):
+    name = "mvr_temporal_pattern"
+    description = (
+        "Time-series MVR metrics for a site: pi_engagement trajectory, action_required_count trend, "
+        "word_count trend, finding severity over visits. Reveals temporal patterns like PI engagement "
+        "decline, post-gap finding spikes, or CRA quality changes. "
+        "Args: site_id (required)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        site_id = kwargs.get("site_id")
+        if not site_id:
+            return ToolResult(tool_name=self.name, success=False, error="site_id is required")
+
+        mvrs = db_session.query(MonitoringVisitReport).filter(
+            MonitoringVisitReport.site_id == site_id
+        ).order_by(MonitoringVisitReport.visit_date).all()
+
+        if not mvrs:
+            return ToolResult(tool_name=self.name, success=True, data=[], row_count=0)
+
+        timeline = []
+        for mvr in mvrs:
+            pi = mvr.pi_engagement or {}
+            timeline.append({
+                "visit_date": mvr.visit_date.isoformat() if mvr.visit_date else "",
+                "visit_number": mvr.visit_number,
+                "cra_id": mvr.cra_id,
+                "word_count": mvr.word_count,
+                "action_required_count": mvr.action_required_count,
+                "pi_present": pi.get("pi_present"),
+                "pi_engagement_quality": pi.get("engagement_quality"),
+                "pi_notes": pi.get("notes", ""),
+                "urgent_issue_count": len(mvr.urgent_issues or []),
+                "finding_count": len(mvr.findings or []),
+                "sdv_finding_count": len(mvr.sdv_findings or []),
+                "follow_up_open_count": sum(
+                    1 for f in (mvr.follow_up_from_prior or [])
+                    if f.get("status") in ("Open", "Partially Resolved")
+                ),
+            })
+
+        # Compute trends
+        word_counts = [t["word_count"] for t in timeline if t["word_count"]]
+        action_counts = [t["action_required_count"] for t in timeline if t["action_required_count"] is not None]
+
+        # Detect CRA changes
+        cra_changes = []
+        for i in range(1, len(timeline)):
+            if timeline[i]["cra_id"] != timeline[i-1]["cra_id"]:
+                cra_changes.append({
+                    "change_date": timeline[i]["visit_date"],
+                    "from_cra": timeline[i-1]["cra_id"],
+                    "to_cra": timeline[i]["cra_id"],
+                    "visit_number": timeline[i]["visit_number"],
+                })
+
+        data = {
+            "site_id": site_id,
+            "timeline": timeline,
+            "total_visits": len(timeline),
+            "avg_word_count": round(sum(word_counts) / len(word_counts), 0) if word_counts else 0,
+            "avg_action_count": round(sum(action_counts) / len(action_counts), 1) if action_counts else 0,
+            "cra_changes": cra_changes,
+            "word_count_trend": "declining" if len(word_counts) >= 3 and word_counts[-1] < word_counts[0] * 0.7 else
+                               "increasing" if len(word_counts) >= 3 and word_counts[-1] > word_counts[0] * 1.3 else "stable",
+            "action_count_trend": "escalating" if len(action_counts) >= 3 and action_counts[-1] > action_counts[0] * 1.5 else
+                                  "improving" if len(action_counts) >= 3 and action_counts[-1] < action_counts[0] * 0.5 else "stable",
+        }
+        return ToolResult(tool_name=self.name, success=True, data=[data], row_count=1)
+
+
+class MVRCrossSiteComparisonTool(BaseTool):
+    name = "mvr_cross_site_comparison"
+    description = (
+        "Comparative MVR metrics across sites: avg word_count, avg action_required_count, "
+        "zero-finding visit %, pi_engagement quality distribution. "
+        "Filters by CRA, country, or specific site list. "
+        "Args: cra_id (optional), country (optional), site_ids (optional, comma-separated)."
+    )
+
+    async def execute(self, db_session: Session, **kwargs) -> ToolResult:
+        cra_id = kwargs.get("cra_id")
+        country = kwargs.get("country")
+        site_ids_str = kwargs.get("site_ids", "")
+
+        q = db_session.query(
+            MonitoringVisitReport.site_id,
+            func.count(MonitoringVisitReport.id).label("total_visits"),
+            func.avg(MonitoringVisitReport.word_count).label("avg_word_count"),
+            func.avg(MonitoringVisitReport.action_required_count).label("avg_action_count"),
+            func.sum(case((MonitoringVisitReport.action_required_count == 0, 1), else_=0)).label("zero_finding_visits"),
+        ).group_by(MonitoringVisitReport.site_id)
+
+        if cra_id:
+            q = q.filter(MonitoringVisitReport.cra_id == cra_id)
+        if country:
+            # Join with Site table to filter by country
+            q = q.join(Site, Site.site_id == MonitoringVisitReport.site_id).filter(Site.country == country)
+        if site_ids_str:
+            site_ids = [s.strip() for s in site_ids_str.split(",")]
+            q = q.filter(MonitoringVisitReport.site_id.in_(site_ids))
+
+        rows = q.all()
+        data = []
+        for r in rows:
+            total = r.total_visits or 1
+            zero_pct = round((r.zero_finding_visits or 0) / total * 100, 1)
+            data.append({
+                "site_id": r.site_id,
+                "total_visits": total,
+                "avg_word_count": round(float(r.avg_word_count or 0), 0),
+                "avg_action_required_count": round(float(r.avg_action_count or 0), 1),
+                "zero_finding_visit_pct": zero_pct,
+            })
+
+        # Add PI engagement distribution per site
+        for entry in data:
+            pi_mvrs = db_session.query(MonitoringVisitReport).filter(
+                MonitoringVisitReport.site_id == entry["site_id"]
+            ).all()
+            pi_qualities = []
+            for mvr in pi_mvrs:
+                pi = mvr.pi_engagement or {}
+                quality = pi.get("engagement_quality", "unknown")
+                pi_qualities.append(quality)
+            entry["pi_engagement_distribution"] = {
+                q: pi_qualities.count(q) for q in set(pi_qualities)
+            } if pi_qualities else {}
+
+        data.sort(key=lambda x: x["avg_word_count"])
+        return ToolResult(tool_name=self.name, success=True, data=data, row_count=len(data))
 
 
 def build_tool_registry() -> "ToolRegistry":
@@ -1717,7 +2276,10 @@ def build_tool_registry() -> "ToolRegistry":
     registry.register(DataCorrectionAnalysisTool())
     registry.register(CRAAssignmentHistoryTool())
     registry.register(MonitoringVisitHistoryTool())
+    registry.register(MonitoringVisitReportTool())
     registry.register(SiteSummaryTool())
+    registry.register(VisitComplianceAnalysisTool())
+    registry.register(OverdueActionSummaryTool())
     # Agent 3 tools (Enrollment Funnel)
     registry.register(ScreeningFunnelTool())
     registry.register(EnrollmentVelocityTool())
@@ -1756,6 +2318,14 @@ def build_tool_registry() -> "ToolRegistry":
     registry.register(BurnRateProjectionTool())
     registry.register(ChangeOrderImpactTool())
     registry.register(FinancialImpactOfDelaysTool())
+    # Study-wide operational snapshot (shared data layer)
+    registry.register(StudyOperationalSnapshotTool())
+    # MVR Analysis tools (Monitoring Visit Report narratives)
+    registry.register(MVRNarrativeSearchTool())
+    registry.register(MVRCRAPortfolioTool())
+    registry.register(MVRRecurrenceAnalysisTool())
+    registry.register(MVRTemporalPatternTool())
+    registry.register(MVRCrossSiteComparisonTool())
     # Competitive intelligence tools (BioMCP-powered) - optional
     try:
         from backend.tools.ctgov_tools import CompetingTrialSearchTool, TrialDetailTool, BIOMCP_AVAILABLE

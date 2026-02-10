@@ -31,10 +31,11 @@ _query_results = query_results_cache
 
 def _build_conductor(settings: Settings) -> ConductorRouter:
     llm = CachedLLMClient(FailoverLLMClient(settings))
+    fast_llm = CachedLLMClient(FailoverLLMClient(settings, model_name=settings.fast_llm)) if settings.fast_llm else llm
     prompts = get_prompt_manager()
     agents = build_agent_registry()
     tools = build_tool_registry()
-    return ConductorRouter(llm, prompts, agents, tools)
+    return ConductorRouter(llm, prompts, agents, tools, fast_llm_client=fast_llm)
 
 
 async def _process_query(query_id: str, question: str, session_id: str, settings: Settings):
@@ -52,8 +53,9 @@ async def _process_query(query_id: str, question: str, session_id: str, settings
             db.commit()
 
         llm = CachedLLMClient(FailoverLLMClient(settings))
+        fast_llm = CachedLLMClient(FailoverLLMClient(settings, model_name=settings.fast_llm)) if settings.fast_llm else llm
         prompts = get_prompt_manager()
-        conductor = ConductorRouter(llm, prompts, build_agent_registry(), build_tool_registry())
+        conductor = ConductorRouter(llm, prompts, build_agent_registry(), build_tool_registry(), fast_llm_client=fast_llm)
 
         # Build session context
         session_context = ""

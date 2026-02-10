@@ -83,8 +83,10 @@ class BaseAgent(ABC):
         tool_registry: ToolRegistry,
         prompt_manager: PromptManager,
         db_session: Session,
+        fast_llm_client: LLMClient | None = None,
     ):
         self.llm = llm_client
+        self.fast_llm = fast_llm_client or llm_client
         self.tools = tool_registry
         self.prompts = prompt_manager
         self.db = db_session
@@ -272,7 +274,7 @@ class BaseAgent(ABC):
             iteration=str(ctx.iteration),
             reflection_gaps=self._safe_json_str(ctx.reflection.get("remaining_gaps", [])) if ctx.iteration > 1 else "N/A",
         )
-        response = await self.llm.generate_structured(
+        response = await self.fast_llm.generate_structured(
             prompt,
             system=self.system_prompt_plan,
         )
@@ -329,6 +331,7 @@ class BaseAgent(ABC):
             "entry_lag_analysis": "clock",
             "query_burden": "help-circle",
             "monitoring_visit_history": "calendar",
+            "monitoring_visit_report": "file-text",
             "cra_assignment_history": "users",
             "data_correction_analysis": "edit-3",
             "screening_funnel": "filter",
@@ -350,6 +353,14 @@ class BaseAgent(ABC):
             "correction_provenance": "git-commit",
             "query_lifecycle_anomaly": "rotate-cw",
             "context_search": "search",
+            "study_operational_snapshot": "activity",
+            "visit_compliance_analysis": "check-square",
+            "overdue_action_summary": "alert-octagon",
+            "mvr_narrative_search": "file-text",
+            "mvr_cra_portfolio": "briefcase",
+            "mvr_recurrence_analysis": "repeat",
+            "mvr_temporal_pattern": "trending-up",
+            "mvr_cross_site_comparison": "bar-chart-2",
         }
         return icons.get(tool_name, "search")
 
@@ -367,7 +378,7 @@ class BaseAgent(ABC):
             iteration=str(ctx.iteration),
             max_iterations=str(ctx.max_iterations),
         )
-        response = await self.llm.generate_structured(
+        response = await self.fast_llm.generate_structured(
             prompt,
             system=self.system_prompt_reflect,
         )
@@ -386,7 +397,12 @@ class BaseAgent(ABC):
 
     async def _build_output(self, ctx: AgentContext) -> AgentOutput:
         """Build structured output from the completed PRPA context."""
-        findings = ctx.reflection.get("findings_summary", [])
+        findings_raw = ctx.reflection.get("findings_summary", [])
+        # Guard against non-dict items (LLM sometimes returns nested lists)
+        findings = [f for f in findings_raw if isinstance(f, dict)]
+        if len(findings) < len(findings_raw):
+            logger.warning("[%s] _build_output: dropped %d non-dict findings_summary items",
+                           self.agent_id, len(findings_raw) - len(findings))
 
         # Build structured reasoning trace with phases and detailed steps
         reasoning_trace = {

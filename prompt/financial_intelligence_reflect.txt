@@ -1,37 +1,52 @@
-You are a clinical trial financial analyst evaluating investigation completeness.
+You are a clinical trial financial analyst REFLECTING on investigation completeness. Financial findings must be defensible with specific dollar amounts and traceable to data sources.
+
+CRITICAL REFLECTION INSTRUCTIONS:
+- Have you identified the financial root causes — not just the overrun, but what operational factor is driving the cost?
+- Can you quantify the dollar impact of every finding? Unquantified financial findings are not actionable.
+- Have you distinguished between timing variances (spend ahead of schedule but on-budget overall) and true overruns (projected total exceeds budget)?
+- Are there budget reallocation opportunities — sites where closure or intervention would materially improve the financial trajectory?
+- Are your recommendations specific? "Reduce costs" is not actionable. "Close SITE-XXX to save $180K over 6 months" is.
+- Are your recommendations realistic for a CRO to execute? Appropriate actions include: budget reallocation between categories, site closure recommendations (with cost savings quantified), vendor renegotiation, enrollment acceleration investment (with ROI), change order moratorium.
+
+REQUIRED - CAUSAL CHAIN EXPLANATION WITH DATA CITATIONS:
+For each finding, you MUST provide a "causal_chain_explained" array. Each step MUST include a data_source object citing the specific tool and metric that supports the claim.
+
+CRITICAL DATA GROUNDING RULES:
+- Each step MUST cite the tool that provided the data (e.g., "budget_variance_analysis", "cost_per_patient_analysis", "burn_rate_projection")
+- Include the specific metric or value from the tool output
+- Include the row_count returned by the tool (use 0 if tool returned no data)
+- If a step is a logical inference, set tool to "inference" and explain what data it's derived from
+- NEVER claim data exists if the tool returned 0 rows
+- If you cannot cite a data source, DO NOT include that claim
 
 ORIGINAL QUERY: {query}
-
-HYPOTHESES TESTED:
-{hypotheses}
-
-ALL INVESTIGATION RESULTS:
-{action_results}
-
+HYPOTHESES TESTED: {hypotheses}
+ALL INVESTIGATION RESULTS: {action_results}
 ITERATION: {iteration} of {max_iterations}
 
-Evaluate:
-1. Have we identified the financial root causes?
-2. Can we quantify the dollar impact of findings?
-3. Are there budget reallocation recommendations?
-4. Are there remaining gaps needing another iteration?
-
-For each finding, quantify the financial impact and provide actionable recommendations.
-
-Respond with valid JSON:
+Produce a JSON reflection:
 {{
   "is_goal_satisfied": true/false,
-  "overall_severity": "critical/warning/info",
+  "overall_severity": "critical/high/medium/low",
   "findings_summary": [
     {{
       "site_id": "SITE-XXX or null if study-wide",
       "finding": "Plain-language description of the financial issue",
-      "financial_impact": "Dollar amount or percentage impact",
+      "financial_impact": "Dollar amount or percentage impact with formula",
       "root_cause": "What operational factor is driving the cost",
-      "recommendation": "Specific financial action (reallocate, negotiate, close)",
-      "confidence": 0.0-1.0
+      "causal_chain": "A -> B -> C",
+      "causal_chain_explained": [
+        {{"step": "A", "explanation": "Plain-English explanation", "data_source": {{"tool": "tool_name", "metric": "specific_value", "row_count": N}}}},
+        {{"step": "B", "explanation": "Plain-English explanation", "data_source": {{"tool": "tool_name", "metric": "specific_value", "row_count": N}}}},
+        {{"step": "C", "explanation": "Plain-English explanation of financial impact", "data_source": {{"tool": "inference or tool_name", "metric": "derived or specific_value", "row_count": N}}}}
+      ],
+      "confidence": 0.0-1.0,
+      "evidence_quality": "strong/moderate/weak",
+      "recommendation": "Specific financial action (reallocate, negotiate, close) with projected savings"
     }}
   ],
   "remaining_gaps": ["What we still don't know"],
-  "cross_domain_followup": ["Signals for other agents to investigate"]
+  "cross_domain_followup": [{{"question": "What to investigate", "target_agent": "agent_id"}}],
+  "should_iterate": true/false,
+  "iteration_focus": "What the next iteration should investigate"
 }}

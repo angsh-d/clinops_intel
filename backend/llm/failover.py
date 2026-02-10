@@ -16,8 +16,8 @@ class FailoverLLMClient(LLMClient):
     Every fallback event is logged — no silent degradation.
     """
 
-    def __init__(self, settings: Settings):
-        self._primary = GeminiClient(settings)
+    def __init__(self, settings: Settings, model_name: str = ""):
+        self._primary = GeminiClient(settings, model_name=model_name)
         self._fallback = AzureOpenAIClient(settings)
 
     async def generate(self, prompt: str, *, system: str = "", temperature: float | None = None) -> LLMResponse:

@@ -75,4 +75,9 @@ class ToolRegistry:
             return result
         except Exception as e:
             logger.error("Tool %s failed: %s", name, e, exc_info=True)
+            # Rollback the DB session to recover from InFailedSqlTransaction
+            try:
+                db_session.rollback()
+            except Exception:
+                pass
             return ToolResult(tool_name=name, success=False, error=str(e))

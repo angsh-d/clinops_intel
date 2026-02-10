@@ -30,8 +30,10 @@ class ConductorRouter:
         prompt_manager: PromptManager,
         agent_registry: AgentRegistry,
         tool_registry: ToolRegistry,
+        fast_llm_client: LLMClient | None = None,
     ):
         self.llm = llm_client
+        self.fast_llm = fast_llm_client or llm_client
         self.prompts = prompt_manager
         self.agent_registry = agent_registry
         self.tool_registry = tool_registry
@@ -43,7 +45,7 @@ class ConductorRouter:
             query=query,
             session_context=session_context or "No prior conversation.",
         )
-        response = await self.llm.generate_structured(
+        response = await self.fast_llm.generate_structured(
             prompt,
             system="You are a clinical operations intelligence conductor. Respond with valid JSON only.",
         )
@@ -95,6 +97,7 @@ class ConductorRouter:
                     tool_registry=self.tool_registry,
                     prompt_manager=self.prompts,
                     db_session=agent_db,
+                    fast_llm_client=self.fast_llm,
                 )
                 output = await agent.run(query, session_id=query_id, on_step=on_step)
                 return agent_id, output
@@ -158,48 +161,13 @@ class ConductorRouter:
             if len(agent_outputs) > 1:
                 requires_synthesis = True
 
-        # 3. Synthesize if multiple agents returned results
-        if requires_synthesis and len(agent_outputs) > 1:
-            if on_step:
-                await on_step("synthesize", "conductor", {"agents": list(agent_outputs.keys())})
-            synthesis = await self._synthesize(query, agent_outputs)
-        else:
-            single_output = next(iter(agent_outputs.values()), None)
-            # Build single_domain_findings matching the prompt schema:
-            # each entry has agent, site_ids, finding (string), recommendation
-            single_findings = []
-            if single_output and single_output.findings:
-                for f in single_output.findings:
-                    if isinstance(f, dict):
-                        single_findings.append({
-                            "agent": single_output.agent_id,
-                            "site_ids": [f.get("site_id")] if f.get("site_id") else [],
-                            "finding": f.get("finding") or f.get("summary") or str(f),
-                            "recommendation": f.get("recommendation", ""),
-                        })
-                    else:
-                        single_findings.append({
-                            "agent": single_output.agent_id,
-                            "site_ids": [],
-                            "finding": str(f),
-                            "recommendation": "",
-                        })
-            elif single_output:
-                single_findings.append({
-                    "agent": single_output.agent_id,
-                    "site_ids": [],
-                    "finding": single_output.summary,
-                    "recommendation": "",
-                })
+        # 2d. Fetch authoritative operational snapshot for synthesis ground truth
+        operational_snapshot = self._get_operational_snapshot(db_session)
 
-            synthesis = {
-                "executive_summary": single_output.summary if single_output else "No results.",
-                "signal_detection": signal_detection,
-                "cross_domain_findings": [],
-                "single_domain_findings": single_findings,
-                "next_best_actions": [],
-                "priority_actions": [],
-            }
+        # 3. Always synthesize — reconcile agent findings with operational snapshot
+        if on_step:
+            await on_step("synthesize", "conductor", {"agents": list(agent_outputs.keys())})
+        synthesis = await self._synthesize(query, agent_outputs, operational_snapshot, db_session=db_session)
 
         # Ensure signal_detection is always present in synthesis
         if "signal_detection" not in synthesis:
@@ -278,7 +246,7 @@ class ConductorRouter:
         )
 
         try:
-            response = await self.llm.generate_structured(
+            response = await self.fast_llm.generate_structured(
                 prompt,
                 system="You are a clinical operations intelligence conductor. Respond with valid JSON only.",
             )
@@ -321,6 +289,7 @@ class ConductorRouter:
                     tool_registry=self.tool_registry,
                     prompt_manager=self.prompts,
                     db_session=agent_db,
+                    fast_llm_client=self.fast_llm,
                 )
                 output = await agent.run(query, session_id=str(uuid.uuid4()), on_step=on_step)
                 results[aid] = output
@@ -331,7 +300,40 @@ class ConductorRouter:
 
         return results, rationale
 
-    async def _synthesize(self, query: str, agent_outputs: dict[str, AgentOutput]) -> dict:
+    def _get_operational_snapshot(self, db_session: Session) -> str:
+        """Fetch authoritative operational data from the shared service layer.
+
+        This is the same data the dashboard displays — used as ground truth in synthesis.
+        """
+        from backend.services.dashboard_data import get_attention_sites_data, get_sites_overview_data
+        from backend.config import get_settings
+
+        try:
+            settings = get_settings()
+            attention = get_attention_sites_data(db_session, settings)
+            overview = get_sites_overview_data(db_session, settings)
+
+            # Build a concise summary for the LLM
+            snapshot = {
+                "attention_sites": attention["sites"],
+                "attention_summary": {
+                    "critical_count": attention["critical_count"],
+                    "warning_count": attention["warning_count"],
+                    "total": len(attention["sites"]),
+                },
+                "study_overview": {
+                    "total_sites": overview["total"],
+                    "critical_sites": [s for s in overview["sites"] if s["status"] == "critical"],
+                    "warning_sites": [s for s in overview["sites"] if s["status"] == "warning"],
+                    "healthy_sites_count": sum(1 for s in overview["sites"] if s["status"] == "healthy"),
+                },
+            }
+            return json.dumps(snapshot, default=str)
+        except Exception as e:
+            logger.error("Failed to fetch operational snapshot: %s", e)
+            return "Operational snapshot unavailable."
+
+    async def _synthesize(self, query: str, agent_outputs: dict[str, AgentOutput], operational_snapshot: str = "", db_session=None) -> dict:
         """Cross-domain synthesis: LLM identifies shared root causes across agents."""
         data_quality_findings = ""
         enrollment_funnel_findings = ""
@@ -340,6 +342,7 @@ class ConductorRouter:
         site_rescue_findings = ""
         vendor_performance_findings = ""
         financial_intelligence_findings = ""
+        mvr_analysis_findings = ""
 
         for aid, out in agent_outputs.items():
             data = json.dumps({
@@ -365,6 +368,8 @@ class ConductorRouter:
                 vendor_performance_findings = data
             elif aid == "financial_intelligence":
                 financial_intelligence_findings = data
+            elif aid == "mvr_analysis":
+                mvr_analysis_findings = data
 
         prompt = self.prompts.render(
             "conductor_synthesize",
@@ -376,13 +381,15 @@ class ConductorRouter:
             site_rescue_findings=site_rescue_findings or "Not invoked.",
             vendor_performance_findings=vendor_performance_findings or "Not invoked.",
             financial_intelligence_findings=financial_intelligence_findings or "Not invoked.",
+            mvr_analysis_findings=mvr_analysis_findings or "Not invoked.",
+            operational_snapshot=operational_snapshot or "Not available.",
         )
         response = await self.llm.generate_structured(
             prompt,
             system="You are a clinical operations intelligence synthesizer. Respond with valid JSON only.",
         )
         try:
-            return parse_llm_json(response.text)
+            synthesis = parse_llm_json(response.text)
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.error("Synthesis parse failed: %s", e)
             return {
@@ -394,3 +401,128 @@ class ConductorRouter:
                 "priority_actions": [],
                 "error": str(e),
             }
+
+        # Post-synthesis: enrich evidence with MVR provenance from DB + agent temporal_evidence
+        synthesis = self._enrich_evidence_provenance(synthesis, agent_outputs, db_session)
+        return synthesis
+
+    def _enrich_evidence_provenance(self, synthesis: dict, agent_outputs: dict, db_session=None) -> dict:
+        """Inject auditable MVR provenance citations into synthesis evidence arrays.
+
+        Two sources:
+        1. MVR agent's temporal_evidence fields (specific visit timelines from the agent)
+        2. Direct DB lookup of MonitoringVisitReport records for sites in findings
+        """
+        # 1. Extract MVR agent temporal_evidence (if available)
+        mvr_temporal: dict[str, list[str]] = {}  # site_id -> [citation_strings]
+        mvr_out = agent_outputs.get("mvr_analysis")
+        if mvr_out:
+            detail = mvr_out.detail if isinstance(mvr_out.detail, dict) else {}
+            for finding in (detail.get("findings") or mvr_out.findings or []):
+                if not isinstance(finding, dict):
+                    continue
+                site_id = finding.get("site_id", "")
+                te = finding.get("temporal_evidence", "")
+                if te and site_id:
+                    mvr_temporal.setdefault(site_id, []).append(te)
+
+        # 2. Direct DB lookup for MVR provenance
+        mvr_db_citations: dict[str, list[str]] = {}  # site_id -> [formatted citations]
+        if db_session:
+            try:
+                from data_generators.models import MonitoringVisitReport
+                # Collect all site_ids mentioned across findings
+                all_sites = set()
+                for cdf in (synthesis.get("cross_domain_findings") or []):
+                    all_sites.update(cdf.get("site_ids") or [])
+
+                for site_id in all_sites:
+                    mvrs = db_session.query(MonitoringVisitReport).filter_by(
+                        site_id=site_id
+                    ).order_by(MonitoringVisitReport.visit_date).all()
+                    if not mvrs:
+                        continue
+                    citations = []
+                    for mvr in mvrs:
+                        # Build a concise provenance string with key facts
+                        parts = [f"MVR Visit {mvr.visit_number} ({mvr.visit_date}"]
+                        if mvr.cra_id:
+                            parts[0] += f", {mvr.cra_id}"
+                        parts[0] += f", {mvr.visit_type})"
+                        details = []
+                        if mvr.action_required_count:
+                            details.append(f"{mvr.action_required_count} actions required")
+                        if mvr.word_count:
+                            details.append(f"{mvr.word_count} words")
+                        # Include key finding text from findings JSON
+                        if mvr.findings:
+                            action_items = [f for f in mvr.findings if isinstance(f, dict) and f.get("action_required")]
+                            if action_items:
+                                first = action_items[0]
+                                q = first.get("question", "")
+                                r = first.get("response", "")[:80] if first.get("response") else ""
+                                if q:
+                                    details.append(f"'{q}': {r}")
+                        # Include follow-up status from follow_up_from_prior
+                        if mvr.follow_up_from_prior:
+                            zombies = [f for f in mvr.follow_up_from_prior if isinstance(f, dict) and f.get("status") != "Closed"]
+                            if zombies:
+                                z = zombies[0]
+                                details.append(f"Follow-up: '{z.get('action', '')[:60]}' — {z.get('status', 'Open')}")
+                        citation = parts[0]
+                        if details:
+                            citation += ": " + "; ".join(details)
+                        citations.append(citation)
+                    mvr_db_citations[site_id] = citations
+            except Exception as e:
+                logger.warning("MVR provenance DB lookup failed: %s", e)
+
+        if not mvr_temporal and not mvr_db_citations:
+            return synthesis
+
+        # Keywords in the finding's OWN claim/chain that indicate it's about monitoring
+        _MVR_CORE_KEYWORDS = {
+            "zombie", "recur", "recurring", "recurrence", "capa",
+            "rubber-stamp", "rubber stamp", "monitoring visit",
+            "visit report", "mvr", "cra oversight", "cra rubber",
+        }
+
+        def _is_mvr_relevant(finding_dict: dict) -> bool:
+            """Check if a finding's core claim is about monitoring/MVR patterns.
+
+            Only checks the finding text and causal chain — NOT existing evidence,
+            because tangential MVR references in evidence shouldn't trigger a full
+            MVR visit dump for unrelated findings (e.g., screen failures).
+            """
+            text = " ".join([
+                str(finding_dict.get("finding", "")),
+                str(finding_dict.get("causal_chain", "")),
+            ]).lower()
+            return any(kw in text for kw in _MVR_CORE_KEYWORDS)
+
+        # 3. Inject into matching cross_domain_findings — only for MVR-relevant findings
+        for cdf in (synthesis.get("cross_domain_findings") or []):
+            cdf_sites = set(cdf.get("site_ids") or [])
+            if not _is_mvr_relevant(cdf):
+                continue
+
+            provenance_items = []
+
+            # Add MVR agent temporal evidence
+            for site_id in cdf_sites:
+                for te in mvr_temporal.get(site_id, []):
+                    provenance_items.append(f"[MVR Agent] {te}")
+
+            # Add DB-sourced MVR provenance
+            for site_id in cdf_sites:
+                for citation in mvr_db_citations.get(site_id, []):
+                    provenance_items.append(citation)
+
+            if provenance_items:
+                cdf.setdefault("confirming_evidence", [])
+                existing = set(cdf["confirming_evidence"])
+                for p in provenance_items:
+                    if p not in existing:
+                        cdf["confirming_evidence"].append(p)
+
+        return synthesis

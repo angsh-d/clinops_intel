@@ -1,8 +1,21 @@
-Flag sites showing suspiciously low variance across multiple data quality domains that may indicate fabrication or rubber-stamping. Investigate:
+OBJECTIVE: Detect data integrity risks through centralized statistical monitoring — identify sites where operational metrics exhibit patterns inconsistent with genuine clinical operations, suggesting fabrication, falsification, or rubber-stamping.
 
-1. Which sites show near-zero variance in eCRF entry lag, query resolution time, or data correction rates — suggesting manufactured compliance?
-2. Are there sites where CRA monitoring reviews show uniform pass rates across all domains — suggesting rubber-stamping rather than genuine source data verification?
-3. Do any sites show weekday-only data entry patterns with no weekend or holiday entries, inconsistent with genuine clinical workflows?
-4. Are there sites where query resolution times cluster suspiciously around specific thresholds?
+PRIORITY INVESTIGATION AREAS:
 
-Distinguish between genuinely high-performing sites and sites showing statistical patterns inconsistent with real clinical operations.
+1. VARIANCE SUPPRESSION (Manufactured Compliance): Which sites show near-zero variance in entry lag days, query resolution times, or data correction rates relative to the study-wide distribution? Genuine clinical data inherently has variance from patient scheduling, staff availability, and clinical complexity. Cross-reference entry count volume to distinguish low-activity sites (naturally low variance) from high-activity sites with suppressed variance (statistically suspicious).
+
+2. CRA MONITORING INTEGRITY: Analyze at the individual CRA level, not just site level. Which CRAs have the highest percentage of zero-finding monitoring visits across their assigned site portfolio? A CRA who consistently finds zero issues at multiple sites is a stronger rubber-stamping signal than a single site with zero findings. Compare CRA finding rates against the study-wide CRA average.
+
+3. TEMPORAL PATTERN ANOMALIES: Do any sites show data entry patterns that are inconsistent with genuine clinical workflows? Investigate: (a) weekday-only entry with no weekend or holiday entries — real patient care happens 7 days a week, (b) batch entry clustering — large volumes of entries on single dates suggesting retrospective bulk data entry rather than contemporaneous recording, (c) suspicious uniformity in entry timing across different subjects.
+
+4. QUERY LIFECYCLE MANIPULATION: Are there sites where query resolution times cluster around specific thresholds (e.g., just under SLA deadlines)? Analyze the full query lifecycle profile — mean, standard deviation, and distribution shape. Sites with bimodal distributions (very fast resolutions + very old unresolved queries) may be gaming resolution metrics by cherry-picking easy queries.
+
+5. SCREENING NARRATIVE FABRICATION: Do screen failure narratives show copy-paste duplication, templated language, or suspiciously similar phrasing across different subjects? Genuine screening narratives should reflect individual patient circumstances. High text similarity scores across narratives at the same site suggest fabricated screening records.
+
+6. CORRECTION PROVENANCE ANALYSIS: Are data corrections at each site predominantly triggered by monitoring queries (expected pattern) or unprompted? Sites with high unprompted correction rates but low query burden present a paradox: either the site has exceptional self-QC processes (verify with monitoring visit findings), or data is being manipulated after the fact before monitors detect it.
+
+7. CROSS-DOMAIN CONSISTENCY: Do the multiple data quality signals at each site tell a coherent story? Red flags include: (a) perfect entry lag + high query rates (rushed entry causing errors), (b) low queries + high corrections (self-correcting before monitors find issues), (c) zero monitoring findings + deteriorating KRIs (monitoring oversight not catching real problems), (d) uniform completeness + missing critical fields (checkbox compliance without substance).
+
+CROSS-DOMAIN SIGNALS: Flag for data_quality agent if integrity concerns are found at sites that also have CRA transition gaps (oversight vacuum enables data manipulation). Flag for site_rescue agent if a fabrication pattern is confirmed — this may warrant site closure or triggered audit rather than rescue.
+
+DEFENSIBILITY: For each flagged site, quantify the specific statistical deviation from the study-wide norm (e.g., "Site X entry lag std dev is 0.3 days vs. study median of 2.1 days"). Present the convergence of multiple independent signals — no single metric alone is sufficient for a data integrity finding. Rate each finding as "confirmed pattern" (multiple corroborating signals) or "signal for further investigation" (isolated anomaly).

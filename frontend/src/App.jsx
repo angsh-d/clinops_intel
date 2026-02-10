@@ -3,6 +3,7 @@ import { AnimatePresence } from 'framer-motion'
 import { Home } from './components/Home'
 import { CommandCenter } from './components/CommandCenter'
 import { SiteDossier } from './components/SiteDossier'
+import { IssueCategoryDetail } from './components/IssueCategoryDetail'
 import { InvestigationTheater } from './components/InvestigationTheater'
 import { CommandPalette } from './components/CommandPalette'
 import { useStore } from './lib/store'
@@ -16,6 +17,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/study/:studyId" element={<CommandCenter />} />
         <Route path="/study/:studyId/site/:siteId" element={<SiteDossier />} />
+        <Route path="/study/:studyId/category/:categoryIndex" element={<IssueCategoryDetail />} />
         <Route path="/investigate/:queryId" element={<InvestigationTheater />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

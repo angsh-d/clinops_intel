@@ -8,6 +8,7 @@ AVAILABLE AGENTS:
 - site_rescue (Site Decision Agent): Recommends rescue or closure for underperforming sites. Expert in: enrollment trajectory analysis, screen failure root cause classification (fixable vs structural), CRA staffing stability, supply constraint impact. Produces rescue/close/watch recommendations with evidence-based justification.
 - vendor_performance (Vendor Performance Agent): Investigates CRO/vendor performance — site activation timelines, query resolution speed, monitoring completion, contractual KPI adherence. Expert in: vendor KPI trending, vendor-site comparison, milestone tracking, issue pattern analysis. Identifies vendor-attributable root causes for operational issues.
 - financial_intelligence (Financial Intelligence Agent): Investigates budget health, cost efficiency, vendor spending patterns, and financial impact of operational delays. Expert in: budget variance analysis, cost-per-patient efficiency, burn rate projection, change order impact, delay cost quantification. Provides risk-adjusted forecasting and budget reallocation recommendations.
+- mvr_analysis (MVR Analysis Agent): Analyzes Monitoring Visit Report narratives to detect patterns invisible in structured data. Expert in: cross-visit finding recurrence (zombie findings), CRA rubber-stamping detection, PI engagement decline tracking, post-gap monitoring debt quantification, CRA transition quality gaps, hidden systemic compliance risks, data integrity red flags from MVR narratives. Provides temporal trajectory analysis across multiple monitoring visits.
 
 ROUTING PRINCIPLES:
 - Route to BOTH data_quality and enrollment_funnel when the query involves site-level performance (sites have both data quality and enrollment dimensions)
@@ -21,6 +22,8 @@ ROUTING PRINCIPLES:
 - Route to vendor_performance when the query involves: vendor, CRO, CRO performance, IQVIA, EPS, Covance, Bioclinica, Medidata, Almac, PharSafer, StudyKIK, monitoring delays, site activation delays, vendor KPIs, vendor issues, vendor milestones, contract performance
 - Route to financial_intelligence when the query involves: budget, cost, spend, financial, burn rate, overrun, variance, cost per patient, change orders, invoices, forecast, funding, expensive, cheap, cost efficiency, budget health
 - When vendor_performance is selected, consider also selecting financial_intelligence if the query has cost/budget implications, and vice versa
+- Route to mvr_analysis when the query involves: monitoring visit reports, MVR, CRA oversight quality, PI engagement, finding recurrence, zombie findings, rubber-stamping, monitoring narratives, visit report patterns, CRA quality, monitoring report analysis
+- When mvr_analysis is selected, consider pairing with phantom_compliance for data integrity concerns or data_quality for monitoring-data quality correlations
 - When in doubt, route to ALL agents that are semantically relevant — the more dimensions investigated, the richer the analysis
 - NEVER use keyword matching. Understand the SEMANTIC INTENT of the query.
 
@@ -31,7 +34,7 @@ SESSION CONTEXT (prior conversation, if any):
 
 Produce a JSON routing decision:
 {{
-  "selected_agents": ["data_quality", "enrollment_funnel", "clinical_trials_gov", "phantom_compliance", "site_rescue", "vendor_performance", "financial_intelligence"],
+  "selected_agents": ["data_quality", "enrollment_funnel", "clinical_trials_gov", "phantom_compliance", "site_rescue", "vendor_performance", "financial_intelligence", "mvr_analysis"],
   "routing_rationale": "Why these agents were selected — semantic reasoning about the query intent",
   "query_interpretation": "What the user is really asking about",
   "expected_cross_domain_insights": "What cross-domain connections might emerge",

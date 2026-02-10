@@ -1,0 +1,23 @@
+OBJECTIVE: Extract hard-to-find patterns from Monitoring Visit Report narratives that are invisible in structured operational data — cross-visit finding recurrence, CRA behavioral signals, PI engagement deterioration, hidden systemic compliance risks, data integrity red flags, and temporal anomaly patterns.
+
+PRIORITY INVESTIGATION AREAS:
+
+1. ZOMBIE FINDINGS (Finding Recurrence): Identify checklist items or SDV findings that are marked "resolved" in one visit but reappear in subsequent visits. Focus on the same CRF page or same checklist section recurring across non-consecutive visits. Zombie findings indicate the root cause was never addressed — only symptoms were treated. Quantify: how many cycles of "open → resolved → reopen" have occurred, and across how many different CRF domains.
+
+2. CRA RUBBER-STAMPING: Analyze per-CRA report patterns across their full portfolio. Flag CRAs where: (a) zero-finding visit percentage exceeds 80%, (b) word count is consistently below 500 words, (c) identical phrases or boilerplate language appears across multiple visits, (d) all checklist items are marked "Yes" with no comments. Cross-reference with the site's operational metrics — a site with active enrollment but zero monitoring findings is a contradiction.
+
+3. PI ENGAGEMENT DECLINE: Track the pi_engagement field trajectory across visits for each site. Map the progression from "PI present and engaged" through intermediate states ("Sub-I covered majority") to "PI unavailable." Correlate PI engagement decline with enrollment velocity changes — establish the temporal lag between PI disengagement and enrollment stall.
+
+4. DATA INTEGRITY RED FLAGS: Look for absence of expected findings (zero SDV discrepancies at actively enrolling sites), "batch corrections" language in narratives, and corrections made "without monitor oversight" during monitoring gaps. Cross-reference with phantom_compliance agent findings on variance suppression.
+
+5. CRA TRANSITION QUALITY GAP: For sites that experienced CRA changes, compare pre-transition and post-transition MVR quality: word count, finding specificity, checklist comment density, SDV thoroughness. Quantify the quality delta. A significant quality drop after CRA transition suggests insufficient handover or less experienced replacement.
+
+6. POST-GAP MONITORING DEBT: For sites with monitoring visit gaps (>2 months between visits), analyze the first post-gap MVR for: elevated action_required_count vs pre-gap baseline, "backlog" or "overdue" language in narratives, data corrections made during the gap period, new CRA unfamiliarity signals. Quantify the debt as the delta between post-gap and pre-gap average findings.
+
+7. HIDDEN SYSTEMIC COMPLIANCE: Aggregate individually minor findings across different checklist sections within the same visit. When items 32-34 (Compliance), items 5-13 (Site Staff), and items 41-46 (SDV) all have minor comments simultaneously, the aggregate reveals systemic compliance erosion that no individual finding would trigger.
+
+8. CROSS-CRA BEHAVIORAL CONTRAST: Compare CRA reporting quality standards across the study. CRAs monitoring similar-profile sites should produce reports with comparable characteristics. Identify outlier CRAs (always zero findings vs. detailed reporters) and assess whether the variation reflects genuine site differences or CRA monitoring quality differences.
+
+CROSS-DOMAIN SIGNALS: Flag for phantom_compliance agent if MVR analysis reveals rubber-stamping patterns — CRA oversight quality directly affects data integrity risk assessment. Flag for data_quality agent if zombie findings indicate persistent data quality issues. Flag for site_rescue agent if PI engagement decline and enrollment stall patterns are confirmed.
+
+DEFENSIBILITY: For each finding, cite specific MVR dates, visit numbers, CRA IDs, word counts, and narrative excerpts. Establish temporal trajectories with quantified before/after comparisons. Present findings as "confirmed pattern" (3+ visits showing consistent signal) or "emerging signal" (2 visits, warrants continued monitoring).

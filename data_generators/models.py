@@ -546,3 +546,40 @@ class SiteFinancialMetric(Base):
     planned_cost_to_date = Column(Float, default=0)
     variance_pct = Column(Float, default=0)
     __table_args__ = (Index("ix_sfm_site", "site_id"),)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MONITORING VISIT REPORTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── 38. monitoring_visit_reports ─────────────────────────────────────────────
+class MonitoringVisitReport(Base):
+    __tablename__ = "monitoring_visit_reports"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    monitoring_visit_id = Column(Integer, nullable=False)
+    site_id = Column(String(20), nullable=False)
+    cra_id = Column(String(20), nullable=False)
+    visit_date = Column(Date, nullable=False)
+    visit_type = Column(String(20))
+    visit_number = Column(Integer)
+
+    # PDF file reference
+    pdf_filename = Column(String(200))
+
+    # Structured content (also in PDF, extracted for SQL querying)
+    executive_summary = Column(Text)
+    overall_impression = Column(Text)
+    urgent_issues = Column(JSONB)           # [{letter, description}]
+    enrollment_status = Column(JSONB)       # {screened, consented, randomized, completed, ongoing, withdrawn}
+    findings = Column(JSONB)                # [{item_number, section, question, response, action_required}]
+    sdv_findings = Column(JSONB)            # [{subject_id, items_reviewed, comments, action_required}]
+    pi_engagement = Column(JSONB)           # {pi_present, pi_review, engagement_quality, notes}
+    follow_up_from_prior = Column(JSONB)    # [{action, status, comment}]
+    cra_assessment = Column(Text)
+    word_count = Column(Integer)
+    action_required_count = Column(Integer)
+    __table_args__ = (
+        Index("ix_mvr_site", "site_id"),
+        Index("ix_mvr_cra", "cra_id"),
+        Index("ix_mvr_visit_date", "visit_date"),
+    )
